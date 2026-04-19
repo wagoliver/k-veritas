@@ -155,6 +155,26 @@ export async function POST(
         'Faça um crawl primeiro antes de analisar.',
       )
     }
+    // unique_violation (23505) no índice parcial project_analyses_one_running_per_project
+    // significa que uma requisição paralela venceu a corrida e já inseriu uma linha running.
+    if (isUniqueViolation(err)) {
+      return Problems.conflict(
+        'analysis_already_running',
+        'Já existe uma análise em andamento.',
+      )
+    }
     return Problems.server(message)
   }
+}
+
+function isUniqueViolation(err: unknown): boolean {
+  if (!err || typeof err !== 'object') return false
+  const direct = (err as { code?: unknown }).code
+  if (direct === '23505') return true
+  const cause = (err as { cause?: unknown }).cause
+  if (cause && typeof cause === 'object') {
+    const causeCode = (cause as { code?: unknown }).code
+    if (causeCode === '23505') return true
+  }
+  return false
 }

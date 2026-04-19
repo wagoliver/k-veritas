@@ -112,17 +112,42 @@ export function ProjectAnalysis({ projectId }: { projectId: string }) {
   }
 
   const trigger = () => {
+    // Guarda contra double-click: se já está em voo (local ou servidor), ignora
+    if (running || isInFlight) return
+
+    // Optimistic UI: troca o empty-state imediatamente por uma linha "running"
+    // stub antes mesmo do POST partir. Sem gap visual, sem oportunidade de
+    // clicar 2x.
+    const now = new Date().toISOString()
+    setAnalysis({
+      id: 'optimistic',
+      status: 'running',
+      model: analysis?.model ?? '…',
+      provider: analysis?.provider ?? '…',
+      summary: null,
+      inferredLocale: null,
+      features: [],
+      error: null,
+      tokensIn: null,
+      tokensOut: 0,
+      durationMs: 0,
+      startedAt: now,
+      finishedAt: null,
+      createdAt: now,
+    })
+
     startRun(async () => {
       try {
-        // Dispara a requisição (bloqueia até terminar), mas em paralelo
-        // fazemos um primeiro load rápido para pegar a linha running.
         const postPromise = fetch(`/api/projects/${projectId}/ai/analyze`, {
           method: 'POST',
           headers: { 'X-Requested-With': 'fetch' },
         })
+        // Em ~500ms o row real já está inserido no banco — troca o optimistic
+        // pelo de verdade, que traz o id real e sincroniza tokens vindos do
+        // heartbeat.
         setTimeout(() => {
           void load()
-        }, 400)
+        }, 500)
 
         const res = await postPromise
 
@@ -148,6 +173,7 @@ export function ProjectAnalysis({ projectId }: { projectId: string }) {
         await load()
       } catch {
         toast.error(t('errors.network'))
+        await load()
       }
     })
   }
