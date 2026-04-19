@@ -385,7 +385,11 @@
             "generated_label": "Teste Playwright gerado",
             "copy": "Copiar",
             "copied": "Copiado.",
-            "copy_failed": "Não foi possível copiar."
+            "copy_failed": "Não foi possível copiar.",
+            "delete": "Excluir teste",
+            "deleted": "Teste excluído. Pode gerar novamente.",
+            "delete_failed": "Não foi possível excluir o teste.",
+            "confirm_delete": "Excluir o teste gerado deste cenário? O cenário voltará a ser candidato para nova geração."
           },
           "add_feature": "Nova feature",
           "add_scenario": "Adicionar cenário",
@@ -406,7 +410,8 @@
           "errors": {
             "update": "Não foi possível atualizar.",
             "delete": "Não foi possível excluir.",
-            "feature_no_reviewed_scenarios": "Revise ao menos um cenário dentro desta feature antes de marcá-la como revisada."
+            "feature_no_reviewed_scenarios": "Revise ao menos um cenário dentro desta feature antes de marcá-la como revisada.",
+            "network": "Falha de conexão."
           },
           "confirm": {
             "delete_feature": "Excluir feature \"{name}\" e todos os cenários dentro dela? Esta ação não pode ser desfeita.",

@@ -937,7 +937,12 @@ function ScenarioRow({
           />
         ) : null}
         {mode === 'reviewed' ? (
-          <ScenarioTestBlock test={scenario.latestTest} />
+          <ScenarioTestBlock
+            test={scenario.latestTest}
+            projectId={projectId}
+            scenarioId={scenario.id}
+            onChanged={onChanged}
+          />
         ) : null}
         {scenario.preconditions.length > 0 ||
         scenario.dataNeeded.length > 0 ? (
@@ -975,9 +980,20 @@ function ScenarioRow({
   )
 }
 
-function ScenarioTestBlock({ test }: { test: LatestTest | null }) {
+function ScenarioTestBlock({
+  test,
+  projectId,
+  scenarioId,
+  onChanged,
+}: {
+  test: LatestTest | null
+  projectId: string
+  scenarioId: string
+  onChanged: () => Promise<void> | void
+}) {
   const t = useTranslations('projects.overview.analysis.editor')
   const [open, setOpen] = useState(false)
+  const [deleting, setDeleting] = useState(false)
 
   if (!test) {
     return (
@@ -994,6 +1010,30 @@ function ScenarioTestBlock({ test }: { test: LatestTest | null }) {
       toast.success(t('test.copied'))
     } catch {
       toast.error(t('test.copy_failed'))
+    }
+  }
+
+  const deleteTest = async () => {
+    if (!confirm(t('test.confirm_delete'))) return
+    setDeleting(true)
+    try {
+      const res = await fetch(
+        `/api/projects/${projectId}/ai-scenarios/${scenarioId}/tests`,
+        {
+          method: 'DELETE',
+          headers: { 'X-Requested-With': 'fetch' },
+        },
+      )
+      if (!res.ok) {
+        toast.error(t('test.delete_failed'))
+        return
+      }
+      toast.success(t('test.deleted'))
+      await onChanged()
+    } catch {
+      toast.error(t('errors.network'))
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -1025,6 +1065,18 @@ function ScenarioTestBlock({ test }: { test: LatestTest | null }) {
           className="inline-flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-background hover:text-foreground"
         >
           <Copy className="size-3.5" />
+        </button>
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation()
+            deleteTest()
+          }}
+          disabled={deleting}
+          title={t('test.delete')}
+          className="inline-flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-destructive/10 hover:text-destructive disabled:opacity-40"
+        >
+          <Trash2 className="size-3.5" />
         </button>
       </button>
       {open ? (

@@ -385,7 +385,11 @@
             "generated_label": "Generated Playwright test",
             "copy": "Copy",
             "copied": "Copied.",
-            "copy_failed": "Couldn't copy."
+            "copy_failed": "Couldn't copy.",
+            "delete": "Delete test",
+            "deleted": "Test deleted. You can generate again.",
+            "delete_failed": "Couldn't delete the test.",
+            "confirm_delete": "Delete the generated test for this scenario? The scenario will become a candidate for regeneration."
           },
           "add_feature": "New feature",
           "add_scenario": "Add scenario",
@@ -406,7 +410,8 @@
           "errors": {
             "update": "Couldn't update.",
             "delete": "Couldn't delete.",
-            "feature_no_reviewed_scenarios": "Review at least one scenario inside this feature before marking it as reviewed."
+            "feature_no_reviewed_scenarios": "Review at least one scenario inside this feature before marking it as reviewed.",
+            "network": "Connection failed."
           },
           "confirm": {
             "delete_feature": "Delete feature \"{name}\" and all scenarios within it? This cannot be undone.",

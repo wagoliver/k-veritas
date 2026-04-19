@@ -6,6 +6,8 @@ import { projectTestRuns, scenarioTests } from '@/lib/db/schema'
 import { getServerSession } from '@/lib/auth/session'
 import { Problems } from '@/lib/auth/errors'
 import { authorizeProject } from '@/lib/auth/project-access'
+import { audit } from '@/lib/auth/audit'
+import { clientIp, userAgent } from '@/lib/auth/request'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -53,6 +55,57 @@ export async function GET(
 
   return NextResponse.json(
     { tests: rows },
+    { headers: { 'Cache-Control': 'no-store' } },
+  )
+}
+
+/**
+ * DELETE — apaga TODOS os testes gerados pra esse scenario.
+ * O scenario volta a ser "candidato" (aparece apagado na aba Cenários de
+ * Teste). O próximo "Gerar" produz um teste novo do zero.
+ *
+ * project_test_runs em si não são apagados — eles são o histórico de
+ * rodadas e guardam custo/tokens/duração pra auditoria.
+ */
+export async function DELETE(
+  req: NextRequest,
+  ctx: { params: Promise<{ id: string; scenarioId: string }> },
+) {
+  const session = await getServerSession()
+  if (!session) return Problems.unauthorized()
+  if (req.headers.get('x-requested-with') !== 'fetch') {
+    return Problems.invalidBody()
+  }
+
+  const { id, scenarioId } = await ctx.params
+  const project = await authorizeProject(session.user.id, id)
+  if (!project) return Problems.forbidden()
+
+  const deleted = await db
+    .delete(scenarioTests)
+    .where(
+      and(
+        eq(scenarioTests.projectId, project.id),
+        eq(scenarioTests.scenarioIdSnapshot, scenarioId),
+      ),
+    )
+    .returning({ id: scenarioTests.id })
+
+  await audit({
+    userId: session.user.id,
+    event: 'scenario_test_deleted',
+    ip: clientIp(req),
+    userAgent: userAgent(req),
+    meta: {
+      projectId: project.id,
+      scenarioId,
+      deletedCount: deleted.length,
+    },
+    outcome: 'success',
+  })
+
+  return NextResponse.json(
+    { deletedCount: deleted.length },
     { headers: { 'Cache-Control': 'no-store' } },
   )
 }
