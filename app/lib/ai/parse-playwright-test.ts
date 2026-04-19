@@ -54,6 +54,63 @@ const PHASE_COMMENT_REGEX = /^\s*\/\/\s*(given|when|then)\s*:?\s*(.*)$/i
 const TEST_HEADER_REGEX = /^\s*test\s*\(\s*(['"`])([\s\S]*?)\1/
 const TAG_REGEX = /tag\s*:\s*(['"`])(@[\w-]+)\1/
 
+/**
+ * Tenta identificar qual step do ParsedTest causou a falha, olhando o
+ * corpo da errorMessage do Playwright. Heurísticas (ordem de precedência):
+ *
+ *   1. errorMessage menciona o `target` do step (nome extraído do
+ *      getByRole({name:'X'}), etc.)
+ *   2. errorMessage cita a `rawLine` praticamente literal
+ *   3. Se o erro é de navegação e tem um step kind='goto', escolhe ele
+ *   4. Nenhum match: retorna null
+ *
+ * Retorna índice GLOBAL (flat) percorrendo phases[].steps[] em ordem.
+ */
+export function locateFailedStepIndex(
+  parsed: ParsedTest,
+  errorMessage: string | null | undefined,
+): number | null {
+  if (!errorMessage) return null
+  const err = errorMessage
+
+  const allSteps = flattenSteps(parsed)
+
+  // 1. Match por target (mais específico)
+  for (let i = 0; i < allSteps.length; i++) {
+    const s = allSteps[i]
+    if (s.target && err.includes(s.target)) return i
+  }
+
+  // 2. Match por rawLine quase-literal (trecho > 15 chars)
+  for (let i = 0; i < allSteps.length; i++) {
+    const s = allSteps[i]
+    const snippet = s.rawLine.trim().replace(/\s+/g, ' ')
+    if (snippet.length > 15 && err.replace(/\s+/g, ' ').includes(snippet)) {
+      return i
+    }
+  }
+
+  // 3. Palavras-chave por kind
+  if (/goto|navigation|page\.goto/i.test(err)) {
+    const idx = allSteps.findIndex((s) => s.kind === 'goto')
+    if (idx >= 0) return idx
+  }
+  if (/toHaveURL|expect.*url/i.test(err)) {
+    const idx = allSteps.findIndex(
+      (s) => s.kind === 'assertion' && /URL/i.test(s.verb),
+    )
+    if (idx >= 0) return idx
+  }
+
+  return null
+}
+
+export function flattenSteps(parsed: ParsedTest): ParsedStep[] {
+  const out: ParsedStep[] = []
+  for (const p of parsed.phases) for (const s of p.steps) out.push(s)
+  return out
+}
+
 export function parseTestCode(code: string): ParsedTest {
   const lines = code.split('\n')
 

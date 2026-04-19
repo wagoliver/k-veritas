@@ -278,6 +278,8 @@
         "running": "Executando · {seconds}s",
         "never_run": "Ainda não executado",
         "enqueued": "Execução enfileirada. O runner pega em instantes.",
+        "flow_toggle": "Ver fluxo do teste",
+        "flow_failed_at": "etapa identificada",
         "errors": {
           "rate_limited": "Aguarde antes de disparar outra execução.",
           "no_generated_test": "Gere o teste deste cenário antes de rodar.",

@@ -278,6 +278,8 @@
         "running": "Running · {seconds}s",
         "never_run": "Never executed",
         "enqueued": "Execution queued. Runner will pick it up shortly.",
+        "flow_toggle": "View test flow",
+        "flow_failed_at": "step identified",
         "errors": {
           "rate_limited": "Wait before queuing another run.",
           "no_generated_test": "Generate this scenario's test before running.",

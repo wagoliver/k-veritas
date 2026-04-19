@@ -17,7 +17,12 @@ import { Button } from '@/components/ui/button'
 import { DateTime } from '@/components/ui/date-time'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
+import {
+  locateFailedStepIndex,
+  parseTestCode,
+} from '@/lib/ai/parse-playwright-test'
 import type { EditableFeature, EditableScenario } from './analysis-editor'
+import { TestFlowView } from './test-flow-view'
 
 interface LatestResult {
   scenarioId: string
@@ -347,9 +352,19 @@ function ScenarioRunRow({
           <p className="text-xs text-muted-foreground">{t('never_run')}</p>
         )}
         {isDone && latest && latest.status !== 'passed' && latest.errorMessage ? (
-          <p className="rounded border border-destructive/30 bg-destructive/5 p-2 font-mono text-[11px] text-destructive">
-            {latest.errorMessage}
-          </p>
+          <>
+            <p className="rounded border border-destructive/30 bg-destructive/5 p-2 font-mono text-[11px] text-destructive">
+              {latest.errorMessage.length > 400
+                ? `${latest.errorMessage.slice(0, 400)}…`
+                : latest.errorMessage}
+            </p>
+            {scenario.latestTest ? (
+              <FailedFlow
+                code={scenario.latestTest.code}
+                errorMessage={latest.errorMessage}
+              />
+            ) : null}
+          </>
         ) : null}
       </div>
       <Button
@@ -367,6 +382,46 @@ function ScenarioRunRow({
         {t('run')}
       </Button>
     </li>
+  )
+}
+
+function FailedFlow({
+  code,
+  errorMessage,
+}: {
+  code: string
+  errorMessage: string
+}) {
+  const t = useTranslations('projects.overview.execution')
+  const [open, setOpen] = useState(false)
+  const parsed = parseTestCode(code)
+  const failedStepIndex = locateFailedStepIndex(parsed, errorMessage)
+
+  return (
+    <div className="overflow-hidden rounded-md border border-border/60 bg-card">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center gap-2 px-2 py-1.5 text-left text-xs font-medium text-muted-foreground transition-colors hover:bg-accent/40"
+      >
+        <ChevronRight
+          className={cn(
+            'size-3.5 transition-transform',
+            open && 'rotate-90',
+          )}
+        />
+        <FileCode2 className="size-3.5" />
+        <span className="flex-1">{t('flow_toggle')}</span>
+        {failedStepIndex !== null ? (
+          <span className="rounded bg-destructive/15 px-1.5 py-0.5 text-[10px] font-medium text-destructive">
+            {t('flow_failed_at')}
+          </span>
+        ) : null}
+      </button>
+      {open ? (
+        <TestFlowView code={code} failedStepIndex={failedStepIndex} />
+      ) : null}
+    </div>
   )
 }
 
