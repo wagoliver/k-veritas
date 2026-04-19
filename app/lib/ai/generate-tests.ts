@@ -14,6 +14,7 @@ import {
   type Project,
   type ScenarioPriority,
 } from '@/lib/db/schema'
+import { sql } from 'drizzle-orm'
 import { buildClient } from './client-factory'
 import { resolveAiConfig } from './config'
 import {
@@ -253,6 +254,11 @@ async function buildTestGenPayload(
     )
     .orderBy(asc(analysisFeatures.sortOrder))
 
+  // Cenários revisados que AINDA NÃO TÊM teste gerado (candidatos).
+  // Usa NOT EXISTS contra scenario_tests pra excluir quem já foi gerado.
+  // Se o usuário quiser regenerar um teste existente, ele precisa primeiro
+  // excluir o teste atual (botão trash no ScenarioTestBlock) — aí ele
+  // volta a ser candidato.
   const allScenarios = await db
     .select()
     .from(analysisScenarios)
@@ -260,6 +266,11 @@ async function buildTestGenPayload(
       and(
         eq(analysisScenarios.projectId, project.id),
         isNotNull(analysisScenarios.reviewedAt),
+        sql`NOT EXISTS (
+          SELECT 1 FROM ${scenarioTests}
+          WHERE ${scenarioTests.scenarioIdSnapshot} = ${analysisScenarios.id}
+            AND ${scenarioTests.projectId} = ${project.id}
+        )`,
       ),
     )
     .orderBy(asc(analysisScenarios.sortOrder))
