@@ -1,4 +1,4 @@
-import { mkdir, writeFile, rm } from 'node:fs/promises'
+import { mkdir, writeFile, rm, symlink } from 'node:fs/promises'
 import { spawn } from 'node:child_process'
 import { join } from 'node:path'
 
@@ -73,6 +73,16 @@ export async function executeScenarioJob(
   try {
     await mkdir(testsDir, { recursive: true })
     await mkdir(artifactsDir, { recursive: true })
+
+    // Playwright resolve @playwright/test subindo a árvore a partir do
+    // config file. Symlink /work/<runId>/node_modules → /app/node_modules
+    // deixa o runner carregar sem depender de NODE_PATH.
+    await symlink('/app/node_modules', join(runDir, 'node_modules')).catch(
+      (err) => {
+        // EEXIST é benigno (symlink já criado em retry); demais propagam.
+        if ((err as NodeJS.ErrnoException).code !== 'EEXIST') throw err
+      },
+    )
 
     const { specFileName, specContent } = buildSpecFile(scenario)
     await writeFile(join(testsDir, specFileName), specContent, 'utf8')
@@ -196,9 +206,13 @@ async function spawnPlaywright(
     // permitindo que @playwright/test seja resolvido mesmo rodando de /work.
     const child = spawn(
       'npx',
-      ['playwright', 'test', `--config=${cwd}/playwright.config.ts`],
+      ['playwright', 'test', '--config=playwright.config.ts'],
       {
-        cwd: '/app',
+        // Rodando dentro do runDir: Playwright resolve @playwright/test
+        // pelo node_modules simbólico; testDir, outputFile e outputDir
+        // já foram configurados com caminhos absolutos ou relativos à
+        // config file.
+        cwd,
         env: {
           ...env,
           PLAYWRIGHT_JSON_OUTPUT_NAME: reportPath,
