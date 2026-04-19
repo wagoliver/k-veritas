@@ -39,7 +39,10 @@ export class OpenAICompatibleClient implements AIClient {
   constructor(public readonly config: AIProviderConfig) {}
 
   private base(): string {
-    return this.config.baseUrl.replace(/\/$/, '')
+    // Normaliza: remove trailing slash e remove /v1 no fim se o usuário colou
+    // a base URL "completa" (ex.: https://api.anthropic.com/v1). Nosso código
+    // sempre anexa /v1/... nos paths, sem isso resultaria em /v1/v1/...
+    return this.config.baseUrl.replace(/\/$/, '').replace(/\/v1$/, '')
   }
 
   private headers(): HeadersInit {
