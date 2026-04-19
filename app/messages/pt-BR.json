@@ -263,7 +263,8 @@
         "success": "Análise concluída.",
         "progress": {
           "pending": "Preparando contexto…",
-          "waiting_model": "Aguardando modelo começar a responder…",
+          "waiting_model": "Aguardando primeiro token · {seconds}s",
+          "waiting_hint": "Modelos grandes ou na nuvem podem levar 30–90s pra aquecer antes de começar a responder.",
           "generating": "Gerando · {tokens} tokens · {seconds}s",
           "elapsed": "{seconds}s"
         },

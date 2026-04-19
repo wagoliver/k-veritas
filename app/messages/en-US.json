@@ -263,7 +263,8 @@
         "success": "Analysis completed.",
         "progress": {
           "pending": "Preparing context…",
-          "waiting_model": "Waiting for the model to start responding…",
+          "waiting_model": "Waiting for first token · {seconds}s",
+          "waiting_hint": "Large or cloud-hosted models can take 30–90s to warm up before responding.",
           "generating": "Generating · {tokens} tokens · {seconds}s",
           "elapsed": "{seconds}s"
         },

@@ -217,15 +217,25 @@ export function ProjectAnalysis({ projectId }: { projectId: string }) {
               ) : null}
             </div>
             {isInFlight ? (
-              <div className="font-medium text-primary tabular-nums">
-                {analysis.status === 'pending'
-                  ? t('progress.pending')
-                  : (analysis.tokensOut ?? 0) === 0
-                    ? t('progress.waiting_model')
-                    : t('progress.generating', {
-                        tokens: analysis.tokensOut ?? 0,
-                        seconds: liveElapsedSeconds,
-                      })}
+              <div className="space-y-0.5">
+                <div className="font-medium text-primary tabular-nums">
+                  {analysis.status === 'pending'
+                    ? t('progress.pending')
+                    : (analysis.tokensOut ?? 0) === 0
+                      ? t('progress.waiting_model', {
+                          seconds: liveElapsedSeconds,
+                        })
+                      : t('progress.generating', {
+                          tokens: analysis.tokensOut ?? 0,
+                          seconds: liveElapsedSeconds,
+                        })}
+                </div>
+                {(analysis.tokensOut ?? 0) === 0 &&
+                liveElapsedSeconds > 20 ? (
+                  <div className="text-[11px] text-muted-foreground">
+                    {t('progress.waiting_hint')}
+                  </div>
+                ) : null}
               </div>
             ) : (
               <div>
