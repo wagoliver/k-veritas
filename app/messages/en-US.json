@@ -416,7 +416,48 @@
     "nav": {
       "label": "Settings",
       "profile": "Profile",
-      "security": "Security"
+      "security": "Security",
+      "ai": "AI"
+    },
+    "ai": {
+      "meta_title": "AI",
+      "title": "AI",
+      "subtitle": "Configure the AI provider used to generate scenarios and tests for every project in this organization.",
+      "provider_label": "Provider",
+      "provider_hint": "Ollama uses its native API. LM Studio, llama.cpp, vLLM, OpenRouter and OpenAI accept the OpenAI-compatible option.",
+      "providers": {
+        "ollama": "Ollama",
+        "openai-compatible": "OpenAI-compatible"
+      },
+      "base_url_label": "Base URL",
+      "base_url_hint": "Examples: http://ollama:11434 (Ollama in Docker), http://host.docker.internal:1234 (LM Studio on host), https://api.openai.com",
+      "model_label": "Model",
+      "model_hint": "The exact model identifier served by the provider. Use \"Test connection\" to pull the list of available models.",
+      "api_key_label": "API key",
+      "api_key_hint": "Only required when the provider asks for it (OpenAI, OpenRouter, Groq). Stored encrypted.",
+      "api_key_saved": "An API key is saved. Leave blank to keep it. Check \"remove key\" to delete it.",
+      "api_key_clear": "Remove saved key",
+      "temperature_label": "Temperature",
+      "temperature_hint": "0 makes the output deterministic; higher values increase creativity. Recommended: 0.2 – 0.4.",
+      "num_ctx_label": "Context window (num_ctx)",
+      "num_ctx_hint": "Maximum tokens the model can reason over. Match the model's native limit. Applies only to Ollama.",
+      "timeout_label": "Timeout (ms)",
+      "timeout_hint": "Generation timeout in milliseconds. Increase for larger models.",
+      "test_button": "Test connection",
+      "testing": "Testing…",
+      "test_ok": "Connection OK ({latency}ms). {count} model(s) available.",
+      "test_fail": "Connection failed: {error}",
+      "available_models": "Available models",
+      "pick_model": "Pick",
+      "save": "Save configuration",
+      "saving": "Saving…",
+      "saved": "Configuration saved.",
+      "errors": {
+        "load": "Couldn't load current configuration.",
+        "save": "Couldn't save configuration.",
+        "forbidden": "Only owners and admins can change the AI configuration.",
+        "rate_limited": "Too many changes in a short time. Try again later."
+      }
     },
     "profile": {
       "meta_title": "Profile",

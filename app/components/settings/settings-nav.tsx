@@ -1,6 +1,6 @@
 'use client'
 
-import { ShieldCheck, User as UserIcon } from 'lucide-react'
+import { Brain, ShieldCheck, User as UserIcon } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 
 import { Link, usePathname } from '@/lib/i18n/navigation'
@@ -13,6 +13,7 @@ export function SettingsNav() {
   const items = [
     { href: '/settings/profile', label: t('profile'), icon: UserIcon },
     { href: '/settings/security', label: t('security'), icon: ShieldCheck },
+    { href: '/settings/ai', label: t('ai'), icon: Brain },
   ]
 
   return (

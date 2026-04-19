@@ -416,7 +416,48 @@
     "nav": {
       "label": "Configurações",
       "profile": "Perfil",
-      "security": "Segurança"
+      "security": "Segurança",
+      "ai": "IA"
+    },
+    "ai": {
+      "meta_title": "IA",
+      "title": "IA",
+      "subtitle": "Configure o provider de IA usado para gerar cenários e testes de todos os projetos desta organização.",
+      "provider_label": "Provider",
+      "provider_hint": "Ollama usa a API nativa. LM Studio, llama.cpp, vLLM, OpenRouter e OpenAI usam a opção compatível com OpenAI.",
+      "providers": {
+        "ollama": "Ollama",
+        "openai-compatible": "Compatível com OpenAI"
+      },
+      "base_url_label": "URL base",
+      "base_url_hint": "Exemplos: http://ollama:11434 (Ollama no Docker), http://host.docker.internal:1234 (LM Studio no host), https://api.openai.com",
+      "model_label": "Modelo",
+      "model_hint": "Identificador exato do modelo servido pelo provider. Use \"Testar conexão\" para listar os modelos disponíveis.",
+      "api_key_label": "API key",
+      "api_key_hint": "Necessária apenas quando o provider exige (OpenAI, OpenRouter, Groq). Armazenada cifrada.",
+      "api_key_saved": "Uma API key está salva. Deixe em branco para mantê-la. Marque \"remover\" para apagá-la.",
+      "api_key_clear": "Remover chave salva",
+      "temperature_label": "Temperatura",
+      "temperature_hint": "0 torna a saída determinística; valores maiores aumentam a criatividade. Recomendado: 0.2 – 0.4.",
+      "num_ctx_label": "Janela de contexto (num_ctx)",
+      "num_ctx_hint": "Tokens máximos que o modelo pode processar. Use o limite nativo do modelo. Aplica-se apenas ao Ollama.",
+      "timeout_label": "Timeout (ms)",
+      "timeout_hint": "Tempo máximo da geração em milissegundos. Aumente para modelos grandes.",
+      "test_button": "Testar conexão",
+      "testing": "Testando…",
+      "test_ok": "Conexão OK ({latency}ms). {count} modelo(s) disponível(is).",
+      "test_fail": "Falha na conexão: {error}",
+      "available_models": "Modelos disponíveis",
+      "pick_model": "Usar",
+      "save": "Salvar configuração",
+      "saving": "Salvando…",
+      "saved": "Configuração salva.",
+      "errors": {
+        "load": "Não foi possível carregar a configuração atual.",
+        "save": "Não foi possível salvar a configuração.",
+        "forbidden": "Apenas owners e admins podem alterar a configuração de IA.",
+        "rate_limited": "Muitas alterações em pouco tempo. Tente novamente em alguns minutos."
+      }
     },
     "profile": {
       "meta_title": "Perfil",
