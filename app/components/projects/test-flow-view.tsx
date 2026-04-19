@@ -27,14 +27,23 @@ import {
   type StepKind,
 } from '@/lib/ai/parse-playwright-test'
 
+export type StepStatus = 'idle' | 'running' | 'passed' | 'failed'
+
 interface TestFlowViewProps {
   code: string
   /** Índice GLOBAL (flat) do step onde o teste falhou. Destacado em
    *  vermelho com banner. Use null/undefined quando não houver falha. */
   failedStepIndex?: number | null
+  /** Status por step (índice global, mesmo comprimento de flatten(phases)).
+   *  Quando fornecido, cada step ganha bolinha colorida. */
+  stepStatuses?: StepStatus[] | null
 }
 
-export function TestFlowView({ code, failedStepIndex }: TestFlowViewProps) {
+export function TestFlowView({
+  code,
+  failedStepIndex,
+  stepStatuses,
+}: TestFlowViewProps) {
   const t = useTranslations('projects.overview.analysis.editor.test')
   const parsed = parseTestCode(code)
 
@@ -68,19 +77,30 @@ export function TestFlowView({ code, failedStepIndex }: TestFlowViewProps) {
     }
   }
 
+  // Corta stepStatuses em fatias por phase mantendo os índices corretos
+  let globalStepCursor = 0
   return (
     <div className="border-t border-primary/20 bg-muted/30 p-4">
       <div className="space-y-4">
-        {parsed.phases.map((phase, idx) => (
-          <PhaseBlock
-            key={idx}
-            phase={phase}
-            isLast={idx === parsed.phases.length - 1}
-            failedStepIndex={
-              failedOffset?.phase === idx ? failedOffset.step : null
-            }
-          />
-        ))}
+        {parsed.phases.map((phase, idx) => {
+          const phaseStart = globalStepCursor
+          globalStepCursor += phase.steps.length
+          return (
+            <PhaseBlock
+              key={idx}
+              phase={phase}
+              isLast={idx === parsed.phases.length - 1}
+              failedStepIndex={
+                failedOffset?.phase === idx ? failedOffset.step : null
+              }
+              stepStatuses={
+                stepStatuses
+                  ? stepStatuses.slice(phaseStart, phaseStart + phase.steps.length)
+                  : null
+              }
+            />
+          )
+        })}
       </div>
     </div>
   )
@@ -123,10 +143,12 @@ function PhaseBlock({
   phase,
   isLast,
   failedStepIndex,
+  stepStatuses,
 }: {
   phase: ParsedPhase
   isLast: boolean
   failedStepIndex: number | null
+  stepStatuses: StepStatus[] | null
 }) {
   const colors = PHASE_COLORS[phase.kind]
   return (
@@ -175,6 +197,7 @@ function PhaseBlock({
                   key={i}
                   step={step}
                   failed={failedStepIndex === i}
+                  status={stepStatuses?.[i] ?? null}
                 />
               ))}
             </ul>
@@ -219,21 +242,31 @@ const STEP_ICON_COLORS: Record<StepKind, string> = {
 function StepRow({
   step,
   failed = false,
+  status = null,
 }: {
   step: ParsedStep
   failed?: boolean
+  status?: StepStatus | null
 }) {
-  const [open, setOpen] = useState(failed) // abre automaticamente se falhou
+  const effectiveStatus: StepStatus =
+    status ?? (failed ? 'failed' : 'idle')
+  const [open, setOpen] = useState(effectiveStatus === 'failed')
   const Icon = STEP_ICONS[step.kind]
   const iconColor = STEP_ICON_COLORS[step.kind]
+
+  const isFailed = effectiveStatus === 'failed'
+  const isRunning = effectiveStatus === 'running'
+  const isPassed = effectiveStatus === 'passed'
 
   return (
     <li
       className={cn(
         'rounded-md border bg-card',
-        failed
+        isFailed
           ? 'border-destructive/60 bg-destructive/[0.06] ring-1 ring-destructive/40'
-          : 'border-border/60',
+          : isRunning
+            ? 'border-blue-500/60 bg-blue-500/[0.04] ring-1 ring-blue-500/40'
+            : 'border-border/60',
       )}
     >
       <button
@@ -241,7 +274,11 @@ function StepRow({
         onClick={() => setOpen((v) => !v)}
         className={cn(
           'flex w-full items-center gap-2 px-2 py-1.5 text-left text-xs transition-colors',
-          failed ? 'hover:bg-destructive/10' : 'hover:bg-accent/40',
+          isFailed
+            ? 'hover:bg-destructive/10'
+            : isRunning
+              ? 'hover:bg-blue-500/10'
+              : 'hover:bg-accent/40',
         )}
       >
         <ChevronRight
@@ -250,15 +287,26 @@ function StepRow({
             open && 'rotate-90',
           )}
         />
-        {failed ? (
+        <StatusDot status={effectiveStatus} />
+        {isFailed ? (
           <AlertTriangle className="size-3.5 shrink-0 text-destructive" />
         ) : (
-          <Icon className={cn('size-3.5 shrink-0', iconColor)} />
+          <Icon
+            className={cn(
+              'size-3.5 shrink-0',
+              isPassed
+                ? 'text-fin-gain'
+                : isRunning
+                  ? 'text-blue-600 dark:text-blue-400'
+                  : iconColor,
+            )}
+          />
         )}
         <span
           className={cn(
             'min-w-0 flex-1 truncate',
-            failed && 'font-medium text-destructive',
+            isFailed && 'font-medium text-destructive',
+            isRunning && 'font-medium text-blue-700 dark:text-blue-300',
           )}
         >
           {step.verb}
@@ -268,7 +316,7 @@ function StepRow({
         <pre
           className={cn(
             'overflow-auto border-t px-3 py-2 font-mono text-[10px] leading-relaxed',
-            failed
+            isFailed
               ? 'border-destructive/30 bg-destructive/5'
               : 'border-border/40 bg-muted/30',
           )}
@@ -277,5 +325,20 @@ function StepRow({
         </pre>
       ) : null}
     </li>
+  )
+}
+
+function StatusDot({ status }: { status: StepStatus }) {
+  const cls = {
+    idle: 'bg-muted-foreground/40',
+    running: 'bg-blue-500 animate-pulse',
+    passed: 'bg-fin-gain',
+    failed: 'bg-destructive',
+  }[status]
+  return (
+    <span
+      className={cn('size-2 shrink-0 rounded-full ring-2 ring-card', cls)}
+      aria-hidden
+    />
   )
 }

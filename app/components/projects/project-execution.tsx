@@ -22,7 +22,7 @@ import {
   parseTestCode,
 } from '@/lib/ai/parse-playwright-test'
 import type { EditableFeature, EditableScenario } from './analysis-editor'
-import { TestFlowView } from './test-flow-view'
+import { TestFlowView, type StepStatus } from './test-flow-view'
 
 interface LatestResult {
   scenarioId: string
@@ -397,6 +397,21 @@ function FailedFlow({
   const parsed = parseTestCode(code)
   const failedStepIndex = locateFailedStepIndex(parsed, errorMessage)
 
+  // Status derivado: antes do falho → passed (já executou), o falho →
+  // failed, depois → idle (nunca chegou). Sem detecção → todos idle
+  // (mostra bolinhas cinzas + o banner fica sem "etapa identificada").
+  const flatCount = parsed.phases.reduce((n, p) => n + p.steps.length, 0)
+  const stepStatuses: StepStatus[] =
+    failedStepIndex !== null
+      ? Array.from({ length: flatCount }, (_, i) =>
+          i < failedStepIndex
+            ? 'passed'
+            : i === failedStepIndex
+              ? 'failed'
+              : 'idle',
+        )
+      : Array.from({ length: flatCount }, () => 'idle' as const)
+
   return (
     <div className="overflow-hidden rounded-md border border-border/60 bg-card">
       <button
@@ -419,7 +434,11 @@ function FailedFlow({
         ) : null}
       </button>
       {open ? (
-        <TestFlowView code={code} failedStepIndex={failedStepIndex} />
+        <TestFlowView
+          code={code}
+          failedStepIndex={failedStepIndex}
+          stepStatuses={stepStatuses}
+        />
       ) : null}
     </div>
   )

@@ -358,14 +358,30 @@ function classifyLine(rawLine: string): ParsedStep {
  */
 function extractTargetName(code: string): string | null {
   // { name: 'Dashboard' } ou { name: "Foo" } ou { name: `bar` }
-  const nameMatch = code.match(/name\s*:\s*(['"`])([^'"`]+)\1/)
-  if (nameMatch) return nameMatch[2]
+  const nameStrMatch = code.match(/name\s*:\s*(['"`])([^'"`]+)\1/)
+  if (nameStrMatch) return nameStrMatch[2]
 
-  // getByText('foo') ou getByTestId('bar')
+  // { name: /empresa/i } — regex, pega a parte textual pro match com o erro
+  const nameRegexMatch = code.match(/name\s*:\s*\/([^/]+)\/[a-z]*/)
+  if (nameRegexMatch) return nameRegexMatch[1]
+
+  // getByText('foo') / getByLabel("bar") / getByTestId(`baz`)
   const textMatch = code.match(
     /getBy(Text|TestId|Label)\s*\(\s*(['"`])([^'"`]+)\2/,
   )
   if (textMatch) return textMatch[3]
+
+  // getByText(/regex/) / getByLabel(/regex/)
+  const textRegexMatch = code.match(
+    /getBy(Text|TestId|Label)\s*\(\s*\/([^/]+)\/[a-z]*/,
+  )
+  if (textRegexMatch) return textRegexMatch[2]
+
+  // getByPlaceholder('00.000.000/0000-00')
+  const phMatch = code.match(
+    /getByPlaceholder\s*\(\s*(['"`])([^'"`]+)\1/,
+  )
+  if (phMatch) return phMatch[2]
 
   return null
 }
