@@ -32,6 +32,7 @@ import {
   FeatureEditorSheet,
   type FeatureDraft,
 } from './feature-editor-sheet'
+import { TestFlowView } from './test-flow-view'
 
 export interface Reviewer {
   id: string
@@ -993,6 +994,7 @@ function ScenarioTestBlock({
 }) {
   const t = useTranslations('projects.overview.analysis.editor')
   const [open, setOpen] = useState(false)
+  const [view, setView] = useState<'visual' | 'code'>('visual')
   const [deleting, setDeleting] = useState(false)
 
   if (!test) {
@@ -1052,6 +1054,43 @@ function ScenarioTestBlock({
         />
         <FileCode2 className="size-3.5" />
         <span className="flex-1">{t('test.generated_label')}</span>
+
+        {/* Toggle Visual/Código */}
+        <div
+          role="tablist"
+          onClick={(e) => e.stopPropagation()}
+          className="inline-flex overflow-hidden rounded border border-primary/30 text-[10px] font-medium"
+        >
+          <button
+            type="button"
+            role="tab"
+            aria-selected={view === 'visual'}
+            onClick={() => setView('visual')}
+            className={cn(
+              'px-2 py-0.5 transition-colors',
+              view === 'visual'
+                ? 'bg-primary/20 text-primary'
+                : 'text-muted-foreground hover:bg-primary/10',
+            )}
+          >
+            {t('test.view_visual')}
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={view === 'code'}
+            onClick={() => setView('code')}
+            className={cn(
+              'border-l border-primary/30 px-2 py-0.5 transition-colors',
+              view === 'code'
+                ? 'bg-primary/20 text-primary'
+                : 'text-muted-foreground hover:bg-primary/10',
+            )}
+          >
+            {t('test.view_code')}
+          </button>
+        </div>
+
         <span className="font-mono text-[10px] font-normal text-muted-foreground">
           <DateTime value={test.createdAt} />
         </span>
@@ -1080,9 +1119,13 @@ function ScenarioTestBlock({
         </button>
       </button>
       {open ? (
-        <pre className="max-h-80 overflow-auto border-t border-primary/20 bg-muted/40 p-3 font-mono text-[10px] leading-relaxed">
-          <code>{test.code}</code>
-        </pre>
+        view === 'visual' ? (
+          <TestFlowView code={test.code} />
+        ) : (
+          <pre className="max-h-80 overflow-auto border-t border-primary/20 bg-muted/40 p-3 font-mono text-[10px] leading-relaxed">
+            <code>{test.code}</code>
+          </pre>
+        )
       ) : null}
     </div>
   )

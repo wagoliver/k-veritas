@@ -389,7 +389,10 @@
             "delete": "Delete test",
             "deleted": "Test deleted. You can generate again.",
             "delete_failed": "Couldn't delete the test.",
-            "confirm_delete": "Delete the generated test for this scenario? The scenario will become a candidate for regeneration."
+            "confirm_delete": "Delete the generated test for this scenario? The scenario will become a candidate for regeneration.",
+            "view_visual": "Visual",
+            "view_code": "Code",
+            "flow_not_detected": "Flow could not be auto-detected. See the raw code below."
           },
           "add_feature": "New feature",
           "add_scenario": "Add scenario",

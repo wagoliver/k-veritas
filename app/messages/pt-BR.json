@@ -389,7 +389,10 @@
             "delete": "Excluir teste",
             "deleted": "Teste excluído. Pode gerar novamente.",
             "delete_failed": "Não foi possível excluir o teste.",
-            "confirm_delete": "Excluir o teste gerado deste cenário? O cenário voltará a ser candidato para nova geração."
+            "confirm_delete": "Excluir o teste gerado deste cenário? O cenário voltará a ser candidato para nova geração.",
+            "view_visual": "Visual",
+            "view_code": "Código",
+            "flow_not_detected": "Fluxo não detectado automaticamente. Veja o código abaixo."
           },
           "add_feature": "Nova feature",
           "add_scenario": "Adicionar cenário",
