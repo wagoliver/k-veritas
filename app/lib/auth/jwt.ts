@@ -31,8 +31,12 @@ function getSecrets(): Uint8Array[] {
 }
 
 function accessTtl(): number {
-  const v = Number(process.env.AUTH_ACCESS_TTL_SECONDS ?? 600)
-  return Number.isFinite(v) && v > 0 ? v : 600
+  // Default 1h: suficiente pra não atrapalhar uso normal. O refresh silencioso
+  // no middleware prolonga sessão automaticamente, mas mesmo assim não vale
+  // manter access token curto demais (cada refresh cria um row na tabela
+  // sessions; TTL muito curto enche o banco).
+  const v = Number(process.env.AUTH_ACCESS_TTL_SECONDS ?? 3600)
+  return Number.isFinite(v) && v > 0 ? v : 3600
 }
 
 export async function signAccessToken(

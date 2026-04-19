@@ -19,8 +19,8 @@ function refreshMaxAge(): number {
 }
 
 function accessMaxAge(): number {
-  const v = Number(process.env.AUTH_ACCESS_TTL_SECONDS ?? 600)
-  return Number.isFinite(v) && v > 0 ? v : 600
+  const v = Number(process.env.AUTH_ACCESS_TTL_SECONDS ?? 3600)
+  return Number.isFinite(v) && v > 0 ? v : 3600
 }
 
 export function setRefreshCookie(store: CookieStore, token: string): void {
