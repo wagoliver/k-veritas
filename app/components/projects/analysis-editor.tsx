@@ -482,7 +482,7 @@ function FeatureCard({
       className={cn(
         'overflow-hidden rounded-lg border bg-card',
         hasCandidate
-          ? 'border-dashed border-primary/50 bg-primary/[0.02]'
+          ? 'border-dashed border-blue-500/60 bg-blue-500/[0.03]'
           : feature.reviewedAt
             ? 'border-fin-gain/40'
             : 'border-border',
@@ -524,7 +524,7 @@ function FeatureCard({
               </span>
             ) : null}
             {hasCandidate ? (
-              <span className="inline-flex items-center gap-1 rounded border border-primary/40 bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
+              <span className="inline-flex items-center gap-1 rounded border border-blue-500/40 bg-blue-500/10 px-1.5 py-0.5 text-[10px] font-medium text-blue-600 dark:text-blue-400">
                 <Zap className="size-3" />
                 {t('pending_gen_badge', { count: candidateCount })}
               </span>
@@ -702,7 +702,7 @@ function ScenarioRow({
         'flex items-start gap-3 p-4 transition-colors hover:bg-accent/20',
         scenario.reviewedAt && !isCandidate && 'bg-fin-gain/[0.03]',
         isCandidate &&
-          'border-l-4 border-dashed border-primary/50 bg-primary/[0.03] opacity-60 hover:opacity-100',
+          'border-l-4 border-dashed border-blue-500/60 bg-blue-500/[0.04] opacity-70 hover:opacity-100',
       )}
     >
       <button
@@ -731,7 +731,7 @@ function ScenarioRow({
             </span>
           ) : null}
           {isCandidate ? (
-            <span className="inline-flex items-center gap-1 rounded border border-primary/40 bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
+            <span className="inline-flex items-center gap-1 rounded border border-blue-500/40 bg-blue-500/10 px-1.5 py-0.5 text-[10px] font-medium text-blue-600 dark:text-blue-400">
               <Zap className="size-3" />
               {t('candidate_badge')}
             </span>
