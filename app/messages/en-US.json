@@ -312,6 +312,7 @@
           "manual_badge": "manual",
           "reviewed_badge": "reviewed",
           "reviewed_by": "Reviewed by {name} on {date}",
+          "reviewed_by_prefix": "Reviewed by {name} on",
           "preconditions": "Preconditions",
           "data_needed": "Data needed",
           "feature_deleted": "Feature deleted.",

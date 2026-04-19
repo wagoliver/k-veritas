@@ -10,7 +10,7 @@ import {
   Zap,
 } from 'lucide-react'
 import { useEffect, useState, useTransition } from 'react'
-import { useFormatter, useTranslations } from 'next-intl'
+import { useTranslations } from 'next-intl'
 import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
@@ -22,6 +22,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { DateTime } from '@/components/ui/date-time'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 import { AnalysisEditor } from './analysis-editor'
@@ -367,12 +368,11 @@ export function ProjectAnalysis({ projectId }: { projectId: string }) {
                 ) : null}
               </div>
             ) : (
-              <div>
-                {format.dateTime(new Date(analysis.createdAt), {
-                  dateStyle: 'medium',
-                  timeStyle: 'short',
-                })}
-              </div>
+              <DateTime
+                value={analysis.createdAt}
+                dateStyle="medium"
+                timeStyle="short"
+              />
             )}
           </div>
         </div>

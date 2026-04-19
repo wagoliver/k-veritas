@@ -12,6 +12,8 @@ export default getRequestConfig(async ({ requestLocale }) => {
 
   const messages = (await import(`../../messages/${locale}.json`)).default
 
+  // Timezone não é definido aqui: datas são renderizadas client-side com
+  // timezone do browser pelo componente <DateTime/>. Mantém server agnóstico.
   return {
     locale,
     messages,

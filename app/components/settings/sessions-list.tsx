@@ -2,10 +2,11 @@
 
 import { useEffect, useState, useTransition } from 'react'
 import { Monitor, Smartphone } from 'lucide-react'
-import { useFormatter, useTranslations } from 'next-intl'
+import { useTranslations } from 'next-intl'
 import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
+import { DateTime } from '@/components/ui/date-time'
 import { Skeleton } from '@/components/ui/skeleton'
 
 interface Session {
@@ -37,7 +38,6 @@ function simplifyUserAgent(userAgent: string | null): string {
 
 export function SessionsList() {
   const t = useTranslations('settings.security.sessions')
-  const format = useFormatter()
   const [sessions, setSessions] = useState<Session[] | null>(null)
   const [pending, start] = useTransition()
 
@@ -117,10 +117,11 @@ export function SessionsList() {
               </p>
               <p className="truncate text-xs text-muted-foreground">
                 {s.ip ?? 'IP ?'} ·{' '}
-                {format.dateTime(new Date(s.createdAt), {
-                  dateStyle: 'medium',
-                  timeStyle: 'short',
-                })}
+                <DateTime
+                  value={s.createdAt}
+                  dateStyle="medium"
+                  timeStyle="short"
+                />
               </p>
             </div>
             {!s.isCurrent ? (

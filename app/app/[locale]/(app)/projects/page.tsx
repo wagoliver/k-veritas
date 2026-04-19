@@ -1,9 +1,10 @@
 import type { Metadata } from 'next'
 import { desc, eq, sql } from 'drizzle-orm'
 import { FolderPlus, Plus } from 'lucide-react'
-import { getFormatter, getTranslations, setRequestLocale } from 'next-intl/server'
+import { getTranslations, setRequestLocale } from 'next-intl/server'
 
 import { Button } from '@/components/ui/button'
+import { DateTime } from '@/components/ui/date-time'
 import { db } from '@/lib/db/pg'
 import { crawlJobs, orgMembers, projects } from '@/lib/db/schema'
 import { Link } from '@/lib/i18n/navigation'
@@ -28,7 +29,6 @@ export default async function ProjectsPage({
   const { locale } = await params
   setRequestLocale(locale)
   const t = await getTranslations('projects')
-  const format = await getFormatter()
 
   const session = await getServerSession()
   if (!session) return null
@@ -149,10 +149,11 @@ export default async function ProjectsPage({
                   {p.pagesCount ?? 0}
                 </td>
                 <td className="px-4 py-3 text-right text-xs text-muted-foreground">
-                  {format.dateTime(new Date(p.updatedAt), {
-                    dateStyle: 'medium',
-                    timeStyle: 'short',
-                  })}
+                  <DateTime
+                    value={p.updatedAt as unknown as string}
+                    dateStyle="medium"
+                    timeStyle="short"
+                  />
                 </td>
               </tr>
             ))}

@@ -11,10 +11,11 @@ import {
   UserPlus,
 } from 'lucide-react'
 import { useEffect, useMemo, useState, useTransition } from 'react'
-import { useFormatter, useTranslations } from 'next-intl'
+import { useTranslations } from 'next-intl'
 import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
+import { DateTime } from '@/components/ui/date-time'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 import {
@@ -521,18 +522,11 @@ function ScenarioRow({
 
 function ReviewedLine({ by, at }: { by: string; at: string }) {
   const t = useTranslations('projects.overview.analysis.editor')
-  const format = useFormatter()
-  const date = new Date(at)
   return (
     <p className="flex items-center gap-1 text-[11px] text-fin-gain/80">
       <CheckCircle2 className="size-3" />
-      {t('reviewed_by', {
-        name: by,
-        date: format.dateTime(date, {
-          dateStyle: 'short',
-          timeStyle: 'short',
-        }),
-      })}
+      <span>{t('reviewed_by_prefix', { name: by })}</span>
+      <DateTime value={at} />
     </p>
   )
 }
