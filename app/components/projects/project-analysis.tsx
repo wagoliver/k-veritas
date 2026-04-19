@@ -560,7 +560,7 @@ function ModelPicker({
           <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
             {t('model_picker.heading')}
           </span>
-          <span className="text-[10px] font-normal text-muted-foreground/70">
+          <span className="text-[10px] font-normal text-muted-foreground">
             {t('model_picker.provider_label', { provider })}
           </span>
         </DropdownMenuLabel>
@@ -609,7 +609,7 @@ function ModelPicker({
           ))
         )}
         {listedModels.length > 30 ? (
-          <div className="px-2 py-1 text-[10px] text-muted-foreground/70">
+          <div className="px-2 py-1 text-[10px] text-muted-foreground">
             {t('model_picker.truncated', { count: listedModels.length - 30 })}
           </div>
         ) : null}

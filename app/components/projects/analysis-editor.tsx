@@ -253,7 +253,7 @@ export function AnalysisEditor({
           {mode === 'pending'
             ? t('pending_header', { count: pendingScenarios })
             : t('reviewed_header', { count: reviewedScenarios })}
-          <span className="ml-2 font-mono text-[11px] normal-case tracking-normal text-muted-foreground/70">
+          <span className="ml-2 font-mono text-[11px] normal-case tracking-normal text-muted-foreground">
             {mode === 'pending'
               ? t('reviewed_done', { count: reviewedScenarios })
               : scenariosWithTest > 0
@@ -343,7 +343,7 @@ export function AnalysisEditor({
 
       {visibleFeatures.length === 0 ? (
         <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-border p-12 text-center">
-          <CheckCircle2 className="size-8 text-muted-foreground/60" />
+          <CheckCircle2 className="size-8 text-muted-foreground" />
           <p className="max-w-md text-sm text-muted-foreground">
             {mode === 'pending'
               ? t('empty_pending')
@@ -809,7 +809,7 @@ function FeatureCard({
               </span>
             ))}
             {feature.scenarios.length > 3 ? (
-              <span className="text-[11px] text-muted-foreground/70">
+              <span className="text-[11px] text-muted-foreground">
                 +{feature.scenarios.length - 3}
               </span>
             ) : null}
@@ -891,7 +891,7 @@ function ScenarioRow({
         'flex items-start gap-3 rounded-md border border-border/60 bg-card p-4 shadow-sm transition-shadow hover:shadow-md',
         scenario.reviewedAt && !isCandidate && 'bg-fin-gain/[0.03]',
         isCandidate &&
-          'border-l-4 border-dashed border-blue-500/60 bg-blue-500/[0.04] opacity-70 hover:opacity-100',
+          'border-l-4 border-dashed border-blue-500/60 bg-blue-500/[0.04]',
       )}
     >
       <button
@@ -997,7 +997,7 @@ function ScenarioTestBlock({
 
   if (!test) {
     return (
-      <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground/70">
+      <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
         <FileCode2 className="size-3" />
         <span>{t('test.none')}</span>
       </div>
@@ -1091,7 +1091,7 @@ function ScenarioTestBlock({
 function ReviewedLine({ by, at }: { by: string; at: string }) {
   const t = useTranslations('projects.overview.analysis.editor')
   return (
-    <p className="flex items-center gap-1 text-[11px] text-fin-gain/80">
+    <p className="flex items-center gap-1 text-[11px] text-fin-gain">
       <CheckCircle2 className="size-3" />
       <span>{t('reviewed_by_prefix', { name: by })}</span>
       <DateTime value={at} />
