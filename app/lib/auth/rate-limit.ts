@@ -93,4 +93,14 @@ export const BUCKETS = {
     capacity: 2,
     refillPerSecond: 1 / 30,
   }),
+  aiConfigTest: (orgId: string): BucketSpec => ({
+    key: `ai:config-test:${orgId}`,
+    capacity: 10,
+    refillPerSecond: 10 / 60,
+  }),
+  aiConfigWrite: (orgId: string): BucketSpec => ({
+    key: `ai:config-write:${orgId}`,
+    capacity: 20,
+    refillPerSecond: 20 / 3600,
+  }),
 }

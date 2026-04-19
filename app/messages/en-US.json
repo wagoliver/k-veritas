@@ -251,7 +251,29 @@
       "recrawl_started": "New crawl started.",
       "tabs": {
         "map": "Site map",
-        "scenarios": "Scenarios"
+        "scenarios": "Scenarios",
+        "analysis": "AI Analysis"
+      },
+      "analysis": {
+        "summary": "Summary",
+        "features_count": "{count} features detected",
+        "preconditions": "Preconditions",
+        "data_needed": "Data needed",
+        "reanalyze": "Re-analyze",
+        "success": "Analysis completed.",
+        "empty": {
+          "title": "No analysis yet",
+          "description": "AI will read the site map and captured elements to suggest features and test scenarios automatically.",
+          "cta": "Analyze with AI"
+        },
+        "errors": {
+          "rate_limited": "Too many analyses started. Wait before trying again.",
+          "conflict": "Analysis already running.",
+          "failed": "Analysis failed: {reason}",
+          "failed_title": "Analysis failed",
+          "network": "Connection failed.",
+          "generic": "Couldn't start analysis."
+        }
       },
       "errors": {
         "crawl_running": "A crawl is already in progress.",

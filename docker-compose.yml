@@ -87,6 +87,7 @@ services:
       CLICKHOUSE_USER: kveritas
       CLICKHOUSE_PASSWORD: kveritas
       APP_URL: http://localhost:3000
+      OLLAMA_URL: http://ollama:11434
       NODE_ENV: production
     ports:
       - "3000:3000"
@@ -118,6 +119,29 @@ services:
     networks:
       - kv-net
 
+  ollama:
+    image: ollama/ollama:latest
+    container_name: kveritas-ollama
+    restart: unless-stopped
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_models:/root/.ollama
+    networks:
+      - kv-net
+    environment:
+      OLLAMA_KEEP_ALIVE: "1h"
+      OLLAMA_HOST: "0.0.0.0"
+    # Descomentar o bloco abaixo para habilitar GPU NVIDIA
+    # (exige nvidia-container-toolkit instalado no host)
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]
+
 networks:
   kv-net:
     driver: bridge
@@ -127,3 +151,4 @@ volumes:
   clickhouse_data:
   clickhouse_logs:
   artifacts:
+  ollama_models:

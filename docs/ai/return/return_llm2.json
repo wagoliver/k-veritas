@@ -1,0 +1,83 @@
+
+{"summary":"xOneCloud is a workforce analytics and employee monitoring platform designed for corporate environments. It provides real-time visibility into workstation activities, 
+productivity metrics including journey adherence, inactivity periods, internet and software usage, and departmental analytics. The system serves HR managers, team leaders, and IT 
+administrators who need to optimize workforce performance, ensure compliance with labor regulations, and manage software licenses across the 
+organization.","inferredLocale":"en-US","features":[{"id":"workforce-analytics","name":"Workforce Analytics","description":"Comprehensive dashboards and analytical views for monitoring 
+employee productivity metrics, journey adherence, system usage patterns, and departmental performance 
+indicators.","paths":["/dashboard/main","/dashboard/journey-adherence","/dashboard/systemic-waiting","/dashboard/inactivity","/dashboard/internet-usage","/dashboard/software-usage","/anindicators.","paths":["/dashboard/main","/dashboard/journey-adherence","/dashboard/ystemic-waiting","/dashboard/inactivity","/dashboard/internet-usage","/dashboard/software-usage","/analysis/department-activity","/analysis/employee-activity","/analysis/journey-detour","/analysis/geolocation"],"scenarios":[{"title":"View main productivity dashboard with key 
+metrics","rationale":"Core business flow enabling managers to monitor team performance and identify productivity trends across the 
+organization.","priority":"critical","preconditions":["User authenticated with dashboard viewing permissions","Historical activity data exists in system"],"dataNeeded":["Active user 
+session","Sample productivity metrics for last 30 days"]},{"title":"Filter internet usage reports by date range and search terms","rationale":"Validates data filtering capabilities 
+essential for compliance audits and investigating specific usage patterns.","priority":"high","preconditions":["User on internet usage dashboard","Internet usage records exist for 
+selected period"],"dataNeeded":["Date range parameters","Search keywords for URLs or domains"]},{"title":"Analyze journey detours and non-compliant activity 
+paths","rationale":"Critical for identifying workflow inefficiencies, security risks, or unauthorized application usage during work hours.","priority":"high","preconditions":["Journey 
+tracking enabled for target employees","Detour records exist in database"],"dataNeeded":["Employee identifiers","Time period for analysis"]},{"title":"Export department activity 
+summary for payroll integration","rationale":"Supports external reporting requirements and integration with billing systems while ensuring data 
+portability.","priority":"normal","preconditions":["User has export permissions","Department classification configured"],"dataNeeded":["Department identifiers","Date range for 
+export","Export format preferences"]},{"title":"Handle empty state when no geolocation data exists","rationale":"Ensures graceful UI behavior for new deployments or privacy-restricted 
+scenarios without breaking user experience.","priority":"normal","preconditions":["User accesses geolocation module","No location tracking data collected 
+yet"],"dataNeeded":[]},{"title":"Validate aggregation accuracy across department activity views","rationale":"Prevents data integrity issues that could lead to wrong managerial 
+decisions or compliance violations.","priority":"critical","preconditions":["Multi-department organizational structure configured","Activity data exists across 
+departments"],"dataNeeded":["Expected aggregation totals","Individual employee records for verification"]}]},{"id":"reporting","name":"Reporting & Data 
+Export","description":"Generation and management of historical reports with configurable parameters for compliance documentation, audits, and strategic workforce 
+planning.","paths":["/reports/generate","/reports/list"],"scenarios":[{"title":"Generate compliance report with custom date range","rationale":"Core functionality for HR audits and 
+legal compliance requirements regarding employee working hours and activities.","priority":"critical","preconditions":["User has report generation permission","Data exists for selected 
+period"],"dataNeeded":["Start date","End date","Report type selection from combobox"]},{"title":"List and filter previously generated reports","rationale":"Enables users to locate and 
+reuse historical analyses without regenerating large datasets.","priority":"high","preconditions":["User has report viewing permissions","Previous reports exist in 
+system"],"dataNeeded":["Filter criteria (date range, report type)"]},{"title":"Attempt report generation without proper role permissions","rationale":"Security validation to ensure 
+data access governance and prevent unauthorized data extraction.","priority":"high","preconditions":["User authenticated without report generation role"],"dataNeeded":["Non-privileged 
+user credentials"]},{"title":"Handle invalid date range selection errors","rationale":"Prevents processing errors and ensures data quality by validating business rules before report 
+execution.","priority":"normal","preconditions":["User on report generation page"],"dataNeeded":["End date before start date","Future dates exceeding current 
+date"]}]},{"id":"real-time-monitoring","name":"Real-time Monitoring","description":"Live workstation monitoring capabilities providing immediate visibility into current user 
+activities, active applications, and system status.","paths":["/monitoring/workstation"],"scenarios":[{"title":"View live workstation status dashboard","rationale":"Critical for IT 
+support and managers needing immediate visibility into active employee sessions and current activities.","priority":"high","preconditions":["Real-time agent data streaming 
+enabled","Active workstations exist in network"],"dataNeeded":["Active agent sessions with current status"]},{"title":"Filter workstations by department or online 
+status","rationale":"Enables focused monitoring of specific teams or identification of disconnected endpoints requiring attention.","priority":"normal","preconditions":["Multiple 
+workstations registered","Department classifications configured"],"dataNeeded":["Department identifiers","Status filters (online/offline)"]},{"title":"Detect and display workstation 
+offline states","rationale":"Ensures accurate representation of agent connectivity issues for immediate technical intervention.","priority":"normal","preconditions":["Known offline 
+workstations in database"],"dataNeeded":["Offline agent records","Last seen timestamps"]}]},{"id":"agent-management","name":"Agent Management","description":"Administration of desktop 
+monitoring agents including registration tracking, connectivity monitoring, version management, and license 
+allocation.","paths":["/agents/registered-agents","/agents/agents-status","/agents/licensing"],"scenarios":[{"title":"View complete inventory of registered agents","rationale":"Primary 
+interface for IT asset management and tracking deployment coverage across corporate devices.","priority":"high","preconditions":["Agents installed on endpoints","Database 
+synchronized"],"dataNeeded":["Registered agent records with metadata"]},{"title":"Monitor agent connectivity and health status","rationale":"Critical for ensuring continuous monitoring 
+coverage and identifying technical failures or network issues.","priority":"critical","preconditions":["Mixed status agents exist (online/offline/pending)"],"dataNeeded":["Agents with 
+various connection states"]},{"title":"Review license utilization against quota limits","rationale":"Prevents service disruption due to license exhaustion and supports procurement 
+planning and budget forecasting.","priority":"high","preconditions":["Licensing module configured","Active licenses allocated"],"dataNeeded":["License quota information","Current usage 
+statistics"]},{"title":"Filter agents by specific version or operating system","rationale":"Supports administrative tasks in large deployments requiring targeted updates or 
+compatibility checks.","priority":"normal","preconditions":["Multiple agents registered with varied attributes"],"dataNeeded":["Filter parameters (agent version, OS 
+type)"]}]},{"id":"user-administration","name":"User & Access Administration","description":"Corporate configuration management including user provisioning, role-based access control, 
+network policies, and organizational structure 
+definition.","paths":["/settings/access-and-permissions","/settings/corporate-wi-fi","/settings/departments","/settings/categories"],"scenarios":[{"title":"Add new user with specific 
+role permissions","rationale":"Core security function controlling system access levels and data visibility across different organizational 
+roles.","priority":"critical","preconditions":["Admin user authenticated","Role definitions exist in system"],"dataNeeded":["New user details (email, name)","Role assignment from 
+combobox"]},{"title":"Configure corporate Wi-Fi networks for geolocation validation","rationale":"Essential for accurate indoor positioning and distinguishing corporate network 
+activity from external connections.","priority":"normal","preconditions":["Network configuration permissions","Physical network infrastructure mapped"],"dataNeeded":["SSID","Network 
+credentials","Location mapping data"]},{"title":"Create organizational department hierarchy","rationale":"Foundational setup for analytics segmentation and hierarchical reporting 
+structures.","priority":"high","preconditions":["Organizational admin privileges","Parent departments defined if nested"],"dataNeeded":["Department name","Parent department 
+reference"]},{"title":"Define productivity categories for activity classification","rationale":"Enables meaningful analytics by grouping applications and websites into productive, 
+neutral, or unproductive classifications.","priority":"normal","preconditions":["Category management permissions"],"dataNeeded":["Category name","Classification rules","Color 
+codes"]},{"title":"Attempt administrative action without sufficient privileges","rationale":"Validates RBAC implementation and prevents unauthorized configuration changes affecting 
+system security.","priority":"critical","preconditions":["Standard user session without admin rights"],"dataNeeded":["Non-privileged user 
+account"]}]},{"id":"account-management","name":"Account & Profile Management","description":"Personal user settings including profile customization, password security management, 
+language preferences, desktop agent installation, and account termination.","paths":["/settings/my-account","/settings/first-access"],"scenarios":[{"title":"Complete first-time user 
+onboarding configuration","rationale":"Critical path for new user activation and initial system setup including security preferences.","priority":"high","preconditions":["New user 
+invitation accepted","First access token valid"],"dataNeeded":["Initial password setup","Language preference selection","Profile photo (optional)"]},{"title":"Update profile photo and 
+account information","rationale":"Standard user maintenance for identity management and personalization of the workspace.","priority":"normal","preconditions":["Authenticated user 
+session","Photo upload permissions"],"dataNeeded":["Image file (JPG/PNG format)","Updated profile fields"]},{"title":"Change account password with current 
+verification","rationale":"Security maintenance enabling users to maintain credential hygiene and respond to security policies.","priority":"high","preconditions":["User logged in with 
+current password"],"dataNeeded":["Current password","New password meeting complexity rules","Password confirmation"]},{"title":"Permanently delete user account and associated 
+data","rationale":"Critical destructive action requiring validation to prevent accidental data loss and support GDPR right to erasure.","priority":"critical","preconditions":["User 
+authenticated","No pending administrative responsibilities"],"dataNeeded":["Deletion confirmation","Re-authentication credentials"]},{"title":"Change interface language 
+preference","rationale":"Accessibility feature supporting international team adoption and user comfort.","priority":"low","preconditions":["Multiple language options available in 
+combobox"],"dataNeeded":["Language selection value"]}]},{"id":"notification-center","name":"Notification Center","description":"Centralized system notifications management for security 
+alerts, system warnings, report completions, and administrative communications.","paths":["/notification-center/notifications"],"scenarios":[{"title":"Mark multiple notifications as 
+read","rationale":"Core notification hygiene preventing alert fatigue and ensuring attention to new critical items.","priority":"normal","preconditions":["Unread notifications exist in 
+inbox"],"dataNeeded":["Notification identifiers to mark"]},{"title":"Search notification history by content keywords","rationale":"Supports audit trails and locating specific past 
+alerts or system messages for reference.","priority":"normal","preconditions":["Notification history exists in database"],"dataNeeded":["Search keywords from input 
+field"]},{"title":"Handle empty notification inbox state","rationale":"Ensures graceful UX for new users or after notification clearing without displaying 
+errors.","priority":"low","preconditions":["Zero notifications in system for user"],"dataNeeded":[]}]},{"id":"application-shell","name":"Application Shell","description":"Core 
+navigation structure and landing page providing authenticated access to all system modules and primary entry points.","paths":["/"],"scenarios":[{"title":"Navigate to primary dashboard 
+from landing page","rationale":"Validates main entry flow and routing integrity ensuring users reach relevant content after 
+authentication.","priority":"high","preconditions":["Authenticated session","Dashboard module accessible"],"dataNeeded":["Valid user credentials"]},{"title":"Access settings module 
+through global navigation","rationale":"Verifies global navigation reachability for configuration tasks from any entry point.","priority":"normal","preconditions":["User on landing 
+page with navigation visible"],"dataNeeded":[]}]}]}

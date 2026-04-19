@@ -7,6 +7,7 @@ import {
   integer,
   jsonb,
   inet,
+  real,
   customType,
   index,
   uniqueIndex,
@@ -315,11 +316,75 @@ export type MfaFactor = typeof mfaFactors.$inferSelect
 export type Org = typeof orgs.$inferSelect
 export type OrgMember = typeof orgMembers.$inferSelect
 export type OrgRole = 'owner' | 'admin' | 'editor' | 'member' | 'viewer'
+
+export const orgAiConfig = pgTable('org_ai_config', {
+  orgId: uuid('org_id')
+    .primaryKey()
+    .references(() => orgs.id, { onDelete: 'cascade' }),
+  provider: text('provider').notNull(),
+  baseUrl: text('base_url').notNull(),
+  model: text('model').notNull(),
+  apiKeyEncrypted: bytea('api_key_encrypted'),
+  temperature: real('temperature').notNull().default(0.3),
+  numCtx: integer('num_ctx').notNull().default(16384),
+  timeoutMs: integer('timeout_ms').notNull().default(300_000),
+  updatedBy: uuid('updated_by')
+    .notNull()
+    .references(() => users.id),
+  createdAt: timestamp('created_at', { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+})
+
+export const projectAnalyses = pgTable(
+  'project_analyses',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    projectId: uuid('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    crawlId: uuid('crawl_id').references(() => crawlJobs.id, {
+      onDelete: 'set null',
+    }),
+    status: text('status').notNull().default('pending'),
+    model: text('model').notNull(),
+    provider: text('provider').notNull(),
+    summary: text('summary'),
+    inferredLocale: text('inferred_locale'),
+    features: jsonb('features').notNull().default(sql`'[]'::jsonb`),
+    rawResponse: text('raw_response'),
+    error: text('error'),
+    requestedBy: uuid('requested_by')
+      .notNull()
+      .references(() => users.id),
+    tokensIn: integer('tokens_in'),
+    tokensOut: integer('tokens_out'),
+    durationMs: integer('duration_ms'),
+    startedAt: timestamp('started_at', { withTimezone: true }),
+    finishedAt: timestamp('finished_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    projectIdx: index('project_analyses_project_idx').on(t.projectId),
+    statusIdx: index('project_analyses_status_idx').on(t.status),
+  }),
+)
+
 export type Project = typeof projects.$inferSelect
 export type NewProject = typeof projects.$inferInsert
 export type ProjectScenario = typeof projectScenarios.$inferSelect
 export type CrawlJob = typeof crawlJobs.$inferSelect
 export type CrawlPage = typeof crawlPages.$inferSelect
 export type CrawlElement = typeof crawlElements.$inferSelect
+export type ProjectAnalysis = typeof projectAnalyses.$inferSelect
+export type OrgAiConfig = typeof orgAiConfig.$inferSelect
+export type NewOrgAiConfig = typeof orgAiConfig.$inferInsert
 export type ProjectStatus = 'draft' | 'crawling' | 'ready' | 'failed'
 export type AuthKind = 'none' | 'form'
+export type AnalysisStatus = 'pending' | 'running' | 'completed' | 'failed'
+export type AIProvider = 'ollama' | 'openai-compatible'

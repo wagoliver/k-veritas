@@ -1,6 +1,6 @@
 'use client'
 
-import { Map, RotateCw, ScrollText, Loader2 } from 'lucide-react'
+import { Map, RotateCw, ScrollText, Loader2, Sparkles } from 'lucide-react'
 import { useEffect, useState, useTransition } from 'react'
 import { useTranslations } from 'next-intl'
 import { toast } from 'sonner'
@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 import { useRouter } from '@/lib/i18n/navigation'
+import { ProjectAnalysis } from './project-analysis'
 import { ScenariosEditor } from './scenarios-editor'
 import { SiteMapList } from './site-map-list'
 
@@ -21,7 +22,7 @@ interface ProjectOverviewProps {
   }
 }
 
-type Tab = 'map' | 'scenarios'
+type Tab = 'map' | 'scenarios' | 'analysis'
 
 export function ProjectOverview({ project }: ProjectOverviewProps) {
   const t = useTranslations('projects.overview')
@@ -90,6 +91,12 @@ export function ProjectOverview({ project }: ProjectOverviewProps) {
           icon={<ScrollText className="size-4" />}
           label={t('tabs.scenarios')}
         />
+        <TabBtn
+          active={tab === 'analysis'}
+          onClick={() => setTab('analysis')}
+          icon={<Sparkles className="size-4" />}
+          label={t('tabs.analysis')}
+        />
         <div className="ml-auto flex items-center gap-2 pb-2">
           <Button
             variant="outline"
@@ -117,6 +124,10 @@ export function ProjectOverview({ project }: ProjectOverviewProps) {
 
       <section className={cn(tab === 'scenarios' ? 'block' : 'hidden')}>
         <ScenariosEditor projectId={project.id} />
+      </section>
+
+      <section className={cn(tab === 'analysis' ? 'block' : 'hidden')}>
+        <ProjectAnalysis projectId={project.id} />
       </section>
     </div>
   )
