@@ -605,6 +605,10 @@ export const testExecRuns = pgTable(
     scenariosCount: integer('scenarios_count').notNull().default(0),
     passedCount: integer('passed_count').notNull().default(0),
     failedCount: integer('failed_count').notNull().default(0),
+    currentStepLabel: text('current_step_label'),
+    currentStepLine: integer('current_step_line'),
+    stepsCompleted: integer('steps_completed').notNull().default(0),
+    stepsTotal: integer('steps_total').notNull().default(0),
     createdAt: timestamp('created_at', { withTimezone: true })
       .notNull()
       .defaultNow(),

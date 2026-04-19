@@ -38,6 +38,10 @@ interface RunningInfo {
   runId: string
   status: 'pending' | 'running'
   createdAt: string
+  stepsCompleted: number
+  stepsTotal: number
+  currentStepLabel: string | null
+  currentStepLine: number | null
 }
 
 export function ProjectExecution({ projectId }: { projectId: string }) {
@@ -333,9 +337,23 @@ function ScenarioRunRow({
           <p className="font-medium">{scenario.title}</p>
         </div>
         {isRunning ? (
-          <p className="text-xs text-primary">
-            {t('running', { seconds: elapsedSeconds })}
-          </p>
+          <>
+            <p className="text-xs text-primary">
+              {running.currentStepLabel
+                ? t('running_step', {
+                    seconds: elapsedSeconds,
+                    step: running.currentStepLabel,
+                  })
+                : t('running', { seconds: elapsedSeconds })}
+            </p>
+            {scenario.latestTest ? (
+              <LiveFlow
+                code={scenario.latestTest.code}
+                stepsCompleted={running.stepsCompleted}
+                currentStepLine={running.currentStepLine}
+              />
+            ) : null}
+          </>
         ) : isDone && latest ? (
           <div className="flex flex-wrap items-center gap-x-3 text-xs text-muted-foreground">
             <span className="flex items-center gap-1">
@@ -382,6 +400,37 @@ function ScenarioRunRow({
         {t('run')}
       </Button>
     </li>
+  )
+}
+
+function LiveFlow({
+  code,
+  stepsCompleted,
+  currentStepLine,
+}: {
+  code: string
+  stepsCompleted: number
+  currentStepLine: number | null
+}) {
+  const parsed = parseTestCode(code)
+  const flatCount = parsed.phases.reduce((n, p) => n + p.steps.length, 0)
+
+  // Heurística conservadora: o Nth step concluído corresponde ao Nth step
+  // do ParsedTest (o reporter filtra só top-level pw:api, em ordem). Pode
+  // haver drift se o mapping do parser não bater 1:1 (asserções extras
+  // dentro de um expect.soft, por exemplo), mas pra a maioria dos testes
+  // lineares Given/When/Then isso funciona.
+  const completed = Math.min(stepsCompleted, flatCount)
+  const stepStatuses: StepStatus[] = Array.from({ length: flatCount }, (_, i) =>
+    i < completed ? 'passed' : i === completed ? 'running' : 'idle',
+  )
+
+  return (
+    <TestFlowView
+      code={code}
+      failedStepIndex={null}
+      stepStatuses={stepStatuses}
+    />
   )
 }
 

@@ -276,6 +276,7 @@
         "legend_never_run": "Never ran",
         "run": "Run",
         "running": "Running · {seconds}s",
+        "running_step": "Running · {seconds}s · {step}",
         "never_run": "Never executed",
         "enqueued": "Execution queued. Runner will pick it up shortly.",
         "flow_toggle": "View test flow",

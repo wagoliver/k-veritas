@@ -106,6 +106,29 @@ export async function heartbeat(jobId: string, workerId: string): Promise<void> 
   `
 }
 
+/**
+ * Atualiza o progresso live do run conforme o reporter do Playwright
+ * emite eventos. Worker chama throttled (~400ms) pra não martelar o DB.
+ */
+export async function updateRunProgress(
+  jobId: string,
+  data: {
+    stepsCompleted: number
+    stepsTotal: number
+    currentStepLabel: string | null
+    currentStepLine: number | null
+  },
+): Promise<void> {
+  await sql`
+    UPDATE test_exec_runs SET
+      steps_completed = ${data.stepsCompleted},
+      steps_total = ${data.stepsTotal},
+      current_step_label = ${data.currentStepLabel},
+      current_step_line = ${data.currentStepLine}
+    WHERE id = ${jobId}
+  `
+}
+
 export interface ResultRow {
   scenario_id: string
   title: string

@@ -45,15 +45,22 @@ export async function GET(
     ORDER BY scenario_id_snapshot, created_at DESC
   `)
 
-  // Também devolve runs em andamento (pending/running) pra UI poder
-  // mostrar "rodando..." no cenário correspondente (scope='scenario')
+  // Runs em andamento (pending/running) com o progresso live vindo do
+  // custom reporter (stepsCompleted, currentStepLabel, etc.) pra a UI
+  // renderizar as bolinhas acendendo em tempo real.
   const pending = await db.execute<{
     scope_id: string | null
     run_id: string
     status: string
     created_at: Date
+    steps_completed: number
+    steps_total: number
+    current_step_label: string | null
+    current_step_line: number | null
   }>(sql`
-    SELECT scope_id, id AS run_id, status, created_at
+    SELECT
+      scope_id, id AS run_id, status, created_at,
+      steps_completed, steps_total, current_step_label, current_step_line
     FROM test_exec_runs
     WHERE project_id = ${project.id}
       AND status IN ('pending','running')
@@ -78,6 +85,10 @@ export async function GET(
         scenarioId: r.scope_id,
         runId: r.run_id,
         status: r.status,
+        stepsCompleted: r.steps_completed,
+        stepsTotal: r.steps_total,
+        currentStepLabel: r.current_step_label,
+        currentStepLine: r.current_step_line,
         createdAt:
           r.created_at instanceof Date
             ? r.created_at.toISOString()

@@ -2,8 +2,18 @@ import { mkdir, writeFile, rm, symlink } from 'node:fs/promises'
 import { spawn } from 'node:child_process'
 import { join } from 'node:path'
 
-import type { PendingExecJob, Project, ScenarioToRun, ResultRow } from './db.ts'
+import {
+  updateRunProgress,
+  type PendingExecJob,
+  type Project,
+  type ScenarioToRun,
+  type ResultRow,
+} from './db.ts'
 import { decryptSecret } from './crypto.ts'
+
+// Prefixo usado pelo custom reporter pra marcar eventos parseáveis.
+// Precisa bater com o reporter em pw-reporter.cjs.
+const EVENT_PREFIX = '::KV_EVT::'
 
 interface PlaywrightJsonReport {
   stats?: {
@@ -108,9 +118,8 @@ export async function executeScenarioJob(
       if (creds.loginUrl) env.TEST_LOGIN_URL = creds.loginUrl
     }
 
-    // Spawn npx playwright test dentro do /work/<runId>
-    // Usa o node_modules já instalado em /app (via NODE_PATH).
-    const exit = await spawnPlaywright(runDir, reportPath, env)
+    // Spawn + parse de eventos do reporter em streaming pra progresso live
+    const exit = await spawnPlaywright(runDir, reportPath, env, job.id)
 
     const reportText = await readOptionalFile(reportPath)
     const parsed = reportText
@@ -163,7 +172,10 @@ export default defineConfig({
   timeout: ${opts.playwrightTimeoutMs},
   fullyParallel: false,
   retries: 0,
-  reporter: [['json', { outputFile: ${JSON.stringify(reportPath)} }]],
+  reporter: [
+    ['json', { outputFile: ${JSON.stringify(reportPath)} }],
+    ['/app/src/pw-reporter.cjs'],
+  ],
   outputDir: ${JSON.stringify(artifactsDir)},
   use: {
     baseURL: ${JSON.stringify(project.target_url)},
@@ -206,23 +218,17 @@ async function spawnPlaywright(
   cwd: string,
   reportPath: string,
   env: NodeJS.ProcessEnv,
+  jobId: string,
 ): Promise<{ stdout: string; exitCode: number }> {
   return new Promise((resolve) => {
-    // NODE_PATH aponta pro node_modules instalado em /app pelo Dockerfile,
-    // permitindo que @playwright/test seja resolvido mesmo rodando de /work.
     const child = spawn(
       'npx',
       ['playwright', 'test', '--config=playwright.config.ts'],
       {
-        // Rodando dentro do runDir: Playwright resolve @playwright/test
-        // pelo node_modules simbólico; testDir, outputFile e outputDir
-        // já foram configurados com caminhos absolutos ou relativos à
-        // config file.
         cwd,
         env: {
           ...env,
           PLAYWRIGHT_JSON_OUTPUT_NAME: reportPath,
-          // Silencia progress TTY pro stdout ficar parseável
           CI: '1',
         },
       },
@@ -230,13 +236,91 @@ async function spawnPlaywright(
 
     let stdout = ''
     let stderr = ''
+    let buffer = ''
+
+    // Progresso live: conta steps top-level, atualiza DB throttled
+    let stepsTotal = 0 // estimado; cresce conforme os steps aparecem
+    let stepsCompleted = 0
+    let currentLabel: string | null = null
+    let currentLine: number | null = null
+    let lastFlushAt = 0
+    let pendingFlush = false
+
+    const flush = () => {
+      lastFlushAt = Date.now()
+      pendingFlush = false
+      void updateRunProgress(jobId, {
+        stepsCompleted,
+        stepsTotal: Math.max(stepsTotal, stepsCompleted),
+        currentStepLabel: currentLabel,
+        currentStepLine: currentLine,
+      }).catch(() => {
+        // best-effort: progresso é melhor ter aproximado que não ter
+      })
+    }
+
+    const scheduleFlush = () => {
+      const now = Date.now()
+      if (now - lastFlushAt >= 400) {
+        flush()
+      } else if (!pendingFlush) {
+        pendingFlush = true
+        setTimeout(() => {
+          if (pendingFlush) flush()
+        }, 400)
+      }
+    }
+
+    const handleLine = (line: string) => {
+      if (!line.startsWith(EVENT_PREFIX)) return
+      try {
+        const payload = JSON.parse(line.slice(EVENT_PREFIX.length)) as {
+          type: string
+          title?: string
+          line?: number | null
+          index?: number
+        }
+        switch (payload.type) {
+          case 'step-begin':
+            stepsTotal = Math.max(stepsTotal, payload.index ?? stepsTotal + 1)
+            currentLabel = payload.title ?? null
+            currentLine = payload.line ?? null
+            scheduleFlush()
+            break
+          case 'step-end':
+            stepsCompleted += 1
+            scheduleFlush()
+            break
+          case 'test-end':
+            currentLabel = null
+            scheduleFlush()
+            break
+        }
+      } catch {
+        // linha de evento corrompida: ignora
+      }
+    }
+
+    const processChunk = (chunk: string) => {
+      buffer += chunk
+      let idx: number
+      while ((idx = buffer.indexOf('\n')) >= 0) {
+        const line = buffer.slice(0, idx)
+        buffer = buffer.slice(idx + 1)
+        handleLine(line)
+      }
+    }
+
     child.stdout?.on('data', (chunk) => {
-      stdout += chunk.toString()
+      const str = chunk.toString()
+      stdout += str
+      processChunk(str)
     })
     child.stderr?.on('data', (chunk) => {
       stderr += chunk.toString()
     })
     child.on('close', (code) => {
+      if (pendingFlush) flush()
       const combined = stdout + (stderr ? `\n[stderr]\n${stderr}` : '')
       resolve({ stdout: combined.slice(-8_000), exitCode: code ?? 0 })
     })

@@ -276,6 +276,7 @@
         "legend_never_run": "Nunca executou",
         "run": "Rodar",
         "running": "Executando · {seconds}s",
+        "running_step": "Executando · {seconds}s · {step}",
         "never_run": "Ainda não executado",
         "enqueued": "Execução enfileirada. O runner pega em instantes.",
         "flow_toggle": "Ver fluxo do teste",
