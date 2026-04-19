@@ -4,11 +4,17 @@ import {
   CheckCircle2,
   ChevronRight,
   Circle,
+  Copy,
+  Download,
+  FileCode2,
+  History,
+  Loader2,
   Pencil,
   Plus,
   Sparkles,
   Trash2,
   UserPlus,
+  Zap,
 } from 'lucide-react'
 import { useEffect, useMemo, useState, useTransition } from 'react'
 import { useTranslations } from 'next-intl'
@@ -32,6 +38,13 @@ export interface Reviewer {
   displayName: string
 }
 
+export interface LatestTest {
+  id: string
+  code: string
+  testRunId: string
+  createdAt: string
+}
+
 export interface EditableScenario {
   id: string
   title: string
@@ -42,6 +55,7 @@ export interface EditableScenario {
   reviewedAt: string | null
   reviewedBy: Reviewer | null
   source: 'ai' | 'manual'
+  latestTest: LatestTest | null
 }
 
 export interface EditableFeature {
@@ -66,6 +80,20 @@ export function AnalysisEditor({ projectId }: { projectId: string }) {
   const [featureEdit, setFeatureEdit] = useState<EditableFeature | null | 'new'>(
     null,
   )
+  const [generating, startGenerate] = useTransition()
+  const [latestRun, setLatestRun] = useState<{
+    id: string
+    status: 'pending' | 'running' | 'completed' | 'failed'
+    provider: string
+    model: string
+    filesCount: number
+    tokensOut: number | null
+    durationMs: number | null
+    error: string | null
+    createdAt: string
+  } | null>(null)
+  const [tick, setTick] = useState(0)
+  void tick
 
   const load = async () => {
     const res = await fetch(`/api/projects/${projectId}/features`, {
@@ -77,10 +105,81 @@ export function AnalysisEditor({ projectId }: { projectId: string }) {
     setFeatures(data.features)
   }
 
+  const loadLatestRun = async () => {
+    try {
+      const res = await fetch(`/api/projects/${projectId}/test-runs`, {
+        headers: { 'X-Requested-With': 'fetch' },
+        cache: 'no-store',
+      })
+      if (!res.ok) return
+      const data = (await res.json()) as { runs: Array<typeof latestRun> }
+      setLatestRun(data.runs?.[0] ?? null)
+    } catch {
+      // silencioso
+    }
+  }
+
   useEffect(() => {
     load()
+    loadLatestRun()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId])
+
+  // Polling + tick enquanto houver run em andamento
+  useEffect(() => {
+    if (!latestRun) return
+    if (latestRun.status !== 'pending' && latestRun.status !== 'running')
+      return
+    const poll = setInterval(() => {
+      loadLatestRun()
+      load()
+    }, 2000)
+    const ticker = setInterval(() => setTick((x) => x + 1), 1000)
+    return () => {
+      clearInterval(poll)
+      clearInterval(ticker)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [latestRun?.status])
+
+  const generateTests = () => {
+    startGenerate(async () => {
+      try {
+        const res = await fetch(
+          `/api/projects/${projectId}/ai/generate-tests`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Requested-With': 'fetch',
+            },
+            body: JSON.stringify({}),
+          },
+        )
+        if (res.status === 429) {
+          toast.error(t('generate.rate_limited'))
+          return
+        }
+        if (res.status === 409) {
+          toast.error(t('generate.no_reviewed'))
+          return
+        }
+        const data = (await res.json().catch(() => ({}))) as {
+          status?: 'completed' | 'failed'
+          error?: string
+          filesCount?: number
+        }
+        if (data.status === 'completed') {
+          toast.success(t('generate.success', { count: data.filesCount ?? 0 }))
+        } else if (data.status === 'failed') {
+          toast.error(t('generate.failed', { reason: data.error ?? '—' }))
+        }
+        await Promise.all([load(), loadLatestRun()])
+      } catch {
+        toast.error(t('generate.network'))
+      }
+    })
+  }
 
   if (features === null) {
     return (
@@ -101,10 +200,25 @@ export function AnalysisEditor({ projectId }: { projectId: string }) {
     (n, f) => n + f.scenarios.filter((s) => s.reviewedAt).length,
     0,
   )
+  const scenariosWithTest = features.reduce(
+    (n, f) => n + f.scenarios.filter((s) => s.latestTest).length,
+    0,
+  )
+  const isGeneratingRun =
+    latestRun?.status === 'pending' || latestRun?.status === 'running'
+  const liveElapsedSeconds =
+    latestRun && isGeneratingRun
+      ? Math.max(
+          0,
+          Math.floor(
+            (Date.now() - new Date(latestRun.createdAt).getTime()) / 1000,
+          ),
+        )
+      : 0
 
   return (
-    <section className="space-y-3">
-      <div className="flex items-center justify-between gap-3">
+    <section className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <h3 className="font-display text-sm font-semibold uppercase tracking-wider text-muted-foreground">
           {t('features_count', { count: features.length })}
           <span className="ml-2 font-mono text-[11px] normal-case tracking-normal text-muted-foreground/70">
@@ -112,18 +226,78 @@ export function AnalysisEditor({ projectId }: { projectId: string }) {
               reviewed: reviewedScenarios,
               total: totalScenarios,
             })}
+            {scenariosWithTest > 0 ? (
+              <> · {t('with_test', { count: scenariosWithTest })}</>
+            ) : null}
           </span>
         </h3>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() => setFeatureEdit('new')}
-        >
-          <Plus className="size-4" />
-          {t('add_feature')}
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            type="button"
+            variant="default"
+            size="sm"
+            onClick={generateTests}
+            disabled={
+              generating || isGeneratingRun || reviewedScenarios === 0
+            }
+            title={
+              reviewedScenarios === 0 ? t('generate.hint_no_reviewed') : undefined
+            }
+          >
+            {generating || isGeneratingRun ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              <Zap className="size-4" />
+            )}
+            {t('generate.button')}
+          </Button>
+          {latestRun && latestRun.status === 'completed' ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                window.location.href = `/api/projects/${projectId}/test-runs/${latestRun.id}/download`
+              }}
+            >
+              <Download className="size-4" />
+              {t('generate.download')}
+            </Button>
+          ) : null}
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setFeatureEdit('new')}
+          >
+            <Plus className="size-4" />
+            {t('add_feature')}
+          </Button>
+        </div>
       </div>
+
+      {isGeneratingRun ? (
+        <div className="rounded-md border border-primary/30 bg-primary/5 p-3 text-xs">
+          <div className="flex items-center gap-2 font-medium text-primary">
+            <Loader2 className="size-3.5 animate-spin" />
+            {(latestRun?.tokensOut ?? 0) === 0
+              ? t('generate.waiting', { seconds: liveElapsedSeconds })
+              : t('generate.generating', {
+                  tokens: latestRun?.tokensOut ?? 0,
+                  seconds: liveElapsedSeconds,
+                })}
+          </div>
+        </div>
+      ) : latestRun && latestRun.status === 'failed' ? (
+        <div className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-xs">
+          <p className="font-medium text-destructive">
+            {t('generate.failed_title')}
+          </p>
+          <p className="mt-1 font-mono text-[11px] text-muted-foreground">
+            {latestRun.error ?? '—'}
+          </p>
+        </div>
+      ) : null}
 
       <div className="space-y-2">
         {features.map((f) => (
@@ -484,6 +658,7 @@ function ScenarioRow({
             at={scenario.reviewedAt}
           />
         ) : null}
+        <ScenarioTestBlock test={scenario.latestTest} />
         {scenario.preconditions.length > 0 ||
         scenario.dataNeeded.length > 0 ? (
           <div className="grid gap-1 pt-1 sm:grid-cols-2">
@@ -517,6 +692,67 @@ function ScenarioRow({
         </IconBtn>
       </div>
     </li>
+  )
+}
+
+function ScenarioTestBlock({ test }: { test: LatestTest | null }) {
+  const t = useTranslations('projects.overview.analysis.editor')
+  const [open, setOpen] = useState(false)
+
+  if (!test) {
+    return (
+      <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground/70">
+        <FileCode2 className="size-3" />
+        <span>{t('test.none')}</span>
+      </div>
+    )
+  }
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(test.code)
+      toast.success(t('test.copied'))
+    } catch {
+      toast.error(t('test.copy_failed'))
+    }
+  }
+
+  return (
+    <div className="rounded-md border border-primary/30 bg-primary/5">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center gap-2 p-2 text-left text-xs font-medium text-primary transition-colors hover:bg-primary/10"
+      >
+        <ChevronRight
+          className={cn(
+            'size-3.5 transition-transform',
+            open && 'rotate-90',
+          )}
+        />
+        <FileCode2 className="size-3.5" />
+        <span className="flex-1">{t('test.generated_label')}</span>
+        <span className="font-mono text-[10px] font-normal text-muted-foreground">
+          <DateTime value={test.createdAt} />
+        </span>
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation()
+            copy()
+          }}
+          title={t('test.copy')}
+          className="inline-flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-background hover:text-foreground"
+        >
+          <Copy className="size-3.5" />
+        </button>
+      </button>
+      {open ? (
+        <pre className="max-h-80 overflow-auto border-t border-primary/20 bg-muted/40 p-3 font-mono text-[10px] leading-relaxed">
+          <code>{test.code}</code>
+        </pre>
+      ) : null}
+    </div>
   )
 }
 

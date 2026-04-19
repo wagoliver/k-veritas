@@ -18,26 +18,39 @@ Um JSON único, válido, aderente ao schema abaixo. O primeiro caractere deve se
   "summary": "Resumo curto do que foi gerado (2-3 frases).",
   "files": [
     {
-      "featureExternalId": "slug da feature (copiar exatamente do input)",
+      "featureExternalId": "slug da feature (copiar EXATAMENTE do input)",
       "featureName": "nome legível da feature",
-      "path": "relative/path/file.spec.ts",
-      "code": "código TypeScript completo do arquivo",
-      "scenarioIds": ["uuid-do-cenario-1", "uuid-do-cenario-2"]
+      "filePath": "relative/path/file.spec.ts",
+      "fileHeader": "imports + início do test.describe (termina com '{' aberto)",
+      "fileFooter": "fecha o describe (geralmente apenas '})')",
+      "tests": [
+        {
+          "scenarioId": "UUID EXATO do scenario do input",
+          "code": "bloco test('título', ...) completo, SEM os wrapper imports/describe"
+        }
+      ]
     }
   ]
 }
+
+GRANULARIDADE — REGRA CRÍTICA:
+- **Um \`tests[i]\` por scenario do input.** Não agrupe cenários em um único \`test(\`, não pule scenarios, não crie \`test(\` além dos fornecidos.
+- \`scenarioId\` DEVE ser um dos UUIDs que aparecem no atributo \`id\` dos \`<scenario>\` do input. Se não for, o pipeline rejeita a resposta.
+- \`code\` contém EXCLUSIVAMENTE o bloco \`test('...', ...)\` — sem imports, sem describe, sem beforeEach fora do test. Qualquer beforeEach compartilhado vai no \`fileHeader\`.
+- \`fileHeader\` sempre termina com \`test.describe('<feature.name>', () => {\` + newline.
+- \`fileFooter\` é tipicamente apenas \`})\` em uma linha.
 
 ==============================================================
 REGRAS DE GERAÇÃO
 ==============================================================
 
 ESTRUTURA DE ARQUIVO:
-- **Um arquivo .spec.ts por feature.** Todos os cenários revisados daquela feature ficam juntos em um único arquivo.
-- Path: kebab-case, hierarquia por prefixo de path quando fizer sentido. Ex.: \`auth/login.spec.ts\`, \`dashboard/metrics.spec.ts\`.
-- Usar \`test.describe(<feature.name>, () => { ... })\` como container.
-- Cada cenário vira um \`test(<scenario.title>, async ({ page }) => { ... })\`.
+- **Um \`files[]\` por feature.** Cada feature com cenários revisados gera um arquivo.
+- \`filePath\`: kebab-case, hierarquia por prefixo quando fizer sentido. Ex.: \`auth/login.spec.ts\`, \`dashboard/metrics.spec.ts\`.
+- \`fileHeader\` contém: linha de import \`import { test, expect } from '@playwright/test'\`, declaração de fixtures/beforeEach compartilhados (se aplicável), e termina com \`test.describe('<feature.name>', () => {\` numa linha própria.
+- Cada cenário vira um item em \`tests[]\` com \`code\` = \`test(<scenario.title>, ..., async ({ page }) => { ... })\`.
 - Priority vira tag: \`test('...', { tag: '@critical' }, ...)\` — use @critical, @high, @normal, @low.
-- Import fixo: \`import { test, expect } from '@playwright/test'\`.
+- \`fileFooter\` = \`})\` fechando o describe.
 
 CORPO DOS TESTES:
 - Começar com \`await page.goto(<url correspondente>)\` quando aplicável.
@@ -77,29 +90,27 @@ OUTPUT:
 - O campo \`code\` deve conter o arquivo .spec.ts inteiro como string TypeScript (com \\n e escapes de quotes corretos).
 
 ==============================================================
-EXEMPLO DE ARQUIVO GERADO (só pra referência interna, não copiar)
+EXEMPLO DE OUTPUT (só pra referência interna, não copiar literalmente)
 ==============================================================
 
-\`\`\`ts
-import { test, expect } from '@playwright/test'
-
-test.describe('Login de usuário', () => {
-  test.beforeEach(async ({ page }) => {
-    await page.goto('/login')
-  })
-
-  test('Fazer login com credenciais válidas', { tag: '@critical' }, async ({ page }) => {
-    // Given: página de login carregada
-    // When: preencher email e senha e submeter
-    await page.getByRole('textbox', { name: 'Email' }).fill(process.env.TEST_USERNAME ?? '')
-    await page.getByRole('textbox', { name: 'Senha' }).fill(process.env.TEST_PASSWORD ?? '')
-    await page.getByRole('button', { name: 'Entrar' }).click()
-
-    // Then: redireciona pra dashboard
-    await expect(page).toHaveURL(/\\/dashboard/)
-  })
-})
-\`\`\`
+{
+  "summary": "Gerou 2 arquivos cobrindo 5 cenários das features de Login e Dashboard.",
+  "files": [
+    {
+      "featureExternalId": "login-de-usuario",
+      "featureName": "Login de usuário",
+      "filePath": "auth/login.spec.ts",
+      "fileHeader": "import { test, expect } from '@playwright/test'\\n\\ntest.describe('Login de usuário', () => {\\n  test.beforeEach(async ({ page }) => {\\n    await page.goto('/login')\\n  })\\n",
+      "fileFooter": "})\\n",
+      "tests": [
+        {
+          "scenarioId": "a1b2c3d4-e5f6-7890-abcd-ef0123456789",
+          "code": "test('Fazer login com credenciais válidas', { tag: '@critical' }, async ({ page }) => {\\n  // Given: página de login carregada\\n  // When: preencher email e senha e submeter\\n  await page.getByRole('textbox', { name: 'Email' }).fill(process.env.TEST_USERNAME ?? '')\\n  await page.getByRole('textbox', { name: 'Senha' }).fill(process.env.TEST_PASSWORD ?? '')\\n  await page.getByRole('button', { name: 'Entrar' }).click()\\n  // Then: redireciona pra dashboard\\n  await expect(page).toHaveURL(/\\\\/dashboard/)\\n})"
+        }
+      ]
+    }
+  ]
+}
 
 Responda APENAS com o JSON estruturado final.`
 

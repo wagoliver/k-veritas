@@ -345,6 +345,27 @@
         "editor": {
           "features_count": "{count} features",
           "reviewed_ratio": "{reviewed}/{total} scenarios reviewed",
+          "with_test": "{count} with test",
+          "generate": {
+            "button": "Generate tests",
+            "download": "Download ZIP",
+            "hint_no_reviewed": "Mark at least one scenario as reviewed before generating tests",
+            "no_reviewed": "Mark at least one scenario as reviewed before generating tests.",
+            "rate_limited": "Wait a moment before generating again.",
+            "success": "{count} files generated.",
+            "failed": "Generation failed: {reason}",
+            "failed_title": "Generation failed",
+            "network": "Connection failed.",
+            "waiting": "Waiting for first token · {seconds}s",
+            "generating": "Generating tests · {tokens} tokens · {seconds}s"
+          },
+          "test": {
+            "none": "No generated test",
+            "generated_label": "Generated Playwright test",
+            "copy": "Copy",
+            "copied": "Copied.",
+            "copy_failed": "Couldn't copy."
+          },
           "add_feature": "New feature",
           "add_scenario": "Add scenario",
           "edit": "Edit",

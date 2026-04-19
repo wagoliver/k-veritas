@@ -517,11 +517,77 @@ export const generatedTests = pgTable(
   }),
 )
 
+export const scenarioTests = pgTable(
+  'scenario_tests',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    projectId: uuid('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    testRunId: uuid('test_run_id')
+      .notNull()
+      .references(() => projectTestRuns.id, { onDelete: 'cascade' }),
+    scenarioId: uuid('scenario_id').references(() => analysisScenarios.id, {
+      onDelete: 'set null',
+    }),
+    scenarioIdSnapshot: uuid('scenario_id_snapshot').notNull(),
+    featureId: uuid('feature_id').references(() => analysisFeatures.id, {
+      onDelete: 'set null',
+    }),
+    featureNameSnapshot: text('feature_name_snapshot').notNull(),
+    featureExternalIdSnapshot: text('feature_external_id_snapshot').notNull(),
+    filePath: text('file_path').notNull(),
+    code: text('code').notNull(),
+    titleSnapshot: text('title_snapshot').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    runIdx: index('scenario_tests_run_idx').on(t.testRunId),
+    scenarioIdx: index('scenario_tests_scenario_idx').on(t.scenarioId),
+    projectScenarioIdx: index('scenario_tests_project_scenario_idx').on(
+      t.projectId,
+      t.scenarioIdSnapshot,
+      t.createdAt,
+    ),
+  }),
+)
+
+export const featureTestFiles = pgTable(
+  'feature_test_files',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    projectId: uuid('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    testRunId: uuid('test_run_id')
+      .notNull()
+      .references(() => projectTestRuns.id, { onDelete: 'cascade' }),
+    featureId: uuid('feature_id').references(() => analysisFeatures.id, {
+      onDelete: 'set null',
+    }),
+    featureExternalIdSnapshot: text('feature_external_id_snapshot').notNull(),
+    featureNameSnapshot: text('feature_name_snapshot').notNull(),
+    filePath: text('file_path').notNull(),
+    fileHeader: text('file_header').notNull(),
+    fileFooter: text('file_footer').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    runIdx: index('feature_test_files_run_idx').on(t.testRunId),
+  }),
+)
+
 export type Project = typeof projects.$inferSelect
 export type NewProject = typeof projects.$inferInsert
 export type ProjectScenario = typeof projectScenarios.$inferSelect
 export type ProjectTestRun = typeof projectTestRuns.$inferSelect
 export type GeneratedTest = typeof generatedTests.$inferSelect
+export type ScenarioTest = typeof scenarioTests.$inferSelect
+export type FeatureTestFile = typeof featureTestFiles.$inferSelect
 export type TestRunStatus = 'pending' | 'running' | 'completed' | 'failed'
 export type CrawlJob = typeof crawlJobs.$inferSelect
 export type CrawlPage = typeof crawlPages.$inferSelect

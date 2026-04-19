@@ -8,8 +8,9 @@ import {
   crawlElements,
   crawlJobs,
   crawlPages,
-  generatedTests,
+  featureTestFiles,
   projectTestRuns,
+  scenarioTests,
   type Project,
   type ScenarioPriority,
 } from '@/lib/db/schema'
@@ -140,8 +141,13 @@ export async function runTestGeneration(
       )
     }
 
-    // Persiste arquivos gerados. Faz matching feature externalId → id interno.
-    await persistGeneratedFiles(testRunId, project.id, validated.data, payload)
+    // Persiste arquivos + snippets por scenario
+    const { totalTests } = await persistGeneratedFiles(
+      testRunId,
+      project.id,
+      validated.data,
+      payload,
+    )
 
     await db
       .update(projectTestRuns)
@@ -155,6 +161,15 @@ export async function runTestGeneration(
         finishedAt: new Date(),
       })
       .where(eq(projectTestRuns.id, testRunId))
+
+    // Se nenhum scenario válido foi persistido (LLM mandou só UUIDs
+    // inventados), deve falhar loud pra não induzir a UI a achar que gerou
+    if (totalTests === 0) {
+      throw new TestGenParseError(
+        'Nenhum scenarioId válido no output do LLM',
+        response.text.slice(0, 2000),
+      )
+    }
 
     return {
       testRunId,
@@ -336,9 +351,8 @@ async function persistGeneratedFiles(
   projectId: string,
   output: TestGenerationOutput,
   payload: TestGenPayload,
-): Promise<void> {
-  // Mapeia externalId → feature DB id pra cross-ref (pode ser null se o
-  // LLM gerou um externalId que não existe; nesse caso guarda sem FK)
+): Promise<{ totalTests: number }> {
+  // Mapeia externalId → feature DB id pra cross-ref
   const externalToDbId = new Map<string, string>()
   const dbFeatures = await db
     .select({
@@ -349,27 +363,73 @@ async function persistGeneratedFiles(
     .where(eq(analysisFeatures.projectId, projectId))
   for (const f of dbFeatures) externalToDbId.set(f.externalId, f.id)
 
-  const payloadFeatureByExt = new Map(
-    payload.features.map((f) => [f.externalId, f]),
-  )
+  // Dicionário scenarioId → title por feature, pra snapshot e filtro
+  const scenariosById = new Map<
+    string,
+    { title: string; featureExternalId: string }
+  >()
+  for (const f of payload.features) {
+    for (const s of f.scenarios) {
+      scenariosById.set(s.id, {
+        title: s.title,
+        featureExternalId: f.externalId,
+      })
+    }
+  }
 
-  const values = output.files.map((file) => {
+  let totalTests = 0
+
+  for (const file of output.files) {
     const featureDbId = externalToDbId.get(file.featureExternalId) ?? null
-    const payloadFeature = payloadFeatureByExt.get(file.featureExternalId)
-    return {
+    const filePath = sanitizePath(file.filePath)
+
+    // Persiste header/footer por feature
+    await db.insert(featureTestFiles).values({
       projectId,
       testRunId,
       featureId: featureDbId,
+      featureExternalIdSnapshot: file.featureExternalId,
       featureNameSnapshot: file.featureName,
-      filePath: sanitizePath(file.path),
-      fileContent: file.code,
-      scenariosJson: payloadFeature?.scenarios ?? [],
-    }
-  })
+      filePath,
+      fileHeader: file.fileHeader,
+      fileFooter: file.fileFooter,
+    })
 
-  if (values.length > 0) {
-    await db.insert(generatedTests).values(values)
+    // Persiste cada test() como row separado em scenario_tests
+    const rows = file.tests
+      .map((t) => {
+        const info = scenariosById.get(t.scenarioId)
+        if (!info) {
+          // LLM inventou scenarioId — ignora silenciosamente (não persiste)
+          console.warn(
+            `[generate-tests] ignoring test with unknown scenarioId ${t.scenarioId}`,
+          )
+          return null
+        }
+        return {
+          projectId,
+          testRunId,
+          scenarioId: t.scenarioId,
+          scenarioIdSnapshot: t.scenarioId,
+          featureId: featureDbId,
+          featureExternalIdSnapshot: file.featureExternalId,
+          featureNameSnapshot: file.featureName,
+          filePath,
+          code: t.code,
+          titleSnapshot: info.title,
+        }
+      })
+      .filter(
+        (r): r is NonNullable<typeof r> => r !== null,
+      )
+
+    if (rows.length > 0) {
+      await db.insert(scenarioTests).values(rows)
+      totalTests += rows.length
+    }
   }
+
+  return { totalTests }
 }
 
 /**

@@ -345,6 +345,27 @@
         "editor": {
           "features_count": "{count} features",
           "reviewed_ratio": "{reviewed}/{total} cenários revisados",
+          "with_test": "{count} com teste",
+          "generate": {
+            "button": "Gerar testes",
+            "download": "Baixar ZIP",
+            "hint_no_reviewed": "Marque ao menos um cenário como revisado antes de gerar testes",
+            "no_reviewed": "Marque pelo menos um cenário como revisado antes de gerar testes.",
+            "rate_limited": "Aguarde um pouco antes de gerar novamente.",
+            "success": "{count} arquivos gerados.",
+            "failed": "Geração falhou: {reason}",
+            "failed_title": "A geração falhou",
+            "network": "Falha de conexão.",
+            "waiting": "Aguardando primeiro token · {seconds}s",
+            "generating": "Gerando testes · {tokens} tokens · {seconds}s"
+          },
+          "test": {
+            "none": "Sem teste gerado",
+            "generated_label": "Teste Playwright gerado",
+            "copy": "Copiar",
+            "copied": "Copiado.",
+            "copy_failed": "Não foi possível copiar."
+          },
           "add_feature": "Nova feature",
           "add_scenario": "Adicionar cenário",
           "edit": "Editar",

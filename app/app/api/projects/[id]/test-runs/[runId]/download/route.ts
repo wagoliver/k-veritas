@@ -2,7 +2,11 @@ import { type NextRequest, NextResponse } from 'next/server'
 import { and, asc, eq } from 'drizzle-orm'
 
 import { db } from '@/lib/db/pg'
-import { generatedTests, projectTestRuns } from '@/lib/db/schema'
+import {
+  featureTestFiles,
+  projectTestRuns,
+  scenarioTests,
+} from '@/lib/db/schema'
 import { getServerSession } from '@/lib/auth/session'
 import { Problems } from '@/lib/auth/errors'
 import { authorizeProject } from '@/lib/auth/project-access'
@@ -43,32 +47,61 @@ export async function GET(
     )
   }
 
-  const files = await db
+  // Busca header/footer por feature + todos os snippets de scenario
+  const features = await db
     .select({
-      filePath: generatedTests.filePath,
-      fileContent: generatedTests.fileContent,
+      filePath: featureTestFiles.filePath,
+      featureExternalIdSnapshot: featureTestFiles.featureExternalIdSnapshot,
+      fileHeader: featureTestFiles.fileHeader,
+      fileFooter: featureTestFiles.fileFooter,
     })
-    .from(generatedTests)
-    .where(eq(generatedTests.testRunId, runId))
-    .orderBy(asc(generatedTests.filePath))
+    .from(featureTestFiles)
+    .where(eq(featureTestFiles.testRunId, runId))
+    .orderBy(asc(featureTestFiles.filePath))
 
-  if (files.length === 0) {
+  const snippets = await db
+    .select({
+      featureExternalIdSnapshot: scenarioTests.featureExternalIdSnapshot,
+      code: scenarioTests.code,
+    })
+    .from(scenarioTests)
+    .where(eq(scenarioTests.testRunId, runId))
+    .orderBy(asc(scenarioTests.createdAt))
+
+  if (features.length === 0) {
     return Problems.conflict('no_files', 'Nenhum arquivo gerado neste run.')
+  }
+
+  // Agrupa snippets por feature
+  const snippetsByFeature = new Map<string, string[]>()
+  for (const s of snippets) {
+    const arr = snippetsByFeature.get(s.featureExternalIdSnapshot) ?? []
+    arr.push(s.code)
+    snippetsByFeature.set(s.featureExternalIdSnapshot, arr)
   }
 
   const { default: JSZip } = await import('jszip')
   const zip = new JSZip()
-
-  // tests/ como pasta raiz dentro do ZIP
   const root = zip.folder('tests') ?? zip
-  for (const f of files) {
-    root.file(f.filePath, f.fileContent)
+
+  // Reconstrói cada arquivo: header + tests.join + footer
+  for (const f of features) {
+    const codes = snippetsByFeature.get(f.featureExternalIdSnapshot) ?? []
+    // Indenta cada test 2 espaços (dentro do describe)
+    const indented = codes.map((c) =>
+      c
+        .split('\n')
+        .map((line) => (line.length > 0 ? `  ${line}` : line))
+        .join('\n'),
+    )
+    const content = `${f.fileHeader}\n${indented.join('\n\n')}\n${f.fileFooter}`
+    root.file(f.filePath, content)
   }
 
   // README com instruções mínimas
   root.file(
     'README.md',
-    readmeContent(project.slug, project.name, runId, files.length),
+    readmeContent(project.slug, project.name, runId, features.length),
   )
 
   const buffer = await zip.generateAsync({

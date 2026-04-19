@@ -3,7 +3,13 @@ import { asc, eq, max } from 'drizzle-orm'
 import { alias } from 'drizzle-orm/pg-core'
 
 import { db } from '@/lib/db/pg'
-import { analysisFeatures, analysisScenarios, users } from '@/lib/db/schema'
+import {
+  analysisFeatures,
+  analysisScenarios,
+  scenarioTests,
+  users,
+} from '@/lib/db/schema'
+import { sql as sqlTag } from 'drizzle-orm'
 import { getServerSession } from '@/lib/auth/session'
 import { Problems } from '@/lib/auth/errors'
 import { authorizeProject } from '@/lib/auth/project-access'
@@ -79,6 +85,42 @@ export async function GET(
     .where(eq(analysisScenarios.projectId, project.id))
     .orderBy(asc(analysisScenarios.sortOrder))
 
+  // Teste mais recente por scenario (um join com subquery agrupada).
+  // Usa scenario_id_snapshot pra pegar mesmo scenarios que já foram deletados.
+  const latestTestsRaw = await db.execute<{
+    scenario_id_snapshot: string
+    id: string
+    code: string
+    test_run_id: string
+    created_at: Date
+  }>(sqlTag`
+    SELECT DISTINCT ON (scenario_id_snapshot)
+      scenario_id_snapshot, id, code, test_run_id, created_at
+    FROM scenario_tests
+    WHERE project_id = ${project.id}
+    ORDER BY scenario_id_snapshot, created_at DESC
+  `)
+  const latestTestByScenario = new Map<
+    string,
+    {
+      id: string
+      code: string
+      testRunId: string
+      createdAt: string
+    }
+  >()
+  for (const row of latestTestsRaw) {
+    latestTestByScenario.set(row.scenario_id_snapshot, {
+      id: row.id,
+      code: row.code,
+      testRunId: row.test_run_id,
+      createdAt:
+        row.created_at instanceof Date
+          ? row.created_at.toISOString()
+          : String(row.created_at),
+    })
+  }
+
   const scenariosByFeature = new Map<string, typeof scenarios>()
   for (const row of scenarios) {
     const arr = scenariosByFeature.get(row.scenario.featureId) ?? []
@@ -109,6 +151,7 @@ export async function GET(
           updatedAt: f.updatedAt,
           scenarios: (scenariosByFeature.get(f.id) ?? []).map((r) => {
             const s = r.scenario
+            const latestTest = latestTestByScenario.get(s.id) ?? null
             return {
               id: s.id,
               title: s.title,
@@ -127,6 +170,7 @@ export async function GET(
                 : null,
               source: s.source,
               updatedAt: s.updatedAt,
+              latestTest,
             }
           }),
         }

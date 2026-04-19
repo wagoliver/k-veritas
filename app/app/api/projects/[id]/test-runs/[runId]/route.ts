@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { and, asc, eq } from 'drizzle-orm'
 
 import { db } from '@/lib/db/pg'
-import { generatedTests, projectTestRuns } from '@/lib/db/schema'
+import { projectTestRuns, scenarioTests } from '@/lib/db/schema'
 import { getServerSession } from '@/lib/auth/session'
 import { Problems } from '@/lib/auth/errors'
 import { authorizeProject } from '@/lib/auth/project-access'
@@ -39,19 +39,22 @@ export async function GET(
 
   if (!run) return Problems.forbidden()
 
-  const files = await db
+  // Nova estrutura: snippets por scenario no run. O arquivo completo é
+  // reconstruído apenas no endpoint de download.
+  const snippets = await db
     .select({
-      id: generatedTests.id,
-      featureId: generatedTests.featureId,
-      featureNameSnapshot: generatedTests.featureNameSnapshot,
-      filePath: generatedTests.filePath,
-      fileContent: generatedTests.fileContent,
-      scenariosJson: generatedTests.scenariosJson,
-      createdAt: generatedTests.createdAt,
+      id: scenarioTests.id,
+      scenarioId: scenarioTests.scenarioId,
+      scenarioIdSnapshot: scenarioTests.scenarioIdSnapshot,
+      featureNameSnapshot: scenarioTests.featureNameSnapshot,
+      titleSnapshot: scenarioTests.titleSnapshot,
+      filePath: scenarioTests.filePath,
+      code: scenarioTests.code,
+      createdAt: scenarioTests.createdAt,
     })
-    .from(generatedTests)
-    .where(eq(generatedTests.testRunId, runId))
-    .orderBy(asc(generatedTests.filePath))
+    .from(scenarioTests)
+    .where(eq(scenarioTests.testRunId, runId))
+    .orderBy(asc(scenarioTests.createdAt))
 
   return NextResponse.json(
     {
@@ -71,7 +74,7 @@ export async function GET(
         finishedAt: run.finishedAt,
         createdAt: run.createdAt,
       },
-      files,
+      snippets,
     },
     { headers: { 'Cache-Control': 'no-store' } },
   )
