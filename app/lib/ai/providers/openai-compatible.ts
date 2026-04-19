@@ -217,14 +217,29 @@ export class OpenAICompatibleClient implements AIClient {
     try {
       const res = await fetch(`${this.base()}${path}`, {
         headers: this.headers(),
-        signal: AbortSignal.timeout(10_000),
+        signal: AbortSignal.timeout(15_000),
       })
-      if (!res.ok) return []
+      if (!res.ok) {
+        console.warn(
+          `[openai-compat] listModels ${path} HTTP ${res.status} ${res.statusText}`,
+        )
+        return []
+      }
       const data = (await res.json()) as ModelListResponse
-      return (data.data ?? [])
+      const items = data.data ?? []
+      if (items.length === 0) {
+        console.warn(
+          `[openai-compat] listModels ${path} returned empty data array`,
+        )
+      }
+      return items
         .map((m) => ({ name: m.id }))
         .filter((m) => typeof m.name === 'string' && m.name.length > 0)
-    } catch {
+    } catch (err) {
+      console.warn(
+        `[openai-compat] listModels ${path} threw:`,
+        err instanceof Error ? err.message : err,
+      )
       return []
     }
   }
