@@ -12,7 +12,13 @@ import { env } from './env.ts'
 const WORKER_ID = `runner-${process.pid}-${Math.random().toString(36).slice(2, 8)}`
 const POLL_INTERVAL_MS = Number(process.env.RUNNER_POLL_MS ?? 2000)
 const STALE_TIMEOUT_SECONDS = Number(process.env.RUNNER_STALE_SECONDS ?? 900)
-const PW_TIMEOUT_MS = Number(process.env.RUNNER_PW_TIMEOUT_MS ?? 60_000)
+const PW_TIMEOUT_MS = Number(process.env.RUNNER_PW_TIMEOUT_MS ?? 120_000)
+const PW_ACTION_TIMEOUT_MS = Number(
+  process.env.RUNNER_PW_ACTION_TIMEOUT_MS ?? 15_000,
+)
+const PW_NAV_TIMEOUT_MS = Number(
+  process.env.RUNNER_PW_NAV_TIMEOUT_MS ?? 30_000,
+)
 const WORK_DIR = env('WORK_DIR', '/work')
 const DATA_DIR = env('DATA_DIR', '/data')
 
@@ -71,6 +77,8 @@ export async function runWorkerLoop(): Promise<void> {
           workDir: WORK_DIR,
           dataDir: DATA_DIR,
           playwrightTimeoutMs: PW_TIMEOUT_MS,
+          actionTimeoutMs: PW_ACTION_TIMEOUT_MS,
+          navigationTimeoutMs: PW_NAV_TIMEOUT_MS,
         })
 
         await markRunCompleted(job.id, project.id, 1, results)

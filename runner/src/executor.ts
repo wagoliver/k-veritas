@@ -43,7 +43,9 @@ interface PwTestResult {
 export interface ExecuteOptions {
   workDir: string         // scratchpad do runner (ex.: /work)
   dataDir: string         // /data compartilhado com app
-  playwrightTimeoutMs: number
+  playwrightTimeoutMs: number   // total do test() inteiro
+  actionTimeoutMs: number       // cada .click/.fill/etc
+  navigationTimeoutMs: number   // goto + waitFor navigation
 }
 
 /**
@@ -91,7 +93,7 @@ export async function executeScenarioJob(
       project,
       artifactsDir,
       reportPath,
-      opts.playwrightTimeoutMs,
+      opts,
     )
     await writeFile(join(runDir, 'playwright.config.ts'), config, 'utf8')
 
@@ -147,22 +149,26 @@ function buildPlaywrightConfig(
   project: Project,
   artifactsDir: string,
   reportPath: string,
-  timeoutMs: number,
+  opts: ExecuteOptions,
 ): string {
-  // IMPORTANTE: outputFile do reporter é resolvido relativo ao CWD do
-  // processo playwright (não à config). Como spawnamos com cwd=/app,
-  // usar caminho absoluto evita que o report saia em /app/report.json.
+  // Três timeouts separados — ajuda a localizar onde o teste trava:
+  //   timeout: teto total do test() inteiro
+  //   actionTimeout: teto por click/fill/check (falha rápido quando
+  //     locator não aparece)
+  //   navigationTimeout: teto pra goto() e waitForURL()
   return `import { defineConfig } from '@playwright/test'
 
 export default defineConfig({
   testDir: './tests',
-  timeout: ${timeoutMs},
+  timeout: ${opts.playwrightTimeoutMs},
   fullyParallel: false,
   retries: 0,
   reporter: [['json', { outputFile: ${JSON.stringify(reportPath)} }]],
   outputDir: ${JSON.stringify(artifactsDir)},
   use: {
     baseURL: ${JSON.stringify(project.target_url)},
+    actionTimeout: ${opts.actionTimeoutMs},
+    navigationTimeout: ${opts.navigationTimeoutMs},
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
     video: 'off',
