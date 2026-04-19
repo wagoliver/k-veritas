@@ -47,11 +47,22 @@ export class OpenAICompatibleClient implements AIClient {
 
   private headers(): HeadersInit {
     const h: Record<string, string> = { 'Content-Type': 'application/json' }
-    if (this.config.apiKey) h.Authorization = `Bearer ${this.config.apiKey}`
+    const base = this.base()
+
+    if (this.config.apiKey) {
+      h.Authorization = `Bearer ${this.config.apiKey}`
+      // Anthropic aceita Bearer em /v1/chat/completions mas exige x-api-key
+      // em /v1/models (endpoint nativo). Mandar os dois cobre os dois casos.
+      if (base.includes('anthropic.com')) {
+        h['x-api-key'] = this.config.apiKey
+        h['anthropic-version'] = '2023-06-01'
+      }
+    }
+
     // OpenRouter recomenda HTTP-Referer + X-Title pra rate limit melhor,
     // atribuição no dashboard e ranking no leaderboard. Outros providers
     // ignoram esses headers silenciosamente.
-    if (this.base().includes('openrouter.ai')) {
+    if (base.includes('openrouter.ai')) {
       h['HTTP-Referer'] = process.env.APP_URL ?? 'http://localhost:3000'
       h['X-Title'] = 'k-veritas'
     }
