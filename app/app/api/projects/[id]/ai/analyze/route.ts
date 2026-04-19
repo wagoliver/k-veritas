@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server'
-import { and, desc, eq, lt, sql } from 'drizzle-orm'
+import { and, desc, eq, sql } from 'drizzle-orm'
 
 import { db } from '@/lib/db/pg'
 import { projectAnalyses } from '@/lib/db/schema'
@@ -86,7 +86,11 @@ export async function POST(
   // Qualquer linha running parada há mais de STALE_THRESHOLD_MS é considerada
   // morta (worker travou, container reiniciou, Ollama nunca respondeu) e marcada
   // como failed — senão o projeto fica trancado com 409 eternamente.
-  const staleBefore = new Date(Date.now() - STALE_THRESHOLD_MS)
+  //
+  // Obs: o cast explícito para timestamptz é necessário porque o lado esquerdo
+  // é sql`...` (tipo não inferível), sem isso o postgres-js tenta serializar
+  // a Date em modo texto e explode com ERR_INVALID_ARG_TYPE.
+  const staleBeforeIso = new Date(Date.now() - STALE_THRESHOLD_MS).toISOString()
   await db
     .update(projectAnalyses)
     .set({
@@ -98,10 +102,7 @@ export async function POST(
       and(
         eq(projectAnalyses.projectId, project.id),
         eq(projectAnalyses.status, 'running'),
-        lt(
-          sql`COALESCE(${projectAnalyses.startedAt}, ${projectAnalyses.createdAt})`,
-          staleBefore,
-        ),
+        sql`COALESCE(${projectAnalyses.startedAt}, ${projectAnalyses.createdAt}) < ${staleBeforeIso}::timestamptz`,
       ),
     )
 
