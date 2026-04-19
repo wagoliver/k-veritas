@@ -103,4 +103,9 @@ export const BUCKETS = {
     capacity: 20,
     refillPerSecond: 20 / 3600,
   }),
+  aiAnalyzeProject: (projectId: string): BucketSpec => ({
+    key: `ai:analyze:${projectId}`,
+    capacity: 20,
+    refillPerSecond: 20 / 3600,
+  }),
 }

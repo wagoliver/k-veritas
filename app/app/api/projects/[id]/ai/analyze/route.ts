@@ -80,11 +80,7 @@ export async function POST(
   const project = await authorizeProject(session.user.id, id)
   if (!project) return Problems.forbidden()
 
-  const rl = await consumeToken({
-    key: `ai:analyze:${project.id}`,
-    capacity: 5,
-    refillPerSecond: 5 / 3600,
-  })
+  const rl = await consumeToken(BUCKETS.aiAnalyzeProject(project.id))
   if (!rl.allowed) return Problems.rateLimited(rl.retryAfterSeconds)
 
   // Qualquer linha running parada há mais de STALE_THRESHOLD_MS é considerada
