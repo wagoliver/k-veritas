@@ -287,6 +287,7 @@
         "errors": {
           "rate_limited": "Muitas análises iniciadas. Aguarde antes de tentar de novo.",
           "conflict": "Já existe uma análise em andamento.",
+          "no_crawl": "Faça um crawl antes de analisar — a IA precisa do mapa do site.",
           "failed": "Análise falhou: {reason}",
           "failed_title": "A análise falhou",
           "network": "Falha de conexão.",

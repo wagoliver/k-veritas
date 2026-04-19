@@ -59,14 +59,23 @@ export function ProjectAnalysis({ projectId }: { projectId: string }) {
   const [running, startRun] = useTransition()
   const [tick, setTick] = useState(0)
 
-  const load = async () => {
+  const load = async (): Promise<Analysis | null | undefined> => {
     const res = await fetch(`/api/projects/${projectId}/ai/analyze`, {
       headers: { 'X-Requested-With': 'fetch' },
       cache: 'no-store',
     })
-    if (!res.ok) return
+    if (!res.ok) return undefined
     const data = (await res.json()) as { analysis: Analysis | null }
-    setAnalysis(data.analysis)
+
+    // Se temos um stub optimistic (id='optimistic') e o server ainda não
+    // criou o row de verdade (ou nunca criou por erro), NÃO sobrescreve com
+    // null — senão a UI pisca de volta pro empty state. O trigger() limpa o
+    // stub explicitamente quando o POST termina (sucesso ou erro).
+    setAnalysis((prev) => {
+      if (prev?.id === 'optimistic' && data.analysis === null) return prev
+      return data.analysis
+    })
+    return data.analysis
   }
 
   useEffect(() => {
@@ -137,14 +146,18 @@ export function ProjectAnalysis({ projectId }: { projectId: string }) {
     })
 
     startRun(async () => {
+      const clearOptimistic = () => {
+        setAnalysis((prev) => (prev?.id === 'optimistic' ? null : prev))
+      }
       try {
         const postPromise = fetch(`/api/projects/${projectId}/ai/analyze`, {
           method: 'POST',
           headers: { 'X-Requested-With': 'fetch' },
         })
-        // Em ~500ms o row real já está inserido no banco — troca o optimistic
-        // pelo de verdade, que traz o id real e sincroniza tokens vindos do
-        // heartbeat.
+        // Em ~500ms o row real já está inserido no banco — substitui o stub
+        // pelo registro real. Se o POST falhou antes do INSERT, load() não
+        // sobrescreve o stub com null (vide lógica de preservação em load()),
+        // mas o clearOptimistic abaixo cuida disso quando o POST retorna.
         setTimeout(() => {
           void load()
         }, 500)
@@ -153,11 +166,32 @@ export function ProjectAnalysis({ projectId }: { projectId: string }) {
 
         if (res.status === 429) {
           toast.error(t('errors.rate_limited'))
+          clearOptimistic()
           await load()
           return
         }
         if (res.status === 409) {
-          toast.error(t('errors.conflict'))
+          // Pode ser "análise já rodando" (mais recente venceu) OU "sem crawl"
+          const payload = (await res
+            .json()
+            .catch(() => ({}))) as { code?: string }
+          if (payload.code === 'no_crawl_available') {
+            toast.error(t('errors.no_crawl'))
+          } else {
+            toast.error(t('errors.conflict'))
+          }
+          clearOptimistic()
+          await load()
+          return
+        }
+        if (res.status >= 500) {
+          const payload = (await res
+            .json()
+            .catch(() => ({}))) as { detail?: string }
+          toast.error(
+            t('errors.failed', { reason: payload.detail ?? `HTTP ${res.status}` }),
+          )
+          clearOptimistic()
           await load()
           return
         }
@@ -173,6 +207,7 @@ export function ProjectAnalysis({ projectId }: { projectId: string }) {
         await load()
       } catch {
         toast.error(t('errors.network'))
+        clearOptimistic()
         await load()
       }
     })

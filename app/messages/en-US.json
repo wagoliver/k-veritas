@@ -287,6 +287,7 @@
         "errors": {
           "rate_limited": "Too many analyses started. Wait before trying again.",
           "conflict": "Analysis already running.",
+          "no_crawl": "Run a crawl before analyzing — the AI needs the site map.",
           "failed": "Analysis failed: {reason}",
           "failed_title": "Analysis failed",
           "network": "Connection failed.",
