@@ -27,29 +27,67 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 import { AnalysisEditor } from './analysis-editor'
 
+type Provider = 'ollama' | 'anthropic' | 'openai-compatible'
+
 interface ModelPreset {
   label: string
   value: string
   hint: string
 }
 
-const MODEL_PRESETS: ModelPreset[] = [
-  {
-    label: 'Haiku 4.5',
-    value: 'claude-haiku-4-5-20251001',
-    hint: 'Rápido e barato (default)',
-  },
-  {
-    label: 'Sonnet 4.6',
-    value: 'claude-sonnet-4-6',
-    hint: 'Equilíbrio qualidade/custo',
-  },
-  {
-    label: 'Opus 4.7',
-    value: 'claude-opus-4-7',
-    hint: 'Qualidade máxima (mais caro)',
-  },
-]
+const MODEL_PRESETS_BY_PROVIDER: Record<Provider, ModelPreset[]> = {
+  anthropic: [
+    {
+      label: 'Haiku 4.5',
+      value: 'claude-haiku-4-5-20251001',
+      hint: 'Rápido e barato',
+    },
+    {
+      label: 'Sonnet 4.6',
+      value: 'claude-sonnet-4-6',
+      hint: 'Equilíbrio qualidade/custo',
+    },
+    {
+      label: 'Opus 4.7',
+      value: 'claude-opus-4-7',
+      hint: 'Qualidade máxima (mais caro)',
+    },
+  ],
+  ollama: [
+    {
+      label: 'qwen2.5:7b',
+      value: 'qwen2.5:7b',
+      hint: 'Leve, CPU-friendly',
+    },
+    {
+      label: 'qwen2.5:14b',
+      value: 'qwen2.5:14b',
+      hint: 'Equilibrado (precisa GPU/mais RAM)',
+    },
+    {
+      label: 'llama3.3:70b',
+      value: 'llama3.3:70b',
+      hint: 'Máxima qualidade local',
+    },
+  ],
+  'openai-compatible': [
+    {
+      label: 'gpt-4o-mini',
+      value: 'openai/gpt-4o-mini',
+      hint: 'Barato (via OpenRouter)',
+    },
+    {
+      label: 'gemini-flash-1.5',
+      value: 'google/gemini-flash-1.5',
+      hint: 'Rápido (via OpenRouter)',
+    },
+    {
+      label: 'deepseek-chat',
+      value: 'deepseek/deepseek-chat',
+      hint: 'Boa relação custo/qualidade',
+    },
+  ],
+}
 
 interface Scenario {
   title: string
@@ -92,6 +130,35 @@ export function ProjectAnalysis({ projectId }: { projectId: string }) {
   const [running, startRun] = useTransition()
   const [tick, setTick] = useState(0)
   const [modelOverride, setModelOverride] = useState<string | null>(null)
+  const [orgProvider, setOrgProvider] = useState<Provider>('ollama')
+  const [orgDefaultModel, setOrgDefaultModel] = useState<string | null>(null)
+
+  // Carrega a config de IA da org pra saber qual provider/modelo-padrão
+  // mostrar no seletor. Decide presets contextualmente.
+  useEffect(() => {
+    let cancelled = false
+    fetch('/api/orgs/current/ai-config', {
+      headers: { 'X-Requested-With': 'fetch' },
+      cache: 'no-store',
+    })
+      .then((res) => (res.ok ? res.json() : null))
+      .then(
+        (data: {
+          config?: { provider?: string; model?: string } | null
+        } | null) => {
+          if (cancelled) return
+          const p = data?.config?.provider as Provider | undefined
+          if (p === 'ollama' || p === 'anthropic' || p === 'openai-compatible') {
+            setOrgProvider(p)
+          }
+          setOrgDefaultModel(data?.config?.model ?? null)
+        },
+      )
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   const load = async (): Promise<Analysis | null | undefined> => {
     const res = await fetch(`/api/projects/${projectId}/ai/analyze`, {
@@ -309,6 +376,8 @@ export function ProjectAnalysis({ projectId }: { projectId: string }) {
           <ModelPicker
             value={modelOverride}
             onChange={setModelOverride}
+            provider={orgProvider}
+            defaultModel={orgDefaultModel}
             t={t}
           />
         </div>
@@ -403,6 +472,8 @@ export function ProjectAnalysis({ projectId }: { projectId: string }) {
           <ModelPicker
             value={modelOverride}
             onChange={setModelOverride}
+            provider={orgProvider}
+            defaultModel={orgDefaultModel}
             t={t}
             compact
           />
@@ -445,18 +516,34 @@ type TFn = ReturnType<typeof useTranslations<'projects.overview.analysis'>>
 function ModelPicker({
   value,
   onChange,
+  provider,
+  defaultModel,
   t,
   compact = false,
 }: {
   value: string | null
   onChange: (v: string | null) => void
+  provider: Provider
+  defaultModel: string | null
   t: TFn
   compact?: boolean
 }) {
-  const current = MODEL_PRESETS.find((p) => p.value === value)
+  const presets = MODEL_PRESETS_BY_PROVIDER[provider] ?? []
+  const current = presets.find((p) => p.value === value)
   const label = value
     ? (current?.label ?? value)
     : t('model_picker.default_label')
+
+  const promptCustom = () => {
+    const v = window.prompt(
+      t('model_picker.custom_prompt', { provider }),
+      value ?? '',
+    )
+    if (v === null) return
+    const trimmed = v.trim()
+    onChange(trimmed.length > 0 ? trimmed : null)
+  }
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -471,9 +558,14 @@ function ModelPicker({
           <ChevronRight className="size-3 rotate-90 opacity-60" />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-64">
-        <DropdownMenuLabel className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-          {t('model_picker.heading')}
+      <DropdownMenuContent align="end" className="w-72">
+        <DropdownMenuLabel className="flex flex-col gap-0.5">
+          <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+            {t('model_picker.heading')}
+          </span>
+          <span className="text-[10px] font-normal text-muted-foreground/70">
+            {t('model_picker.provider_label', { provider })}
+          </span>
         </DropdownMenuLabel>
         <DropdownMenuItem
           onSelect={() => onChange(null)}
@@ -481,25 +573,49 @@ function ModelPicker({
         >
           <span className="font-medium">
             {t('model_picker.default_label')}
+            {defaultModel ? (
+              <span className="ml-1 font-mono text-[10px] font-normal text-muted-foreground">
+                ({defaultModel})
+              </span>
+            ) : null}
           </span>
           <span className="text-xs text-muted-foreground">
             {t('model_picker.default_hint')}
           </span>
         </DropdownMenuItem>
+        {presets.length > 0 ? (
+          <>
+            <DropdownMenuSeparator />
+            {presets.map((p) => (
+              <DropdownMenuItem
+                key={p.value}
+                onSelect={() => onChange(p.value)}
+                className={cn(
+                  'flex-col items-start gap-0.5',
+                  value === p.value && 'bg-accent',
+                )}
+              >
+                <span className="font-medium">{p.label}</span>
+                <span className="text-xs text-muted-foreground">{p.hint}</span>
+              </DropdownMenuItem>
+            ))}
+          </>
+        ) : null}
         <DropdownMenuSeparator />
-        {MODEL_PRESETS.map((p) => (
-          <DropdownMenuItem
-            key={p.value}
-            onSelect={() => onChange(p.value)}
-            className={cn(
-              'flex-col items-start gap-0.5',
-              value === p.value && 'bg-accent',
-            )}
-          >
-            <span className="font-medium">{p.label}</span>
-            <span className="text-xs text-muted-foreground">{p.hint}</span>
-          </DropdownMenuItem>
-        ))}
+        <DropdownMenuItem
+          onSelect={(e) => {
+            e.preventDefault()
+            promptCustom()
+          }}
+          className="flex-col items-start gap-0.5"
+        >
+          <span className="font-medium">
+            {t('model_picker.custom_label')}
+          </span>
+          <span className="text-xs text-muted-foreground">
+            {t('model_picker.custom_hint')}
+          </span>
+        </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   )

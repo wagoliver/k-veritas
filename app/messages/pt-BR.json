@@ -273,8 +273,12 @@
         "cancelled": "Análise cancelada.",
         "model_picker": {
           "heading": "Modelo desta rodada",
+          "provider_label": "Provider: {provider}",
           "default_label": "Padrão",
-          "default_hint": "Usa o modelo salvo em Configurações de IA"
+          "default_hint": "Usa o modelo salvo em Configurações de IA",
+          "custom_label": "Outro modelo…",
+          "custom_hint": "Digite o nome exato do modelo",
+          "custom_prompt": "Digite o nome do modelo ({provider}). Deixe em branco pra usar o padrão."
         },
         "success": "Análise concluída.",
         "progress": {

@@ -273,8 +273,12 @@
         "cancelled": "Analysis cancelled.",
         "model_picker": {
           "heading": "Model for this run",
+          "provider_label": "Provider: {provider}",
           "default_label": "Default",
-          "default_hint": "Uses the model saved in AI Settings"
+          "default_hint": "Uses the model saved in AI Settings",
+          "custom_label": "Other model…",
+          "custom_hint": "Type the exact model name",
+          "custom_prompt": "Enter the model name ({provider}). Leave empty to use the default."
         },
         "success": "Analysis completed.",
         "progress": {
