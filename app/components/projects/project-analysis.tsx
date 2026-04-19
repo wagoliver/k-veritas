@@ -86,7 +86,6 @@ interface Analysis {
 
 export function ProjectAnalysis({ projectId }: { projectId: string }) {
   const t = useTranslations('projects.overview.analysis')
-  const format = useFormatter()
   const [analysis, setAnalysis] = useState<Analysis | null | undefined>(
     undefined,
   )
