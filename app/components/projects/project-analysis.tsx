@@ -14,8 +14,41 @@ import { useFormatter, useTranslations } from 'next-intl'
 import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
+import { AnalysisEditor } from './analysis-editor'
+
+interface ModelPreset {
+  label: string
+  value: string
+  hint: string
+}
+
+const MODEL_PRESETS: ModelPreset[] = [
+  {
+    label: 'Haiku 4.5',
+    value: 'claude-haiku-4-5-20251001',
+    hint: 'Rápido e barato (default)',
+  },
+  {
+    label: 'Sonnet 4.6',
+    value: 'claude-sonnet-4-6',
+    hint: 'Equilíbrio qualidade/custo',
+  },
+  {
+    label: 'Opus 4.7',
+    value: 'claude-opus-4-7',
+    hint: 'Qualidade máxima (mais caro)',
+  },
+]
 
 interface Scenario {
   title: string
@@ -58,6 +91,7 @@ export function ProjectAnalysis({ projectId }: { projectId: string }) {
   )
   const [running, startRun] = useTransition()
   const [tick, setTick] = useState(0)
+  const [modelOverride, setModelOverride] = useState<string | null>(null)
 
   const load = async (): Promise<Analysis | null | undefined> => {
     const res = await fetch(`/api/projects/${projectId}/ai/analyze`, {
@@ -152,7 +186,13 @@ export function ProjectAnalysis({ projectId }: { projectId: string }) {
       try {
         const postPromise = fetch(`/api/projects/${projectId}/ai/analyze`, {
           method: 'POST',
-          headers: { 'X-Requested-With': 'fetch' },
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'fetch',
+          },
+          body: JSON.stringify(
+            modelOverride ? { model: modelOverride } : {},
+          ),
         })
         // Em ~500ms o row real já está inserido no banco — substitui o stub
         // pelo registro real. Se o POST falhou antes do INSERT, load() não
@@ -257,14 +297,21 @@ export function ProjectAnalysis({ projectId }: { projectId: string }) {
             {t('empty.description')}
           </p>
         </div>
-        <Button onClick={trigger} disabled={running} size="lg">
-          {running ? (
-            <Loader2 className="size-4 animate-spin" />
-          ) : (
-            <Sparkles className="size-4" />
-          )}
-          {t('empty.cta')}
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button onClick={trigger} disabled={running} size="lg">
+            {running ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              <Sparkles className="size-4" />
+            )}
+            {t('empty.cta')}
+          </Button>
+          <ModelPicker
+            value={modelOverride}
+            onChange={setModelOverride}
+            t={t}
+          />
+        </div>
       </div>
     )
   }
@@ -354,6 +401,12 @@ export function ProjectAnalysis({ projectId }: { projectId: string }) {
             )}
             {t('reanalyze')}
           </Button>
+          <ModelPicker
+            value={modelOverride}
+            onChange={setModelOverride}
+            t={t}
+            compact
+          />
         </div>
       </div>
 
@@ -383,129 +436,73 @@ export function ProjectAnalysis({ projectId }: { projectId: string }) {
         </section>
       ) : null}
 
-      {analysis.features.length > 0 ? (
-        <section>
-          <h3 className="mb-3 font-display text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-            {t('features_count', { count: analysis.features.length })}
-          </h3>
-          <div className="space-y-2">
-            {analysis.features.map((f) => (
-              <FeatureCard key={f.id} feature={f} />
-            ))}
-          </div>
-        </section>
-      ) : null}
+      <AnalysisEditor projectId={projectId} />
     </div>
   )
 }
 
-function FeatureCard({ feature }: { feature: Feature }) {
-  const t = useTranslations('projects.overview.analysis')
-  const [open, setOpen] = useState(false)
+type TFn = ReturnType<typeof useTranslations<'projects.overview.analysis'>>
 
+function ModelPicker({
+  value,
+  onChange,
+  t,
+  compact = false,
+}: {
+  value: string | null
+  onChange: (v: string | null) => void
+  t: TFn
+  compact?: boolean
+}) {
+  const current = MODEL_PRESETS.find((p) => p.value === value)
+  const label = value
+    ? (current?.label ?? value)
+    : t('model_picker.default_label')
   return (
-    <div className="overflow-hidden rounded-lg border border-border bg-card">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-start gap-3 p-4 text-left transition-colors hover:bg-accent/30"
-      >
-        <ChevronRight
-          className={cn(
-            'mt-0.5 size-4 shrink-0 text-muted-foreground transition-transform',
-            open && 'rotate-90',
-          )}
-        />
-        <div className="min-w-0 flex-1 space-y-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="font-display text-base font-semibold">
-              {feature.name}
-            </span>
-            <span className="rounded-full bg-muted px-1.5 py-0 text-[10px] font-medium tabular-nums text-muted-foreground">
-              {feature.scenarios.length}
-            </span>
-          </div>
-          <p className="text-sm text-muted-foreground">{feature.description}</p>
-          <div className="flex flex-wrap gap-1 pt-1">
-            {feature.paths.map((p) => (
-              <code
-                key={p}
-                className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground"
-              >
-                {p}
-              </code>
-            ))}
-          </div>
-        </div>
-      </button>
-
-      {open ? (
-        <ul className="divide-y divide-border/40 border-t border-border">
-          {feature.scenarios.map((s, i) => (
-            <ScenarioRow key={i} scenario={s} />
-          ))}
-        </ul>
-      ) : null}
-    </div>
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          type="button"
+          variant="ghost"
+          size={compact ? 'sm' : 'default'}
+          className="gap-1.5 text-xs text-muted-foreground"
+        >
+          <Sparkles className="size-3.5" />
+          {label}
+          <ChevronRight className="size-3 rotate-90 opacity-60" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-64">
+        <DropdownMenuLabel className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+          {t('model_picker.heading')}
+        </DropdownMenuLabel>
+        <DropdownMenuItem
+          onSelect={() => onChange(null)}
+          className={cn('flex-col items-start gap-0.5', !value && 'bg-accent')}
+        >
+          <span className="font-medium">
+            {t('model_picker.default_label')}
+          </span>
+          <span className="text-xs text-muted-foreground">
+            {t('model_picker.default_hint')}
+          </span>
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        {MODEL_PRESETS.map((p) => (
+          <DropdownMenuItem
+            key={p.value}
+            onSelect={() => onChange(p.value)}
+            className={cn(
+              'flex-col items-start gap-0.5',
+              value === p.value && 'bg-accent',
+            )}
+          >
+            <span className="font-medium">{p.label}</span>
+            <span className="text-xs text-muted-foreground">{p.hint}</span>
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 }
 
-function ScenarioRow({ scenario }: { scenario: Scenario }) {
-  const t = useTranslations('projects.overview.analysis')
-  return (
-    <li className="p-4">
-      <div className="flex items-start gap-3">
-        <PriorityBadge priority={scenario.priority} />
-        <div className="min-w-0 flex-1 space-y-2">
-          <p className="font-medium">{scenario.title}</p>
-          <p className="text-xs italic text-muted-foreground">
-            {scenario.rationale}
-          </p>
-          {scenario.preconditions && scenario.preconditions.length > 0 ? (
-            <div className="rounded border border-border/60 bg-background/40 p-2 text-xs">
-              <p className="mb-1 font-semibold uppercase tracking-wider text-muted-foreground">
-                {t('preconditions')}
-              </p>
-              <ul className="list-disc space-y-0.5 pl-4">
-                {scenario.preconditions.map((p, i) => (
-                  <li key={i}>{p}</li>
-                ))}
-              </ul>
-            </div>
-          ) : null}
-          {scenario.dataNeeded && scenario.dataNeeded.length > 0 ? (
-            <div className="rounded border border-border/60 bg-background/40 p-2 text-xs">
-              <p className="mb-1 font-semibold uppercase tracking-wider text-muted-foreground">
-                {t('data_needed')}
-              </p>
-              <ul className="list-disc space-y-0.5 pl-4">
-                {scenario.dataNeeded.map((d, i) => (
-                  <li key={i}>{d}</li>
-                ))}
-              </ul>
-            </div>
-          ) : null}
-        </div>
-      </div>
-    </li>
-  )
-}
-
-function PriorityBadge({ priority }: { priority: Scenario['priority'] }) {
-  const colors: Record<Scenario['priority'], string> = {
-    critical: 'bg-destructive/15 text-destructive',
-    high: 'bg-amber-500/15 text-amber-500',
-    normal: 'bg-primary/15 text-primary',
-    low: 'bg-muted text-muted-foreground',
-  }
-  return (
-    <span
-      className={cn(
-        'inline-flex shrink-0 items-center rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider',
-        colors[priority],
-      )}
-    >
-      {priority}
-    </span>
-  )
-}

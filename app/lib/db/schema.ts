@@ -376,6 +376,82 @@ export const projectAnalyses = pgTable(
   }),
 )
 
+export const analysisFeatures = pgTable(
+  'analysis_features',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    projectId: uuid('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    sourceAnalysisId: uuid('source_analysis_id').references(
+      () => projectAnalyses.id,
+      { onDelete: 'set null' },
+    ),
+    externalId: text('external_id').notNull(),
+    name: text('name').notNull(),
+    description: text('description').notNull(),
+    paths: jsonb('paths').notNull().default(sql`'[]'::jsonb`),
+    sortOrder: integer('sort_order').notNull().default(0),
+    reviewedAt: timestamp('reviewed_at', { withTimezone: true }),
+    reviewedBy: uuid('reviewed_by').references(() => users.id, {
+      onDelete: 'set null',
+    }),
+    source: text('source').notNull().default('ai'),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    projectIdx: index('analysis_features_project_idx').on(
+      t.projectId,
+      t.sortOrder,
+    ),
+    sourceIdx: index('analysis_features_source_analysis_idx').on(
+      t.sourceAnalysisId,
+    ),
+  }),
+)
+
+export const analysisScenarios = pgTable(
+  'analysis_scenarios',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    featureId: uuid('feature_id')
+      .notNull()
+      .references(() => analysisFeatures.id, { onDelete: 'cascade' }),
+    projectId: uuid('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    title: text('title').notNull(),
+    rationale: text('rationale').notNull(),
+    priority: text('priority').notNull(),
+    preconditions: jsonb('preconditions').notNull().default(sql`'[]'::jsonb`),
+    dataNeeded: jsonb('data_needed').notNull().default(sql`'[]'::jsonb`),
+    sortOrder: integer('sort_order').notNull().default(0),
+    reviewedAt: timestamp('reviewed_at', { withTimezone: true }),
+    reviewedBy: uuid('reviewed_by').references(() => users.id, {
+      onDelete: 'set null',
+    }),
+    source: text('source').notNull().default('ai'),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    featureIdx: index('analysis_scenarios_feature_idx').on(
+      t.featureId,
+      t.sortOrder,
+    ),
+    projectIdx: index('analysis_scenarios_project_idx').on(t.projectId),
+  }),
+)
+
 export type Project = typeof projects.$inferSelect
 export type NewProject = typeof projects.$inferInsert
 export type ProjectScenario = typeof projectScenarios.$inferSelect
@@ -383,6 +459,12 @@ export type CrawlJob = typeof crawlJobs.$inferSelect
 export type CrawlPage = typeof crawlPages.$inferSelect
 export type CrawlElement = typeof crawlElements.$inferSelect
 export type ProjectAnalysis = typeof projectAnalyses.$inferSelect
+export type AnalysisFeature = typeof analysisFeatures.$inferSelect
+export type NewAnalysisFeature = typeof analysisFeatures.$inferInsert
+export type AnalysisScenario = typeof analysisScenarios.$inferSelect
+export type NewAnalysisScenario = typeof analysisScenarios.$inferInsert
+export type AnalysisSource = 'ai' | 'manual'
+export type ScenarioPriority = 'critical' | 'high' | 'normal' | 'low'
 export type OrgAiConfig = typeof orgAiConfig.$inferSelect
 export type NewOrgAiConfig = typeof orgAiConfig.$inferInsert
 export type ProjectStatus = 'draft' | 'crawling' | 'ready' | 'failed'

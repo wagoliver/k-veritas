@@ -124,8 +124,25 @@ export async function POST(
     )
   }
 
+  // Body opcional: permite escolher modelo específico só pra esta rodada,
+  // sem alterar o default da org em /settings/ai.
+  let modelOverride: string | undefined
+  if (req.headers.get('content-type')?.includes('application/json')) {
+    const body = (await req.json().catch(() => null)) as {
+      model?: unknown
+    } | null
+    if (body && typeof body.model === 'string') {
+      const trimmed = body.model.trim()
+      if (trimmed.length > 0 && trimmed.length <= 200) {
+        modelOverride = trimmed
+      }
+    }
+  }
+
   try {
-    const outcome = await runProjectAnalysis(project, session.user.id)
+    const outcome = await runProjectAnalysis(project, session.user.id, {
+      modelOverride,
+    })
 
     await audit({
       userId: session.user.id,

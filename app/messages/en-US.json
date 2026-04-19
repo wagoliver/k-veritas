@@ -271,6 +271,11 @@
         "reanalyze": "Re-analyze",
         "cancel": "Cancel",
         "cancelled": "Analysis cancelled.",
+        "model_picker": {
+          "heading": "Model for this run",
+          "default_label": "Default",
+          "default_hint": "Uses the model saved in AI Settings"
+        },
         "success": "Analysis completed.",
         "progress": {
           "pending": "Preparing context…",
@@ -292,6 +297,91 @@
           "failed_title": "Analysis failed",
           "network": "Connection failed.",
           "generic": "Couldn't start analysis."
+        },
+        "editor": {
+          "features_count": "{count} features",
+          "reviewed_ratio": "{reviewed}/{total} scenarios reviewed",
+          "add_feature": "New feature",
+          "add_scenario": "Add scenario",
+          "edit": "Edit",
+          "delete": "Delete",
+          "expand": "Expand",
+          "collapse": "Collapse",
+          "mark_reviewed": "Mark as reviewed",
+          "unmark_reviewed": "Unmark reviewed",
+          "manual_badge": "manual",
+          "reviewed_badge": "reviewed",
+          "reviewed_by": "Reviewed by {name} on {date}",
+          "preconditions": "Preconditions",
+          "data_needed": "Data needed",
+          "feature_deleted": "Feature deleted.",
+          "scenario_deleted": "Scenario deleted.",
+          "errors": {
+            "update": "Couldn't update.",
+            "delete": "Couldn't delete."
+          },
+          "confirm": {
+            "delete_feature": "Delete feature \"{name}\" and all scenarios within it? This cannot be undone.",
+            "delete_scenario": "Delete scenario \"{title}\"?"
+          },
+          "sheet_scenario": {
+            "title_new": "New scenario",
+            "title_edit": "Edit scenario",
+            "description": "A scenario is what an automated test will verify. Be specific about the expected behavior.",
+            "title_label": "Title",
+            "title_placeholder": "E.g.: Search customer by CNPJ with status filter",
+            "rationale_label": "Rationale",
+            "rationale_hint": "Why is this worth testing? The business value, not technical details.",
+            "rationale_placeholder": "Validates that CNPJ search finds the customer even with the status filter active.",
+            "priority_label": "Priority",
+            "priority": {
+              "critical": "Critical — failure causes financial/legal loss",
+              "high": "High — frequent flow",
+              "normal": "Normal — variation or common case",
+              "low": "Low — optional edge case"
+            },
+            "preconditions_label": "Preconditions",
+            "preconditions_hint": "System state that must exist before the scenario starts.",
+            "preconditions_placeholder": "E.g.: Customer registered and active",
+            "data_needed_label": "Data needed",
+            "data_needed_hint": "Fixtures and parameters the test will need to prepare.",
+            "data_needed_placeholder": "E.g.: Valid 14-digit CNPJ",
+            "add_item": "Add",
+            "remove_item": "Remove",
+            "cancel": "Cancel",
+            "save": "Save",
+            "create": "Create scenario",
+            "created": "Scenario created.",
+            "updated": "Scenario updated.",
+            "errors": {
+              "save": "Couldn't save.",
+              "title_min": "Title needs at least 4 characters.",
+              "rationale_min": "Rationale needs at least 5 characters."
+            }
+          },
+          "sheet_feature": {
+            "title_new": "New feature",
+            "title_edit": "Edit feature",
+            "description_hint": "A feature is a functional grouping — a business capability.",
+            "name_label": "Name",
+            "name_placeholder": "E.g.: Supplier management",
+            "description_label": "Description",
+            "description_placeholder": "One sentence about what the feature delivers.",
+            "paths_label": "Associated routes",
+            "paths_placeholder": "/suppliers",
+            "paths_hint": "App paths that belong to this feature. One per line.",
+            "add_path": "Add",
+            "cancel": "Cancel",
+            "save": "Save",
+            "create": "Create feature",
+            "created": "Feature created.",
+            "updated": "Feature updated.",
+            "errors": {
+              "save": "Couldn't save.",
+              "name_min": "Name needs at least 2 characters.",
+              "description_min": "Description needs at least 5 characters."
+            }
+          }
         }
       },
       "errors": {

@@ -67,6 +67,33 @@ export function recordAuthEvent(event: AuthEvent): void {
     })
 }
 
+export interface ReviewEvent {
+  project_id: string
+  target_kind: 'feature' | 'scenario'
+  target_id: string
+  action: 'marked' | 'unmarked'
+  user_id: string
+  user_display: string
+  title_snapshot: string
+}
+
+/**
+ * Grava evento de revisão (marcar/desmarcar) no ClickHouse.
+ * Fire-and-forget. Postgres já tem a fonte de verdade do estado atual
+ * (reviewed_at + reviewed_by); o CH é pra auditoria temporal.
+ */
+export function recordReviewEvent(event: ReviewEvent): void {
+  getClient()
+    .insert({
+      table: 'analysis_review_events',
+      values: [event],
+      format: 'JSONEachRow',
+    })
+    .catch((err) => {
+      console.error('[clickhouse] recordReviewEvent failed', err)
+    })
+}
+
 /**
  * Mutação assíncrona no ClickHouse: apaga todo o histórico de crawls
  * de um projeto. Fire-and-forget — a mutação é processada em background
@@ -90,6 +117,17 @@ export function purgeProjectCrawlHistory(projectId: string): void {
       })
       .catch((err) =>
         console.error('[clickhouse] purge crawl_page_history failed', err),
+      ),
+    ch
+      .command({
+        query: `ALTER TABLE analysis_review_events DELETE WHERE project_id = {pid:UUID}`,
+        query_params: { pid: projectId },
+      })
+      .catch((err) =>
+        console.error(
+          '[clickhouse] purge analysis_review_events failed',
+          err,
+        ),
       ),
   ])
 }

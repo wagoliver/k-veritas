@@ -271,6 +271,11 @@
         "reanalyze": "Reanalisar",
         "cancel": "Cancelar",
         "cancelled": "Análise cancelada.",
+        "model_picker": {
+          "heading": "Modelo desta rodada",
+          "default_label": "Padrão",
+          "default_hint": "Usa o modelo salvo em Configurações de IA"
+        },
         "success": "Análise concluída.",
         "progress": {
           "pending": "Preparando contexto…",
@@ -292,6 +297,91 @@
           "failed_title": "A análise falhou",
           "network": "Falha de conexão.",
           "generic": "Não foi possível iniciar a análise."
+        },
+        "editor": {
+          "features_count": "{count} features",
+          "reviewed_ratio": "{reviewed}/{total} cenários revisados",
+          "add_feature": "Nova feature",
+          "add_scenario": "Adicionar cenário",
+          "edit": "Editar",
+          "delete": "Excluir",
+          "expand": "Expandir",
+          "collapse": "Recolher",
+          "mark_reviewed": "Marcar como revisado",
+          "unmark_reviewed": "Desmarcar revisado",
+          "manual_badge": "manual",
+          "reviewed_badge": "revisado",
+          "reviewed_by": "Revisado por {name} em {date}",
+          "preconditions": "Pré-condições",
+          "data_needed": "Dados necessários",
+          "feature_deleted": "Feature excluída.",
+          "scenario_deleted": "Cenário excluído.",
+          "errors": {
+            "update": "Não foi possível atualizar.",
+            "delete": "Não foi possível excluir."
+          },
+          "confirm": {
+            "delete_feature": "Excluir feature \"{name}\" e todos os cenários dentro dela? Esta ação não pode ser desfeita.",
+            "delete_scenario": "Excluir cenário \"{title}\"?"
+          },
+          "sheet_scenario": {
+            "title_new": "Novo cenário",
+            "title_edit": "Editar cenário",
+            "description": "Cenário é o que um teste automatizado vai validar. Seja específico sobre o comportamento esperado.",
+            "title_label": "Título",
+            "title_placeholder": "Ex.: Buscar cliente por CNPJ com filtro por status",
+            "rationale_label": "Justificativa",
+            "rationale_hint": "Por que vale a pena testar isso? O valor de negócio, não os detalhes técnicos.",
+            "rationale_placeholder": "Valida que o filtro por CNPJ encontra o cliente mesmo com o filtro por status ativo.",
+            "priority_label": "Prioridade",
+            "priority": {
+              "critical": "Crítico — falha causa perda financeira/legal",
+              "high": "Alto — fluxo frequente",
+              "normal": "Normal — variação ou caso comum",
+              "low": "Baixo — edge case opcional"
+            },
+            "preconditions_label": "Pré-condições",
+            "preconditions_hint": "Estado do sistema que deve existir antes do cenário começar.",
+            "preconditions_placeholder": "Ex.: Cliente cadastrado e ativo",
+            "data_needed_label": "Dados necessários",
+            "data_needed_hint": "Fixtures e parâmetros que o teste vai precisar preparar.",
+            "data_needed_placeholder": "Ex.: CNPJ válido de 14 dígitos",
+            "add_item": "Adicionar",
+            "remove_item": "Remover",
+            "cancel": "Cancelar",
+            "save": "Salvar",
+            "create": "Criar cenário",
+            "created": "Cenário criado.",
+            "updated": "Cenário atualizado.",
+            "errors": {
+              "save": "Não foi possível salvar.",
+              "title_min": "Título precisa de pelo menos 4 caracteres.",
+              "rationale_min": "Justificativa precisa de pelo menos 5 caracteres."
+            }
+          },
+          "sheet_feature": {
+            "title_new": "Nova feature",
+            "title_edit": "Editar feature",
+            "description_hint": "Feature é um agrupamento funcional — uma capacidade de negócio.",
+            "name_label": "Nome",
+            "name_placeholder": "Ex.: Gestão de fornecedores",
+            "description_label": "Descrição",
+            "description_placeholder": "Uma frase sobre o que a feature entrega.",
+            "paths_label": "Rotas associadas",
+            "paths_placeholder": "/suppliers",
+            "paths_hint": "Paths da aplicação que pertencem a esta feature. Um por linha.",
+            "add_path": "Adicionar",
+            "cancel": "Cancelar",
+            "save": "Salvar",
+            "create": "Criar feature",
+            "created": "Feature criada.",
+            "updated": "Feature atualizada.",
+            "errors": {
+              "save": "Não foi possível salvar.",
+              "name_min": "Nome precisa de pelo menos 2 caracteres.",
+              "description_min": "Descrição precisa de pelo menos 5 caracteres."
+            }
+          }
         }
       },
       "errors": {
