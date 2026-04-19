@@ -155,6 +155,14 @@
   * {
     @apply border-border outline-ring/50;
   }
+  /* Sinaliza ao browser o esquema — faz <select>, scrollbars,
+     autofill e outros widgets nativos usarem paleta correta. */
+  :root {
+    color-scheme: light;
+  }
+  .dark {
+    color-scheme: dark;
+  }
   body {
     @apply bg-background text-foreground;
   }

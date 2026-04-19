@@ -27,6 +27,13 @@ import {
   FormMessage,
 } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { Separator } from '@/components/ui/separator'
 import { useRouter } from '@/lib/i18n/navigation'
 
@@ -34,6 +41,7 @@ const schema = z.object({
   name: z.string().trim().min(2).max(80),
   targetUrl: z.string().trim().url(),
   description: z.string().trim().max(4000).optional().or(z.literal('')),
+  crawlMaxDepth: z.coerce.number().int().min(1).max(10),
 })
 
 type Values = z.infer<typeof schema>
@@ -45,6 +53,7 @@ interface ProjectSettingsFormProps {
     targetUrl: string
     description: string | null
     authKind: 'none' | 'form'
+    crawlMaxDepth: number
   }
 }
 
@@ -62,6 +71,7 @@ export function ProjectSettingsForm({ project }: ProjectSettingsFormProps) {
       name: project.name,
       targetUrl: project.targetUrl,
       description: project.description ?? '',
+      crawlMaxDepth: project.crawlMaxDepth ?? 3,
     },
   })
 
@@ -78,6 +88,7 @@ export function ProjectSettingsForm({ project }: ProjectSettingsFormProps) {
           name: values.name,
           targetUrl: values.targetUrl,
           description: values.description || undefined,
+          crawlMaxDepth: values.crawlMaxDepth,
         }),
       })
       if (!res.ok) {
@@ -161,6 +172,67 @@ export function ProjectSettingsForm({ project }: ProjectSettingsFormProps) {
               </FormItem>
             )}
           />
+
+          <Separator />
+
+          <section className="space-y-4">
+            <div>
+              <h2 className="font-display text-base font-semibold">
+                {t('crawl.section_title')}
+              </h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {t('crawl.section_subtitle')}
+              </p>
+            </div>
+
+            <FormField
+              control={form.control}
+              name="crawlMaxDepth"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{t('crawl.max_depth_label')}</FormLabel>
+                  <Select
+                    value={String(field.value ?? 3)}
+                    onValueChange={(v) => field.onChange(parseInt(v, 10))}
+                  >
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="1">
+                        {t('crawl.depth_options.1')}
+                      </SelectItem>
+                      <SelectItem value="2">
+                        {t('crawl.depth_options.2')}
+                      </SelectItem>
+                      <SelectItem value="3">
+                        {t('crawl.depth_options.3')}
+                      </SelectItem>
+                      <SelectItem value="4">
+                        {t('crawl.depth_options.4')}
+                      </SelectItem>
+                      <SelectItem value="5">
+                        {t('crawl.depth_options.5')}
+                      </SelectItem>
+                      <SelectItem value="7">
+                        {t('crawl.depth_options.7')}
+                      </SelectItem>
+                      <SelectItem value="10">
+                        {t('crawl.depth_options.10')}
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormDescription>
+                    {t('crawl.max_depth_hint')}
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </section>
+
           <div className="flex items-center gap-3 border-t border-border pt-5">
             <Button type="submit" disabled={submitting || !form.formState.isDirty}>
               {submitting ? <Loader2 className="size-4 animate-spin" /> : null}

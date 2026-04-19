@@ -33,6 +33,7 @@ export const updateProjectSchema = z.object({
   description: z.string().trim().max(4000).optional(),
   authKind: authKindSchema.optional(),
   authForm: authFormSchema.optional(),
+  crawlMaxDepth: z.number().int().min(1).max(10).optional(),
 })
 
 export const createScenarioSchema = z.object({

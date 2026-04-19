@@ -8,6 +8,7 @@ import { Problems } from '@/lib/auth/errors'
 import { authorizeProject } from '@/lib/auth/project-access'
 
 export const runtime = 'nodejs'
+export const dynamic = 'force-dynamic'
 
 /**
  * GET /api/projects/[id]/pages
@@ -47,13 +48,12 @@ export async function GET(
       title: crawlPages.title,
       statusCode: crawlPages.statusCode,
       discoveredAt: crawlPages.discoveredAt,
-      elementsCount: sql<number>`(
-        SELECT count(*) FROM ${crawlElements}
-        WHERE ${crawlElements.pageId} = ${crawlPages.id}
-      )`,
+      elementsCount: sql<number>`count(${crawlElements.id})::int`,
     })
     .from(crawlPages)
+    .leftJoin(crawlElements, eq(crawlElements.pageId, crawlPages.id))
     .where(eq(crawlPages.crawlId, lastCompleted.id))
+    .groupBy(crawlPages.id)
     .orderBy(crawlPages.discoveredAt)
 
   return NextResponse.json({ crawlId: lastCompleted.id, items: pages })

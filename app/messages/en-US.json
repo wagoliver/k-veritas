@@ -263,7 +263,58 @@
         "crawling_description": "This may take a few minutes. The page updates automatically.",
         "empty_title": "No pages found",
         "empty_description": "Check the URL you provided and try re-crawling.",
-        "elements": "elements"
+        "elements": "elements",
+        "summary": {
+          "pages": "pages",
+          "elements": "elements captured",
+          "empty_pages": "{count} empty"
+        },
+        "row": {
+          "open_detail": "View captured elements",
+          "no_elements_hint": "No elements captured. The SPA likely didn't finish hydrating — try re-crawling."
+        },
+        "view": {
+          "tree": "Tree",
+          "list": "List"
+        },
+        "tree": {
+          "inferred": "inferred",
+          "expand": "Expand",
+          "collapse": "Collapse",
+          "children_count": "{count} sublevel(s)"
+        },
+        "recheck": {
+          "label": "Recheck this path",
+          "success": "Recovered — responded with status {status}.",
+          "still_failing": "Still failing (status {status}).",
+          "errors": {
+            "generic": "Couldn't recheck.",
+            "network": "Connection failed."
+          }
+        }
+      },
+      "page_detail": {
+        "loading": "Loading...",
+        "close": "Close",
+        "elements": "elements",
+        "empty": "No elements in this category.",
+        "no_label": "(no label)",
+        "copy": "Copy selector",
+        "copied": "Selector copied.",
+        "copy_error": "Could not copy.",
+        "kinds": {
+          "all": "All",
+          "button": "Buttons",
+          "link": "Links",
+          "input": "Inputs",
+          "form": "Forms",
+          "heading": "Headings",
+          "nav": "Navs",
+          "aria": "ARIA",
+          "testid": "Test IDs",
+          "label": "Labels",
+          "image": "Images"
+        }
       },
       "log": {
         "status": {
@@ -312,6 +363,21 @@
         "update": "Couldn't save changes.",
         "delete": "Couldn't delete project.",
         "network": "Connection failed."
+      },
+      "crawl": {
+        "section_title": "Crawler settings",
+        "section_subtitle": "Adjust how deep the crawler follows links.",
+        "max_depth_label": "Max depth",
+        "max_depth_hint": "Seed URL is depth 0; each link followed adds +1. Links beyond this limit are skipped (avoids infinite pagination, dynamic filters and loops).",
+        "depth_options": {
+          "1": "1 — seed only",
+          "2": "2 — shallow",
+          "3": "3 — simple (recommended)",
+          "4": "4 — moderate",
+          "5": "5 — complex (marketplaces)",
+          "7": "7 — deep",
+          "10": "10 — max"
+        }
       },
       "danger": {
         "title": "Danger zone",

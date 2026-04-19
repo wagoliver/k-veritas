@@ -52,7 +52,10 @@ export function CrawlLogStream({ projectId, onComplete }: CrawlLogStreamProps) {
       try {
         const res = await fetch(
           `/api/projects/${projectId}/crawls/latest`,
-          { headers: { 'X-Requested-With': 'fetch' } },
+          {
+            headers: { 'X-Requested-With': 'fetch' },
+            cache: 'no-store',
+          },
         )
         if (!res.ok) return
         const data = (await res.json()) as CrawlSnapshot

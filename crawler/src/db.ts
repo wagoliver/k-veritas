@@ -23,6 +23,7 @@ export interface Project {
   auth_kind: 'none' | 'form'
   auth_credentials: Buffer | null
   status: string
+  crawl_max_depth: number
 }
 
 export async function claimNextJob(
@@ -48,7 +49,8 @@ export async function claimNextJob(
   if (!job) return null
 
   const projectRows = await sql<Project[]>`
-    SELECT id, org_id, name, slug, target_url, auth_kind, auth_credentials, status
+    SELECT id, org_id, name, slug, target_url, auth_kind, auth_credentials,
+           status, crawl_max_depth
     FROM projects WHERE id = ${job.project_id} LIMIT 1
   `
   const project = projectRows[0]

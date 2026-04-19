@@ -263,7 +263,58 @@
         "crawling_description": "Pode levar alguns minutos. A página atualiza automaticamente.",
         "empty_title": "Nenhuma página encontrada",
         "empty_description": "Verifique a URL informada e tente recrawlear.",
-        "elements": "elementos"
+        "elements": "elementos",
+        "summary": {
+          "pages": "páginas",
+          "elements": "elementos capturados",
+          "empty_pages": "{count} sem elementos"
+        },
+        "row": {
+          "open_detail": "Ver elementos capturados",
+          "no_elements_hint": "Nenhum elemento capturado. Provavelmente a SPA não finalizou de hidratar — tente recrawlear."
+        },
+        "view": {
+          "tree": "Árvore",
+          "list": "Lista"
+        },
+        "tree": {
+          "inferred": "inferido",
+          "expand": "Expandir",
+          "collapse": "Recolher",
+          "children_count": "{count} subn\u00edvel/eis"
+        },
+        "recheck": {
+          "label": "Retestar este caminho",
+          "success": "Voltou a responder com status {status}.",
+          "still_failing": "Ainda falhando (status {status}).",
+          "errors": {
+            "generic": "Não foi possível retestar.",
+            "network": "Falha de conexão."
+          }
+        }
+      },
+      "page_detail": {
+        "loading": "Carregando...",
+        "close": "Fechar",
+        "elements": "elementos",
+        "empty": "Nenhum elemento nessa categoria.",
+        "no_label": "(sem label)",
+        "copy": "Copiar seletor",
+        "copied": "Seletor copiado.",
+        "copy_error": "Não foi possível copiar.",
+        "kinds": {
+          "all": "Todos",
+          "button": "Botões",
+          "link": "Links",
+          "input": "Inputs",
+          "form": "Forms",
+          "heading": "Headings",
+          "nav": "Navs",
+          "aria": "ARIA",
+          "testid": "Test IDs",
+          "label": "Labels",
+          "image": "Imagens"
+        }
       },
       "log": {
         "status": {
@@ -312,6 +363,21 @@
         "update": "Não foi possível salvar as alterações.",
         "delete": "Não foi possível excluir o projeto.",
         "network": "Falha de conexão."
+      },
+      "crawl": {
+        "section_title": "Configurações do crawler",
+        "section_subtitle": "Ajuste a profundidade da exploração de links.",
+        "max_depth_label": "Profundidade máxima",
+        "max_depth_hint": "A URL inicial é profundidade 0; cada link seguido adiciona +1. Links além deste limite são ignorados (evita paginações infinitas, filtros dinâmicos e loops).",
+        "depth_options": {
+          "1": "1 — apenas a URL inicial",
+          "2": "2 — rasa",
+          "3": "3 — simples (recomendado)",
+          "4": "4 — moderada",
+          "5": "5 — complexa (marketplaces)",
+          "7": "7 — profunda",
+          "10": "10 — máxima"
+        }
       },
       "danger": {
         "title": "Zona de perigo",

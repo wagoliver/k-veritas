@@ -34,6 +34,7 @@ export async function GET(
     description: project.description,
     authKind: project.authKind,
     ingestionMode: project.ingestionMode,
+    crawlMaxDepth: project.crawlMaxDepth,
     status: project.status,
     createdAt: project.createdAt,
     updatedAt: project.updatedAt,
@@ -65,6 +66,8 @@ export async function PATCH(
   if (parsed.data.name !== undefined) updates.name = parsed.data.name
   if (parsed.data.description !== undefined)
     updates.description = parsed.data.description
+  if (parsed.data.crawlMaxDepth !== undefined)
+    updates.crawlMaxDepth = parsed.data.crawlMaxDepth
 
   if (parsed.data.targetUrl !== undefined) {
     const check = validateTargetUrl(parsed.data.targetUrl)

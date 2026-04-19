@@ -6,8 +6,15 @@ import type { Project, SavedPageInput } from './db.ts'
 import { decryptCredentials } from './crypto.ts'
 
 const DATA_DIR = process.env.DATA_DIR ?? '/data'
-const MAX_PAGES = Number(process.env.CRAWL_MAX_PAGES ?? 20)
-const TOTAL_TIMEOUT_MS = Number(process.env.CRAWL_TOTAL_TIMEOUT_MS ?? 5 * 60_000)
+const MAX_PAGES = Number(process.env.CRAWL_MAX_PAGES ?? 1000)
+/**
+ * Default usado apenas se o projeto não tiver `crawl_max_depth` configurado.
+ * Em prod o valor vem do próprio projeto (configurável via UI).
+ */
+const DEFAULT_MAX_DEPTH = Number(process.env.CRAWL_MAX_DEPTH ?? 3)
+const TOTAL_TIMEOUT_MS = Number(
+  process.env.CRAWL_TOTAL_TIMEOUT_MS ?? 60 * 60_000,
+)
 const PAGE_TIMEOUT_MS = Number(process.env.CRAWL_PAGE_TIMEOUT_MS ?? 30_000)
 const USER_AGENT =
   process.env.CRAWL_USER_AGENT ??
@@ -27,6 +34,11 @@ export async function collectDom(
   const artifactsDir = join(DATA_DIR, 'projects', project.id, 'crawls', crawlId)
   await mkdir(artifactsDir, { recursive: true })
 
+  const maxDepth =
+    typeof project.crawl_max_depth === 'number' && project.crawl_max_depth > 0
+      ? project.crawl_max_depth
+      : DEFAULT_MAX_DEPTH
+
   const browser = await chromium.launch({
     args: ['--no-sandbox', '--disable-dev-shm-usage'],
   })
@@ -43,22 +55,52 @@ export async function collectDom(
       await performFormLogin(context, project.auth_credentials)
     }
 
-    const queue: string[] = [project.target_url]
+    interface QueuedUrl {
+      url: string
+      depth: number
+    }
+
+    const queue: QueuedUrl[] = [{ url: project.target_url, depth: 0 }]
     const seen = new Set<string>()
+    const enqueued = new Set<string>([project.target_url])
+
+    console.log(
+      `[crawler] starting crawl max_depth=${maxDepth} max_pages=${MAX_PAGES}`,
+    )
 
     while (queue.length > 0 && pagesCount < MAX_PAGES) {
       if (Date.now() - start > TOTAL_TIMEOUT_MS) break
 
-      const url = queue.shift()!
+      const { url, depth } = queue.shift()!
       if (seen.has(url)) continue
       seen.add(url)
+
+      console.log(
+        `[crawler] ALLOW ${url} depth=${depth} reason=${depth === 0 ? 'seed_url' : 'within_limit'}`,
+      )
 
       const page = await context.newPage()
       page.setDefaultTimeout(PAGE_TIMEOUT_MS)
 
       try {
         const response = await page.goto(url, { waitUntil: 'domcontentloaded' })
-        await page.waitForLoadState('networkidle', { timeout: PAGE_TIMEOUT_MS }).catch(() => {})
+        await page
+          .waitForLoadState('networkidle', { timeout: PAGE_TIMEOUT_MS })
+          .catch(() => {})
+        // Buffer extra para SPAs hidratarem após networkidle
+        await page.waitForTimeout(1_500)
+        // Espera ao menos um elemento interativo aparecer
+        await page
+          .waitForFunction(
+            () =>
+              document.body &&
+              document.querySelectorAll(
+                'button, a[href], input, textarea, select, [role="button"], [data-testid]',
+              ).length > 0,
+            undefined,
+            { timeout: 5_000 },
+          )
+          .catch(() => {})
 
         const statusCode = response?.status() ?? null
         const title = await page.title().catch(() => null)
@@ -93,12 +135,34 @@ export async function collectDom(
           domPath,
           elements,
         }
+
+        // Diagnóstico: se extraiu 0 elementos mas a página claramente tem DOM,
+        // logar um aviso com o tamanho do HTML pra facilitar debug
+        if (elements.length === 0) {
+          console.warn(
+            `[crawler] ${url} extracted 0 elements (html length: ${html.length})`,
+          )
+        }
+
         await callbacks.onPage?.(saved)
         pagesCount++
 
+        // Só segue links se o próximo depth estiver dentro do limite
+        const nextDepth = depth + 1
         const links = await collectSameOriginLinks(page, baseUrl)
+
         for (const l of links) {
-          if (!seen.has(l) && !queue.includes(l)) queue.push(l)
+          if (seen.has(l) || enqueued.has(l)) continue
+
+          if (nextDepth > maxDepth) {
+            console.log(
+              `[crawler] BLOCK ${l} depth=${nextDepth} reason=exceeds_max_depth (max=${maxDepth})`,
+            )
+            continue
+          }
+
+          enqueued.add(l)
+          queue.push({ url: l, depth: nextDepth })
         }
       } catch (err) {
         // uma página com erro não interrompe o crawl
@@ -114,6 +178,14 @@ export async function collectDom(
   return { pagesCount }
 }
 
+const USER_SELECTOR =
+  'input[type="email"], input[name*="email" i], input[name*="user" i], input[name*="login" i], input[id*="email" i], input[id*="user" i], input[type="text"]:not([name*="search" i])'
+const PASS_SELECTOR = 'input[type="password"]'
+const SUBMIT_SELECTOR =
+  'button[type="submit"], input[type="submit"], button:has-text("Entrar"), button:has-text("Login"), button:has-text("Sign in"), button:has-text("Log in"), button:has-text("Acessar"), button:has-text("Enviar")'
+const NEXT_SELECTOR =
+  'button[type="submit"], button:has-text("Next"), button:has-text("Continue"), button:has-text("Continuar"), button:has-text("Próximo"), button:has-text("Proximo"), button:has-text("Avançar")'
+
 async function performFormLogin(
   context: Awaited<ReturnType<Browser['newContext']>>,
   credentials: Buffer,
@@ -121,22 +193,65 @@ async function performFormLogin(
   const creds = decryptCredentials(credentials)
   const page = await context.newPage()
   try {
+    console.log(`[crawler] login: navegando para ${creds.loginUrl}`)
     await page.goto(creds.loginUrl, { waitUntil: 'domcontentloaded' })
+    await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
+    await page.waitForTimeout(800) // buffer pra SPA hidratar
 
-    const user = await page
-      .locator('input[type="email"], input[name*="email" i], input[name*="user" i], input[type="text"]')
-      .first()
-    const pass = await page.locator('input[type="password"]').first()
-    const submit = await page
-      .locator('button[type="submit"], button:has-text("Entrar"), button:has-text("Login"), button:has-text("Sign in")')
-      .first()
+    const userInput = page.locator(USER_SELECTOR).first()
+    const passInput = page.locator(PASS_SELECTOR).first()
 
-    await user.fill(creds.username)
-    await pass.fill(creds.password)
-    await Promise.all([
-      page.waitForLoadState('networkidle').catch(() => {}),
-      submit.click().catch(() => {}),
-    ])
+    // Aguarda o campo de usuário aparecer
+    await userInput.waitFor({ state: 'visible', timeout: 15_000 })
+    await userInput.fill(creds.username)
+    console.log('[crawler] login: usuário preenchido')
+
+    // Detecta single-step vs two-step: o campo de senha já está visível agora?
+    const passVisible = await passInput
+      .isVisible({ timeout: 1_500 })
+      .catch(() => false)
+
+    if (passVisible) {
+      console.log('[crawler] login: single-step detectado')
+      await passInput.fill(creds.password)
+      const submit = page.locator(SUBMIT_SELECTOR).first()
+      await Promise.all([
+        page
+          .waitForLoadState('networkidle', { timeout: 20_000 })
+          .catch(() => {}),
+        submit.click().catch(() => {}),
+      ])
+    } else {
+      console.log('[crawler] login: two-step detectado, clicando "next"')
+      const nextBtn = page.locator(NEXT_SELECTOR).first()
+      await nextBtn.click().catch(() => {})
+
+      // Aguarda a tela de senha aparecer (pode ser navegação ou DOM update)
+      await passInput
+        .waitFor({ state: 'visible', timeout: 20_000 })
+        .catch(() => {
+          console.warn(
+            '[crawler] login: campo de senha não apareceu após clique em next',
+          )
+        })
+
+      await passInput.fill(creds.password)
+      console.log('[crawler] login: senha preenchida (step 2)')
+
+      const finalSubmit = page.locator(SUBMIT_SELECTOR).first()
+      await Promise.all([
+        page
+          .waitForLoadState('networkidle', { timeout: 20_000 })
+          .catch(() => {}),
+        finalSubmit.click().catch(() => {}),
+      ])
+    }
+
+    // Um buffer final pra redirects pós-login completarem
+    await page.waitForTimeout(1_200)
+    console.log(`[crawler] login: finalizado (url atual: ${page.url()})`)
+  } catch (err) {
+    console.error('[crawler] login falhou:', err)
   } finally {
     await page.close().catch(() => {})
   }
@@ -155,6 +270,10 @@ async function collectSameOriginLinks(page: Page, base: URL): Promise<string[]> 
       const u = new URL(href)
       if (u.host !== base.host) continue
       u.hash = ''
+      // Normaliza trailing slash para evitar duplicar /foo e /foo/
+      if (u.pathname.length > 1 && u.pathname.endsWith('/')) {
+        u.pathname = u.pathname.replace(/\/+$/, '')
+      }
       const normalized = u.toString()
       if (!result.includes(normalized)) result.push(normalized)
     } catch {
@@ -270,7 +389,69 @@ async function extractElements(
       })
     })
 
-    return out.slice(0, 500)
+    // Elementos com role ARIA explícito (tabs, dialog, menu, etc)
+    document
+      .querySelectorAll(
+        '[role="tab"], [role="tabpanel"], [role="dialog"], [role="alert"], [role="menu"], [role="menuitem"], [role="checkbox"], [role="radio"], [role="switch"], [role="combobox"], [role="listbox"], [role="option"]',
+      )
+      .forEach((el) => {
+        out.push({
+          kind: 'aria',
+          role: el.getAttribute('role'),
+          label: el.getAttribute('aria-label') || visibleText(el) || null,
+          selector: selectorFor(el),
+          meta: {},
+        })
+      })
+
+    // Qualquer elemento com data-testid (teste-friendly)
+    document.querySelectorAll('[data-testid]').forEach((el) => {
+      out.push({
+        kind: 'testid',
+        role: el.getAttribute('role'),
+        label:
+          el.getAttribute('aria-label') ||
+          visibleText(el) ||
+          el.getAttribute('data-testid'),
+        selector: `[data-testid="${el.getAttribute('data-testid')}"]`,
+        meta: { testid: el.getAttribute('data-testid') },
+      })
+    })
+
+    // Labels (para associação com inputs)
+    document.querySelectorAll('label').forEach((l) => {
+      out.push({
+        kind: 'label',
+        role: 'label',
+        label: visibleText(l),
+        selector: selectorFor(l),
+        meta: { for: (l as HTMLLabelElement).htmlFor },
+      })
+    })
+
+    // Imagens com alt (candidatas a asserções)
+    document.querySelectorAll('img[alt]').forEach((img) => {
+      const alt = img.getAttribute('alt')
+      if (!alt) return
+      out.push({
+        kind: 'image',
+        role: 'img',
+        label: alt,
+        selector: selectorFor(img),
+        meta: { src: (img as HTMLImageElement).src },
+      })
+    })
+
+    // Dedup grosseiro por selector
+    const seen = new Set<string>()
+    const deduped = out.filter((el) => {
+      const key = `${el.kind}:${el.selector}`
+      if (seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
+
+    return deduped.slice(0, 1000)
   })
 
   return elements
