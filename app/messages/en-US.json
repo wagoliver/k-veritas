@@ -351,6 +351,13 @@
           "reviewed_done": "{count} already reviewed ↗",
           "candidate_badge": "candidate",
           "pending_gen_badge": "{count} without test",
+          "progress_title": "{tested} of {total} with test · {pct}%",
+          "progress_reviewed": "{pct}% reviewed",
+          "progress_segment_tested": "{count} scenarios with test",
+          "progress_segment_candidate": "{count} candidates for generation",
+          "progress_legend_tested": "With test",
+          "progress_legend_candidate": "Reviewed, no test",
+          "progress_legend_pending": "In review",
           "empty_pending": "All reviewed. Head to \"Test Scenarios\" to generate Playwright code.",
           "empty_reviewed": "No reviewed scenarios yet. Mark scenarios as reviewed in the AI Analysis tab to bring them here.",
           "with_test": "{count} with test",
@@ -394,7 +401,8 @@
           "scenario_deleted": "Scenario deleted.",
           "errors": {
             "update": "Couldn't update.",
-            "delete": "Couldn't delete."
+            "delete": "Couldn't delete.",
+            "feature_no_reviewed_scenarios": "Review at least one scenario inside this feature before marking it as reviewed."
           },
           "confirm": {
             "delete_feature": "Delete feature \"{name}\" and all scenarios within it? This cannot be undone.",

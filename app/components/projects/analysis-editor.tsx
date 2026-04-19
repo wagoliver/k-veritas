@@ -242,6 +242,12 @@ export function AnalysisEditor({
 
   return (
     <section className="space-y-4">
+      <ProgressIndicator
+        total={totalScenarios}
+        reviewed={reviewedScenarios}
+        tested={scenariosWithTest}
+        t={t}
+      />
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h3 className="font-display text-sm font-semibold uppercase tracking-wider text-muted-foreground">
           {mode === 'pending'
@@ -395,6 +401,92 @@ export function AnalysisEditor({
   )
 }
 
+function ProgressIndicator({
+  total,
+  reviewed,
+  tested,
+  t,
+}: {
+  total: number
+  reviewed: number
+  tested: number
+  t: TFnEditor
+}) {
+  if (total === 0) return null
+
+  const testedPct = Math.round((tested / total) * 100)
+  const candidatePct = Math.round(((reviewed - tested) / total) * 100)
+  const reviewedPct = Math.round((reviewed / total) * 100)
+
+  return (
+    <div className="rounded-lg border border-border bg-card p-3 text-xs">
+      <div className="flex items-baseline justify-between gap-2">
+        <div className="font-medium">
+          {t('progress_title', {
+            tested,
+            total,
+            pct: testedPct,
+          })}
+        </div>
+        <div className="flex gap-3 text-[11px] text-muted-foreground">
+          <span>{t('progress_reviewed', { pct: reviewedPct })}</span>
+        </div>
+      </div>
+      <div className="mt-2 flex h-2 overflow-hidden rounded-full bg-muted">
+        <div
+          className="bg-fin-gain transition-[width]"
+          style={{ width: `${testedPct}%` }}
+          title={t('progress_segment_tested', {
+            count: tested,
+          })}
+        />
+        <div
+          className="bg-blue-500 transition-[width]"
+          style={{ width: `${candidatePct}%` }}
+          title={t('progress_segment_candidate', {
+            count: reviewed - tested,
+          })}
+        />
+      </div>
+      <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-muted-foreground">
+        <Legend color="bg-fin-gain" label={t('progress_legend_tested')} count={tested} />
+        <Legend
+          color="bg-blue-500"
+          label={t('progress_legend_candidate')}
+          count={reviewed - tested}
+        />
+        <Legend
+          color="bg-muted-foreground/30"
+          label={t('progress_legend_pending')}
+          count={total - reviewed}
+        />
+      </div>
+    </div>
+  )
+}
+
+function Legend({
+  color,
+  label,
+  count,
+}: {
+  color: string
+  label: string
+  count: number
+}) {
+  return (
+    <span className="flex items-center gap-1.5">
+      <span className={cn('size-2 rounded-full', color)} />
+      <span>{label}</span>
+      <span className="tabular-nums text-foreground">{count}</span>
+    </span>
+  )
+}
+
+type TFnEditor = ReturnType<
+  typeof useTranslations<'projects.overview.analysis.editor'>
+>
+
 interface FeatureCardProps {
   feature: EditableFeature
   projectId: string
@@ -436,7 +528,18 @@ function FeatureCard({
   )
   const hasCandidate = candidateCount > 0
 
+  const reviewedScenariosInFeature = useMemo(
+    () => feature.scenarios.filter((s) => s.reviewedAt).length,
+    [feature.scenarios],
+  )
+  const canMarkReviewed = reviewedScenariosInFeature > 0
+  const isMarkReviewedBlocked = !feature.reviewedAt && !canMarkReviewed
+
   const toggleReviewed = () => {
+    if (isMarkReviewedBlocked) {
+      toast.error(t('errors.feature_no_reviewed_scenarios'))
+      return
+    }
     startTransition(async () => {
       const nextState = !feature.reviewedAt
       const res = await fetch(
@@ -450,6 +553,10 @@ function FeatureCard({
           body: JSON.stringify({ reviewed: nextState }),
         },
       )
+      if (res.status === 409) {
+        toast.error(t('errors.feature_no_reviewed_scenarios'))
+        return
+      }
       if (!res.ok) {
         toast.error(t('errors.update'))
         return
@@ -552,10 +659,14 @@ function FeatureCard({
         <div className="flex shrink-0 items-center gap-1">
           <IconBtn
             title={
-              feature.reviewedAt ? t('unmark_reviewed') : t('mark_reviewed')
+              isMarkReviewedBlocked
+                ? t('errors.feature_no_reviewed_scenarios')
+                : feature.reviewedAt
+                  ? t('unmark_reviewed')
+                  : t('mark_reviewed')
             }
             onClick={toggleReviewed}
-            disabled={pending}
+            disabled={pending || isMarkReviewedBlocked}
           >
             {feature.reviewedAt ? (
               <CheckCircle2 className="size-4 text-fin-gain" />

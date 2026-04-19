@@ -2,7 +2,13 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { and, eq } from 'drizzle-orm'
 
 import { db } from '@/lib/db/pg'
-import { analysisFeatures, users } from '@/lib/db/schema'
+import {
+  analysisFeatures,
+  analysisScenarios,
+  users,
+} from '@/lib/db/schema'
+import { isNotNull } from 'drizzle-orm'
+import { sql } from 'drizzle-orm'
 import { getServerSession } from '@/lib/auth/session'
 import { Problems } from '@/lib/auth/errors'
 import { authorizeProject } from '@/lib/auth/project-access'
@@ -41,6 +47,25 @@ export async function PATCH(
   if (parsed.data.sortOrder !== undefined)
     updates.sortOrder = parsed.data.sortOrder
   if (parsed.data.reviewed !== undefined) {
+    // Feature só pode ser marcada como revisada se houver pelo menos
+    // 1 cenário dentro dela marcado como revisado. Desmarcar é sempre ok.
+    if (parsed.data.reviewed) {
+      const [row] = await db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(analysisScenarios)
+        .where(
+          and(
+            eq(analysisScenarios.featureId, featureId),
+            isNotNull(analysisScenarios.reviewedAt),
+          ),
+        )
+      if (!row || row.count === 0) {
+        return Problems.conflict(
+          'no_reviewed_scenarios',
+          'Revise ao menos um cenário dentro desta feature antes de marcá-la como revisada.',
+        )
+      }
+    }
     updates.reviewedAt = parsed.data.reviewed ? new Date() : null
     updates.reviewedBy = parsed.data.reviewed ? session.user.id : null
   }
