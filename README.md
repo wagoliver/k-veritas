@@ -130,12 +130,41 @@ k-veritas/
 
 ## Roadmap
 
-| Fase | Escopo |
-|---|---|
-| 1 — Fundação (atual) | Auth: login, registro, reset, MFA TOTP. Postgres + ClickHouse. |
-| 2 — Autoria | Editor de testes Playwright com assistente LLM. |
-| 3 — Execução | Runner Playwright, execução isolada, captura de artefatos. |
-| 4 — Relatórios | Dashboards de resultados (aproveita o visual do `template/`). |
+### ✓ Fase 1 — Fundação
+
+Auth (login, registro, reset, MFA TOTP), Postgres + ClickHouse, i18n pt-BR/en-US, shell SaaS (sidebar, command palette, settings).
+
+### ✓ Fase 2 — Autoria
+
+- **2.0** Shell de projetos + configurações
+- **2.1** Criar projeto + crawler Playwright (container separado) + captura DOM/elements/screenshots + BFS com controle de profundidade
+- **2.2** Análise IA: abstração de provider (Ollama, Anthropic, OpenAI-compat), streaming de tokens, geração de features/cenários com schema JSON estrito, edição humano-na-volta, histórico por cenário
+- **2.3** Geração Playwright: `.spec.ts` por feature granular por cenário, visualização em fluxo Given/When/Then, download ZIP, delete/regeneração por cenário, preservação de histórico em ClickHouse
+
+### ☐ Fase 3 — Execução
+
+- Runner Playwright em container isolado (mesmo padrão do crawler)
+- Fila `test_exec_jobs` no Postgres
+- **Executar passo isolado** quando o ambiente estiver pronto — rodar um único `test(...)` de um cenário específico pra iterar sem disparar a suíte inteira
+- Resultado por cenário: passed/failed/flaky + trace viewer + screenshot de falha
+- Badges inline no card do cenário (último run) + histórico de execuções no CH
+- Webhook pra receber resultados de CI externo
+
+### ☐ Fase 4 — Relatórios
+
+- Dashboards de taxa de sucesso por feature/projeto/período
+- Grafo temporal de crawls (mostra evolução do app ao longo do tempo)
+- Diff entre crawls: quais páginas/elementos mudaram
+- Aproveita o visual do `template/`
+
+### Ideias em backlog (sem fase definida)
+
+- Modo Avançado de ingestão: carregar código-fonte junto com DOM pra enriquecer contexto da IA (GitHub PAT + clone raso ou upload de zip)
+- Export Gherkin `.feature` direto de cada cenário
+- Dialog de confirmação do Recrawlear com contexto ("último crawl: 2h atrás · 47 páginas")
+- Badge "análise desatualizada" quando o crawl é mais recente que a análise
+- Seletor de modelo por feature (crítico = Opus, simples = Haiku)
+- Limpeza automática de crawls antigos (hoje só o mais recente fica no PG; histórico comprimido no CH — faltam dashboards que exponham isso)
 
 ## Segurança
 
