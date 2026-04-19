@@ -80,6 +80,7 @@ export async function executeScenarioJob(
     const config = buildPlaywrightConfig(
       project,
       artifactsDir,
+      reportPath,
       opts.playwrightTimeoutMs,
     )
     await writeFile(join(runDir, 'playwright.config.ts'), config, 'utf8')
@@ -135,8 +136,12 @@ function buildSpecFile(scenario: ScenarioToRun): {
 function buildPlaywrightConfig(
   project: Project,
   artifactsDir: string,
+  reportPath: string,
   timeoutMs: number,
 ): string {
+  // IMPORTANTE: outputFile do reporter é resolvido relativo ao CWD do
+  // processo playwright (não à config). Como spawnamos com cwd=/app,
+  // usar caminho absoluto evita que o report saia em /app/report.json.
   return `import { defineConfig } from '@playwright/test'
 
 export default defineConfig({
@@ -144,7 +149,7 @@ export default defineConfig({
   timeout: ${timeoutMs},
   fullyParallel: false,
   retries: 0,
-  reporter: [['json', { outputFile: './report.json' }]],
+  reporter: [['json', { outputFile: ${JSON.stringify(reportPath)} }]],
   outputDir: ${JSON.stringify(artifactsDir)},
   use: {
     baseURL: ${JSON.stringify(project.target_url)},
@@ -240,14 +245,19 @@ function extractResults(
   artifactsDir: string,
 ): ResultRow[] {
   if (!report) {
-    // Reporter não gerou JSON — marca como falha com stdout como contexto
+    // Reporter não gerou JSON — marca como falha, coloca o tail do stdout
+    // dentro do errorMessage pra visibilidade imediata na UI.
+    const tail = stdout.slice(-1200).trim()
     return [
       {
         scenario_id: scenario.scenario_id,
         title: scenario.title,
         status: 'failed',
         duration_ms: null,
-        error_message: 'Playwright não gerou relatório JSON',
+        error_message:
+          tail.length > 0
+            ? `Playwright não gerou relatório JSON. Output:\n${tail}`
+            : 'Playwright não gerou relatório JSON (sem output).',
         error_stack: null,
         stdout,
         trace_path: null,
