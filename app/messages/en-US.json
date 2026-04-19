@@ -262,7 +262,8 @@
         "map": "Site map",
         "scenarios": "Scenarios",
         "analysis": "AI Analysis",
-        "tests": "Tests"
+        "tests": "Tests",
+        "test_scenarios": "Test Scenarios"
       },
       "tests": {
         "heading": "Generate Playwright tests",
@@ -345,11 +346,19 @@
         "editor": {
           "features_count": "{count} features",
           "reviewed_ratio": "{reviewed}/{total} scenarios reviewed",
+          "pending_header": "{count} scenarios pending review",
+          "reviewed_header": "{count} reviewed scenarios",
+          "reviewed_done": "{count} already reviewed ↗",
+          "candidate_badge": "candidate",
+          "empty_pending": "All reviewed. Head to \"Test Scenarios\" to generate Playwright code.",
+          "empty_reviewed": "No reviewed scenarios yet. Mark scenarios as reviewed in the AI Analysis tab to bring them here.",
           "with_test": "{count} with test",
           "generate": {
             "button": "Generate tests",
+            "button_with_count": "Generate tests ({count})",
             "download": "Download ZIP",
             "hint_no_reviewed": "Mark at least one scenario as reviewed before generating tests",
+            "hint_no_candidates": "All reviewed scenarios already have tests. Re-review or add new ones to generate more.",
             "no_reviewed": "Mark at least one scenario as reviewed before generating tests.",
             "rate_limited": "Wait a moment before generating again.",
             "success": "{count} files generated.",

@@ -262,7 +262,8 @@
         "map": "Mapa do site",
         "scenarios": "Cenários",
         "analysis": "Análise IA",
-        "tests": "Testes"
+        "tests": "Testes",
+        "test_scenarios": "Cenários de Teste"
       },
       "tests": {
         "heading": "Gerar testes Playwright",
@@ -345,11 +346,19 @@
         "editor": {
           "features_count": "{count} features",
           "reviewed_ratio": "{reviewed}/{total} cenários revisados",
+          "pending_header": "{count} cenários pendentes de revisão",
+          "reviewed_header": "{count} cenários revisados",
+          "reviewed_done": "{count} já revisados ↗",
+          "candidate_badge": "candidato",
+          "empty_pending": "Tudo revisado. Vá em \"Cenários de Teste\" pra gerar o código Playwright.",
+          "empty_reviewed": "Nenhum cenário revisado ainda. Marque cenários como revisados na aba Análise IA pra trazê-los pra cá.",
           "with_test": "{count} com teste",
           "generate": {
             "button": "Gerar testes",
+            "button_with_count": "Gerar testes ({count})",
             "download": "Baixar ZIP",
             "hint_no_reviewed": "Marque ao menos um cenário como revisado antes de gerar testes",
+            "hint_no_candidates": "Todos os cenários revisados já têm teste. Re-revise ou adicione novos pra gerar mais.",
             "no_reviewed": "Marque pelo menos um cenário como revisado antes de gerar testes.",
             "rate_limited": "Aguarde um pouco antes de gerar novamente.",
             "success": "{count} arquivos gerados.",

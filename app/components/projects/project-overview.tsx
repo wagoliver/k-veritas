@@ -1,6 +1,7 @@
 'use client'
 
 import {
+  FileCode2,
   Map,
   RotateCw,
   ScrollText,
@@ -15,6 +16,7 @@ import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 import { useRouter } from '@/lib/i18n/navigation'
+import { AnalysisEditor } from './analysis-editor'
 import { ProjectAnalysis } from './project-analysis'
 import { ScenariosEditor } from './scenarios-editor'
 import { SiteMapList } from './site-map-list'
@@ -28,7 +30,7 @@ interface ProjectOverviewProps {
   }
 }
 
-type Tab = 'map' | 'scenarios' | 'analysis'
+type Tab = 'map' | 'scenarios' | 'analysis' | 'test-scenarios'
 
 export function ProjectOverview({ project }: ProjectOverviewProps) {
   const t = useTranslations('projects.overview')
@@ -103,6 +105,12 @@ export function ProjectOverview({ project }: ProjectOverviewProps) {
           icon={<Sparkles className="size-4" />}
           label={t('tabs.analysis')}
         />
+        <TabBtn
+          active={tab === 'test-scenarios'}
+          onClick={() => setTab('test-scenarios')}
+          icon={<FileCode2 className="size-4" />}
+          label={t('tabs.test_scenarios')}
+        />
         <div className="ml-auto flex items-center gap-2 pb-2">
           <Button
             variant="outline"
@@ -134,6 +142,12 @@ export function ProjectOverview({ project }: ProjectOverviewProps) {
 
       <section className={cn(tab === 'analysis' ? 'block' : 'hidden')}>
         <ProjectAnalysis projectId={project.id} />
+      </section>
+
+      <section
+        className={cn(tab === 'test-scenarios' ? 'block' : 'hidden')}
+      >
+        <AnalysisEditor projectId={project.id} mode="reviewed" />
       </section>
     </div>
   )

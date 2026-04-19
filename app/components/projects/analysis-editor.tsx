@@ -70,7 +70,15 @@ export interface EditableFeature {
   scenarios: EditableScenario[]
 }
 
-export function AnalysisEditor({ projectId }: { projectId: string }) {
+export type EditorMode = 'pending' | 'reviewed'
+
+export function AnalysisEditor({
+  projectId,
+  mode = 'pending',
+}: {
+  projectId: string
+  mode?: EditorMode
+}) {
   const t = useTranslations('projects.overview.analysis.editor')
   const [features, setFeatures] = useState<EditableFeature[] | null>(null)
   const [scenarioEdit, setScenarioEdit] = useState<{
@@ -195,13 +203,29 @@ export function AnalysisEditor({ projectId }: { projectId: string }) {
     return null
   }
 
+  // Filtra scenarios por modo; features sem scenarios no modo somem da view
+  const visibleFeatures: EditableFeature[] = features
+    .map((f) => ({
+      ...f,
+      scenarios: f.scenarios.filter((s) =>
+        mode === 'pending' ? !s.reviewedAt : Boolean(s.reviewedAt),
+      ),
+    }))
+    .filter((f) => f.scenarios.length > 0)
+
   const totalScenarios = features.reduce((n, f) => n + f.scenarios.length, 0)
   const reviewedScenarios = features.reduce(
     (n, f) => n + f.scenarios.filter((s) => s.reviewedAt).length,
     0,
   )
+  const pendingScenarios = totalScenarios - reviewedScenarios
   const scenariosWithTest = features.reduce(
     (n, f) => n + f.scenarios.filter((s) => s.latestTest).length,
+    0,
+  )
+  const candidatesForGeneration = features.reduce(
+    (n, f) =>
+      n + f.scenarios.filter((s) => s.reviewedAt && !s.latestTest).length,
     0,
   )
   const isGeneratingRun =
@@ -220,63 +244,75 @@ export function AnalysisEditor({ projectId }: { projectId: string }) {
     <section className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h3 className="font-display text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-          {t('features_count', { count: features.length })}
+          {mode === 'pending'
+            ? t('pending_header', { count: pendingScenarios })
+            : t('reviewed_header', { count: reviewedScenarios })}
           <span className="ml-2 font-mono text-[11px] normal-case tracking-normal text-muted-foreground/70">
-            {t('reviewed_ratio', {
-              reviewed: reviewedScenarios,
-              total: totalScenarios,
-            })}
-            {scenariosWithTest > 0 ? (
-              <> · {t('with_test', { count: scenariosWithTest })}</>
-            ) : null}
+            {mode === 'pending'
+              ? t('reviewed_done', { count: reviewedScenarios })
+              : scenariosWithTest > 0
+                ? t('with_test', { count: scenariosWithTest })
+                : ''}
           </span>
         </h3>
         <div className="flex items-center gap-2">
-          <Button
-            type="button"
-            variant="default"
-            size="sm"
-            onClick={generateTests}
-            disabled={
-              generating || isGeneratingRun || reviewedScenarios === 0
-            }
-            title={
-              reviewedScenarios === 0 ? t('generate.hint_no_reviewed') : undefined
-            }
-          >
-            {generating || isGeneratingRun ? (
-              <Loader2 className="size-4 animate-spin" />
-            ) : (
-              <Zap className="size-4" />
-            )}
-            {t('generate.button')}
-          </Button>
-          {latestRun && latestRun.status === 'completed' ? (
+          {mode === 'reviewed' ? (
+            <>
+              <Button
+                type="button"
+                variant="default"
+                size="sm"
+                onClick={generateTests}
+                disabled={
+                  generating || isGeneratingRun || candidatesForGeneration === 0
+                }
+                title={
+                  candidatesForGeneration === 0
+                    ? t('generate.hint_no_candidates')
+                    : undefined
+                }
+              >
+                {generating || isGeneratingRun ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <Zap className="size-4" />
+                )}
+                {candidatesForGeneration > 0
+                  ? t('generate.button_with_count', {
+                      count: candidatesForGeneration,
+                    })
+                  : t('generate.button')}
+              </Button>
+              {latestRun && latestRun.status === 'completed' ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    window.location.href = `/api/projects/${projectId}/test-runs/${latestRun.id}/download`
+                  }}
+                >
+                  <Download className="size-4" />
+                  {t('generate.download')}
+                </Button>
+              ) : null}
+            </>
+          ) : null}
+          {mode === 'pending' ? (
             <Button
               type="button"
               variant="outline"
               size="sm"
-              onClick={() => {
-                window.location.href = `/api/projects/${projectId}/test-runs/${latestRun.id}/download`
-              }}
+              onClick={() => setFeatureEdit('new')}
             >
-              <Download className="size-4" />
-              {t('generate.download')}
+              <Plus className="size-4" />
+              {t('add_feature')}
             </Button>
           ) : null}
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => setFeatureEdit('new')}
-          >
-            <Plus className="size-4" />
-            {t('add_feature')}
-          </Button>
         </div>
       </div>
 
-      {isGeneratingRun ? (
+      {mode === 'reviewed' && isGeneratingRun ? (
         <div className="rounded-md border border-primary/30 bg-primary/5 p-3 text-xs">
           <div className="flex items-center gap-2 font-medium text-primary">
             <Loader2 className="size-3.5 animate-spin" />
@@ -288,7 +324,7 @@ export function AnalysisEditor({ projectId }: { projectId: string }) {
                 })}
           </div>
         </div>
-      ) : latestRun && latestRun.status === 'failed' ? (
+      ) : mode === 'reviewed' && latestRun && latestRun.status === 'failed' ? (
         <div className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-xs">
           <p className="font-medium text-destructive">
             {t('generate.failed_title')}
@@ -299,12 +335,24 @@ export function AnalysisEditor({ projectId }: { projectId: string }) {
         </div>
       ) : null}
 
+      {visibleFeatures.length === 0 ? (
+        <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-border p-12 text-center">
+          <CheckCircle2 className="size-8 text-muted-foreground/60" />
+          <p className="max-w-md text-sm text-muted-foreground">
+            {mode === 'pending'
+              ? t('empty_pending')
+              : t('empty_reviewed')}
+          </p>
+        </div>
+      ) : null}
+
       <div className="space-y-2">
-        {features.map((f) => (
+        {visibleFeatures.map((f) => (
           <FeatureCard
             key={f.id}
             feature={f}
             projectId={projectId}
+            mode={mode}
             onChanged={load}
             onEditScenario={(s) =>
               setScenarioEdit({ featureId: f.id, scenario: s })
@@ -350,6 +398,7 @@ export function AnalysisEditor({ projectId }: { projectId: string }) {
 interface FeatureCardProps {
   feature: EditableFeature
   projectId: string
+  mode: EditorMode
   onChanged: () => Promise<void> | void
   onEditScenario: (s: EditableScenario) => void
   onAddScenario: () => void
@@ -359,6 +408,7 @@ interface FeatureCardProps {
 function FeatureCard({
   feature,
   projectId,
+  mode,
   onChanged,
   onEditScenario,
   onAddScenario,
@@ -514,23 +564,26 @@ function FeatureCard({
                 key={s.id}
                 scenario={s}
                 projectId={projectId}
+                mode={mode}
                 onChanged={onChanged}
                 onEdit={() => onEditScenario(s)}
               />
             ))}
           </ul>
-          <div className="p-3">
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={onAddScenario}
-              className="text-muted-foreground"
-            >
-              <Plus className="size-4" />
-              {t('add_scenario')}
-            </Button>
-          </div>
+          {mode === 'pending' ? (
+            <div className="p-3">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={onAddScenario}
+                className="text-muted-foreground"
+              >
+                <Plus className="size-4" />
+                {t('add_scenario')}
+              </Button>
+            </div>
+          ) : null}
         </div>
       ) : null}
 
@@ -560,6 +613,7 @@ function FeatureCard({
 interface ScenarioRowProps {
   scenario: EditableScenario
   projectId: string
+  mode: EditorMode
   onChanged: () => Promise<void> | void
   onEdit: () => void
 }
@@ -567,6 +621,7 @@ interface ScenarioRowProps {
 function ScenarioRow({
   scenario,
   projectId,
+  mode,
   onChanged,
   onEdit,
 }: ScenarioRowProps) {
@@ -615,11 +670,18 @@ function ScenarioRow({
     })
   }
 
+  // Efeito "apagado" (candidato pra próxima geração): só na aba Cenários
+  // de Teste, quando o scenario está revisado mas ainda não tem teste.
+  const isCandidate =
+    mode === 'reviewed' && scenario.reviewedAt && !scenario.latestTest
+
   return (
     <li
       className={cn(
         'flex items-start gap-3 p-4 transition-colors hover:bg-accent/20',
-        scenario.reviewedAt && 'bg-fin-gain/[0.03]',
+        scenario.reviewedAt && !isCandidate && 'bg-fin-gain/[0.03]',
+        isCandidate &&
+          'border-l-4 border-dashed border-primary/50 bg-primary/[0.03] opacity-60 hover:opacity-100',
       )}
     >
       <button
@@ -647,6 +709,12 @@ function ScenarioRow({
               {t('manual_badge')}
             </span>
           ) : null}
+          {isCandidate ? (
+            <span className="inline-flex items-center gap-1 rounded border border-primary/40 bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
+              <Zap className="size-3" />
+              {t('candidate_badge')}
+            </span>
+          ) : null}
           <p className="font-medium">{scenario.title}</p>
         </div>
         <p className="text-xs italic text-muted-foreground">
@@ -658,7 +726,9 @@ function ScenarioRow({
             at={scenario.reviewedAt}
           />
         ) : null}
-        <ScenarioTestBlock test={scenario.latestTest} />
+        {mode === 'reviewed' ? (
+          <ScenarioTestBlock test={scenario.latestTest} />
+        ) : null}
         {scenario.preconditions.length > 0 ||
         scenario.dataNeeded.length > 0 ? (
           <div className="grid gap-1 pt-1 sm:grid-cols-2">
