@@ -29,66 +29,6 @@ import { AnalysisEditor } from './analysis-editor'
 
 type Provider = 'ollama' | 'anthropic' | 'openai-compatible'
 
-interface ModelPreset {
-  label: string
-  value: string
-  hint: string
-}
-
-const MODEL_PRESETS_BY_PROVIDER: Record<Provider, ModelPreset[]> = {
-  anthropic: [
-    {
-      label: 'Haiku 4.5',
-      value: 'claude-haiku-4-5-20251001',
-      hint: 'Rápido e barato',
-    },
-    {
-      label: 'Sonnet 4.6',
-      value: 'claude-sonnet-4-6',
-      hint: 'Equilíbrio qualidade/custo',
-    },
-    {
-      label: 'Opus 4.7',
-      value: 'claude-opus-4-7',
-      hint: 'Qualidade máxima (mais caro)',
-    },
-  ],
-  ollama: [
-    {
-      label: 'qwen2.5:7b',
-      value: 'qwen2.5:7b',
-      hint: 'Leve, CPU-friendly',
-    },
-    {
-      label: 'qwen2.5:14b',
-      value: 'qwen2.5:14b',
-      hint: 'Equilibrado (precisa GPU/mais RAM)',
-    },
-    {
-      label: 'llama3.3:70b',
-      value: 'llama3.3:70b',
-      hint: 'Máxima qualidade local',
-    },
-  ],
-  'openai-compatible': [
-    {
-      label: 'gpt-4o-mini',
-      value: 'openai/gpt-4o-mini',
-      hint: 'Barato (via OpenRouter)',
-    },
-    {
-      label: 'gemini-flash-1.5',
-      value: 'google/gemini-flash-1.5',
-      hint: 'Rápido (via OpenRouter)',
-    },
-    {
-      label: 'deepseek-chat',
-      value: 'deepseek/deepseek-chat',
-      hint: 'Boa relação custo/qualidade',
-    },
-  ],
-}
-
 interface Scenario {
   title: string
   rationale: string
@@ -131,10 +71,11 @@ export function ProjectAnalysis({ projectId }: { projectId: string }) {
   const [tick, setTick] = useState(0)
   const [modelOverride, setModelOverride] = useState<string | null>(null)
   const [orgProvider, setOrgProvider] = useState<Provider>('ollama')
+  const [orgBaseUrl, setOrgBaseUrl] = useState<string | null>(null)
   const [orgDefaultModel, setOrgDefaultModel] = useState<string | null>(null)
 
-  // Carrega a config de IA da org pra saber qual provider/modelo-padrão
-  // mostrar no seletor. Decide presets contextualmente.
+  // Carrega a config de IA da org pra saber qual provider/baseUrl/modelo.
+  // O picker usa provider+baseUrl pra consultar modelos reais no provider.
   useEffect(() => {
     let cancelled = false
     fetch('/api/orgs/current/ai-config', {
@@ -144,13 +85,18 @@ export function ProjectAnalysis({ projectId }: { projectId: string }) {
       .then((res) => (res.ok ? res.json() : null))
       .then(
         (data: {
-          config?: { provider?: string; model?: string } | null
+          config?: {
+            provider?: string
+            baseUrl?: string
+            model?: string
+          } | null
         } | null) => {
           if (cancelled) return
           const p = data?.config?.provider as Provider | undefined
           if (p === 'ollama' || p === 'anthropic' || p === 'openai-compatible') {
             setOrgProvider(p)
           }
+          setOrgBaseUrl(data?.config?.baseUrl ?? null)
           setOrgDefaultModel(data?.config?.model ?? null)
         },
       )
@@ -377,6 +323,7 @@ export function ProjectAnalysis({ projectId }: { projectId: string }) {
             value={modelOverride}
             onChange={setModelOverride}
             provider={orgProvider}
+            baseUrl={orgBaseUrl}
             defaultModel={orgDefaultModel}
             t={t}
           />
@@ -473,6 +420,7 @@ export function ProjectAnalysis({ projectId }: { projectId: string }) {
             value={modelOverride}
             onChange={setModelOverride}
             provider={orgProvider}
+            baseUrl={orgBaseUrl}
             defaultModel={orgDefaultModel}
             t={t}
             compact
@@ -517,6 +465,7 @@ function ModelPicker({
   value,
   onChange,
   provider,
+  baseUrl,
   defaultModel,
   t,
   compact = false,
@@ -524,15 +473,61 @@ function ModelPicker({
   value: string | null
   onChange: (v: string | null) => void
   provider: Provider
+  baseUrl: string | null
   defaultModel: string | null
   t: TFn
   compact?: boolean
 }) {
-  const presets = MODEL_PRESETS_BY_PROVIDER[provider] ?? []
-  const current = presets.find((p) => p.value === value)
-  const label = value
-    ? (current?.label ?? value)
-    : t('model_picker.default_label')
+  const [models, setModels] = useState<string[] | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [loaded, setLoaded] = useState(false)
+
+  const label = value ?? t('model_picker.default_label')
+
+  // Lazy-fetch: consulta a API do provider real (via nosso endpoint /test)
+  // só quando o dropdown é aberto pela primeira vez. Depois reusa cache.
+  const loadModels = async () => {
+    if (loaded || loading || !baseUrl) return
+    setLoading(true)
+    setError(null)
+    try {
+      const res = await fetch('/api/orgs/current/ai-config/test', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Requested-With': 'fetch',
+        },
+        body: JSON.stringify({
+          provider,
+          baseUrl,
+          useSavedApiKey: true,
+        }),
+      })
+      if (!res.ok) {
+        setError(`HTTP ${res.status}`)
+        setLoaded(true)
+        return
+      }
+      const data = (await res.json()) as {
+        ok: boolean
+        error?: string
+        models?: string[]
+      }
+      if (!data.ok) {
+        setError(data.error ?? 'unknown')
+        setLoaded(true)
+        return
+      }
+      setModels(data.models ?? [])
+      setLoaded(true)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'unknown')
+      setLoaded(true)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const promptCustom = () => {
     const v = window.prompt(
@@ -544,8 +539,10 @@ function ModelPicker({
     onChange(trimmed.length > 0 ? trimmed : null)
   }
 
+  const listedModels = (models ?? []).filter((m) => m !== defaultModel)
+
   return (
-    <DropdownMenu>
+    <DropdownMenu onOpenChange={(open) => open && loadModels()}>
       <DropdownMenuTrigger asChild>
         <Button
           type="button"
@@ -558,7 +555,7 @@ function ModelPicker({
           <ChevronRight className="size-3 rotate-90 opacity-60" />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-72">
+      <DropdownMenuContent align="end" className="max-h-96 w-80 overflow-y-auto">
         <DropdownMenuLabel className="flex flex-col gap-0.5">
           <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
             {t('model_picker.heading')}
@@ -583,23 +580,38 @@ function ModelPicker({
             {t('model_picker.default_hint')}
           </span>
         </DropdownMenuItem>
-        {presets.length > 0 ? (
-          <>
-            <DropdownMenuSeparator />
-            {presets.map((p) => (
-              <DropdownMenuItem
-                key={p.value}
-                onSelect={() => onChange(p.value)}
-                className={cn(
-                  'flex-col items-start gap-0.5',
-                  value === p.value && 'bg-accent',
-                )}
-              >
-                <span className="font-medium">{p.label}</span>
-                <span className="text-xs text-muted-foreground">{p.hint}</span>
-              </DropdownMenuItem>
-            ))}
-          </>
+        <DropdownMenuSeparator />
+        {loading ? (
+          <div className="flex items-center gap-2 px-2 py-3 text-xs text-muted-foreground">
+            <Loader2 className="size-3.5 animate-spin" />
+            {t('model_picker.loading')}
+          </div>
+        ) : error ? (
+          <div className="px-2 py-3 text-xs text-destructive">
+            {t('model_picker.load_failed', { error: error })}
+          </div>
+        ) : listedModels.length === 0 && loaded ? (
+          <div className="px-2 py-3 text-xs text-muted-foreground">
+            {t('model_picker.empty')}
+          </div>
+        ) : (
+          listedModels.slice(0, 30).map((name) => (
+            <DropdownMenuItem
+              key={name}
+              onSelect={() => onChange(name)}
+              className={cn(
+                'font-mono text-xs',
+                value === name && 'bg-accent',
+              )}
+            >
+              {name}
+            </DropdownMenuItem>
+          ))
+        )}
+        {listedModels.length > 30 ? (
+          <div className="px-2 py-1 text-[10px] text-muted-foreground/70">
+            {t('model_picker.truncated', { count: listedModels.length - 30 })}
+          </div>
         ) : null}
         <DropdownMenuSeparator />
         <DropdownMenuItem

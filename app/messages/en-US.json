@@ -276,6 +276,10 @@
           "provider_label": "Provider: {provider}",
           "default_label": "Default",
           "default_hint": "Uses the model saved in AI Settings",
+          "loading": "Querying provider…",
+          "empty": "No models available.",
+          "truncated": "+{count} more models (use \"Other model…\" to type)",
+          "load_failed": "Failed to list models: {error}",
           "custom_label": "Other model…",
           "custom_hint": "Type the exact model name",
           "custom_prompt": "Enter the model name ({provider}). Leave empty to use the default."
