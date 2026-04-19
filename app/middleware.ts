@@ -4,7 +4,8 @@ import createIntlMiddleware from 'next-intl/middleware'
 
 import { routing } from '@/lib/i18n/routing'
 import { verifyAccessToken } from '@/lib/auth/jwt'
-import { ACCESS_COOKIE } from '@/lib/auth/cookies'
+import { ACCESS_COOKIE, REFRESH_COOKIE } from '@/lib/auth/cookies'
+import { silentRefreshAccess } from '@/lib/auth/session'
 
 const intlMiddleware = createIntlMiddleware(routing)
 

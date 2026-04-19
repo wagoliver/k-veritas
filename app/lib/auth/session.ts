@@ -169,6 +169,65 @@ export async function rotateRefresh(opts: {
   }
 }
 
+/**
+ * Silent refresh: valida o refresh token e emite NOVO access token sem
+ * rotacionar o refresh. Usado pelo middleware pra prolongar sessão de forma
+ * transparente durante uso normal.
+ *
+ * Não rotaciona o refresh porque:
+ *   - Evita race condition entre abas (aba A rota, aba B vê v1 revogado
+ *     → detecção de replay → revoga tudo). A rotação só acontece no
+ *     /api/auth/refresh explícito.
+ *   - Sliding window: cada silent refresh estende `sessions.expires_at`,
+ *     então usuário ativo nunca é deslogado enquanto continuar usando.
+ */
+export async function silentRefreshAccess(
+  refreshToken: string,
+): Promise<
+  | { status: 'ok'; accessToken: string }
+  | { status: 'invalid' }
+> {
+  const hash = hashToken(refreshToken)
+
+  const [existing] = await db
+    .select()
+    .from(sessions)
+    .where(eq(sessions.refreshHash, hash))
+    .limit(1)
+
+  if (!existing) return { status: 'invalid' }
+  if (existing.revokedAt) return { status: 'invalid' }
+  if (existing.expiresAt.getTime() < Date.now()) return { status: 'invalid' }
+
+  const [user] = await db
+    .select()
+    .from(users)
+    .where(eq(users.id, existing.userId))
+    .limit(1)
+  if (!user || user.status !== 'active') return { status: 'invalid' }
+
+  // Sliding window: estende a expiração do refresh enquanto o usuário usa.
+  // Só atualiza se passou mais de 1h desde a última vez (evita UPDATE em
+  // toda request de página).
+  const slidingThresholdMs = 60 * 60 * 1000
+  const newExpires = new Date(Date.now() + refreshTtl() * 1000)
+  if (newExpires.getTime() - existing.expiresAt.getTime() > slidingThresholdMs) {
+    await db
+      .update(sessions)
+      .set({ expiresAt: newExpires })
+      .where(eq(sessions.id, existing.id))
+  }
+
+  const accessToken = await signAccessToken({
+    sub: user.id,
+    sid: existing.id,
+    locale: user.locale,
+    mfaLevel: existing.mfaLevel as MfaLevel,
+  })
+
+  return { status: 'ok', accessToken }
+}
+
 export async function revokeSessionByRefresh(refreshToken: string): Promise<void> {
   const hash = hashToken(refreshToken)
   await db
