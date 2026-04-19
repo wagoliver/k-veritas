@@ -350,6 +350,7 @@
           "reviewed_header": "{count} cenários revisados",
           "reviewed_done": "{count} já revisados ↗",
           "candidate_badge": "candidato",
+          "pending_gen_badge": "{count} sem teste",
           "empty_pending": "Tudo revisado. Vá em \"Cenários de Teste\" pra gerar o código Playwright.",
           "empty_reviewed": "Nenhum cenário revisado ainda. Marque cenários como revisados na aba Análise IA pra trazê-los pra cá.",
           "with_test": "{count} com teste",

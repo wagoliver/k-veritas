@@ -425,6 +425,17 @@ function FeatureCard({
     [feature.scenarios],
   )
 
+  // Quantos scenarios revisados dentro dessa feature ainda não viraram
+  // teste. Só faz sentido na aba Cenários de Teste (mode='reviewed').
+  const candidateCount = useMemo(
+    () =>
+      mode === 'reviewed'
+        ? feature.scenarios.filter((s) => s.reviewedAt && !s.latestTest).length
+        : 0,
+    [feature.scenarios, mode],
+  )
+  const hasCandidate = candidateCount > 0
+
   const toggleReviewed = () => {
     startTransition(async () => {
       const nextState = !feature.reviewedAt
@@ -470,7 +481,11 @@ function FeatureCard({
     <div
       className={cn(
         'overflow-hidden rounded-lg border bg-card',
-        feature.reviewedAt ? 'border-fin-gain/40' : 'border-border',
+        hasCandidate
+          ? 'border-dashed border-primary/50 bg-primary/[0.02]'
+          : feature.reviewedAt
+            ? 'border-fin-gain/40'
+            : 'border-border',
       )}
     >
       <div className="flex items-start gap-2 p-4">
@@ -506,6 +521,12 @@ function FeatureCard({
               <span className="inline-flex items-center gap-1 rounded bg-fin-gain/10 px-1.5 py-0.5 text-[10px] font-medium text-fin-gain">
                 <CheckCircle2 className="size-3" />
                 {t('reviewed_badge')}
+              </span>
+            ) : null}
+            {hasCandidate ? (
+              <span className="inline-flex items-center gap-1 rounded border border-primary/40 bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
+                <Zap className="size-3" />
+                {t('pending_gen_badge', { count: candidateCount })}
               </span>
             ) : null}
           </div>

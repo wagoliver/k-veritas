@@ -350,6 +350,7 @@
           "reviewed_header": "{count} reviewed scenarios",
           "reviewed_done": "{count} already reviewed ↗",
           "candidate_badge": "candidate",
+          "pending_gen_badge": "{count} without test",
           "empty_pending": "All reviewed. Head to \"Test Scenarios\" to generate Playwright code.",
           "empty_reviewed": "No reviewed scenarios yet. Mark scenarios as reviewed in the AI Analysis tab to bring them here.",
           "with_test": "{count} with test",
