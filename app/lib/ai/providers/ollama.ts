@@ -64,8 +64,17 @@ export class OllamaClient implements AIClient {
 
       if (!res.ok) {
         const raw = await res.text().catch(() => '')
+        // Ollama devolve JSON com { error: "..." } no corpo. Extrai a mensagem
+        // pra cair no error do project_analyses e virar toast legível.
+        let detail = raw.slice(0, 500)
+        try {
+          const parsed = JSON.parse(raw) as { error?: string }
+          if (parsed?.error) detail = parsed.error
+        } catch {
+          // raw não era JSON — mantém o texto bruto truncado
+        }
         throw new AIProviderError(
-          `Ollama ${res.status} ${res.statusText}`,
+          `Ollama ${res.status} ${res.statusText}: ${detail}`,
           res.status,
           raw,
         )
