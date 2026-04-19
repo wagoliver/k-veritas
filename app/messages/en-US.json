@@ -364,6 +364,10 @@
           "generate": {
             "button": "Generate tests",
             "button_with_count": "Generate tests ({count})",
+            "button_all": "Generate all ({count})",
+            "feature_button": "Generate ({count})",
+            "feature_running": "Generating · {seconds}s",
+            "success_feature": "{count} scenarios generated in {name}.",
             "download": "Download ZIP",
             "hint_no_reviewed": "Mark at least one scenario as reviewed before generating tests",
             "hint_no_candidates": "All reviewed scenarios already have tests. Re-review or add new ones to generate more.",

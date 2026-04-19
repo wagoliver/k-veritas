@@ -30,6 +30,12 @@ import { sanitizeJsonResponse } from './json-sanitize'
 
 export interface GenerateTestsOptions {
   modelOverride?: string
+  /**
+   * Se fornecido, restringe a geração aos cenários revisados dessa feature
+   * específica (escopo granular, reduz tokens e dá controle per-card).
+   * Quando omitido, gera pra todas as features com cenários revisados.
+   */
+  featureIdFilter?: string
 }
 
 export interface GenerateTestsOutcome {
@@ -56,8 +62,9 @@ export async function runTestGeneration(
   const client = buildClient(effectiveConfig)
   const { provider, model } = client.config
 
-  // Monta payload: só features que têm pelo menos um cenário revisado
-  const payload = await buildTestGenPayload(project)
+  // Monta payload: só features que têm pelo menos um cenário revisado.
+  // Filtra pelo featureId se escopo granular.
+  const payload = await buildTestGenPayload(project, opts.featureIdFilter)
   if (payload.features.length === 0) {
     throw new Error('no_reviewed_scenarios')
   }
@@ -226,14 +233,24 @@ class TestGenParseError extends Error {
   }
 }
 
-async function buildTestGenPayload(project: Project): Promise<TestGenPayload> {
-  // Busca features que têm pelo menos 1 cenário revisado
+async function buildTestGenPayload(
+  project: Project,
+  featureIdFilter?: string,
+): Promise<TestGenPayload> {
+  // Busca features do projeto; filtra por id se escopo granular
   const reviewedFeaturesRows = await db
     .select({
       feature: analysisFeatures,
     })
     .from(analysisFeatures)
-    .where(eq(analysisFeatures.projectId, project.id))
+    .where(
+      featureIdFilter
+        ? and(
+            eq(analysisFeatures.projectId, project.id),
+            eq(analysisFeatures.id, featureIdFilter),
+          )
+        : eq(analysisFeatures.projectId, project.id),
+    )
     .orderBy(asc(analysisFeatures.sortOrder))
 
   const allScenarios = await db

@@ -364,6 +364,10 @@
           "generate": {
             "button": "Gerar testes",
             "button_with_count": "Gerar testes ({count})",
+            "button_all": "Gerar todos ({count})",
+            "feature_button": "Gerar ({count})",
+            "feature_running": "Gerando · {seconds}s",
+            "success_feature": "{count} cenários gerados em {name}.",
             "download": "Baixar ZIP",
             "hint_no_reviewed": "Marque ao menos um cenário como revisado antes de gerar testes",
             "hint_no_candidates": "Todos os cenários revisados já têm teste. Re-revise ou adicione novos pra gerar mais.",

@@ -284,7 +284,7 @@ export function AnalysisEditor({
                   <Zap className="size-4" />
                 )}
                 {candidatesForGeneration > 0
-                  ? t('generate.button_with_count', {
+                  ? t('generate.button_all', {
                       count: candidatesForGeneration,
                     })
                   : t('generate.button')}
@@ -509,6 +509,65 @@ function FeatureCard({
   const t = useTranslations('projects.overview.analysis.editor')
   const [open, setOpen] = useState(false)
   const [pending, startTransition] = useTransition()
+  const [generating, startGenerate] = useTransition()
+  const [genElapsed, setGenElapsed] = useState(0)
+
+  // Contador de tempo enquanto gerando
+  useEffect(() => {
+    if (!generating) {
+      setGenElapsed(0)
+      return
+    }
+    const start = Date.now()
+    const interval = setInterval(() => {
+      setGenElapsed(Math.floor((Date.now() - start) / 1000))
+    }, 1000)
+    return () => clearInterval(interval)
+  }, [generating])
+
+  const generateTestsForFeature = () => {
+    startGenerate(async () => {
+      try {
+        const res = await fetch(
+          `/api/projects/${projectId}/features/${feature.id}/generate-tests`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Requested-With': 'fetch',
+            },
+            body: JSON.stringify({}),
+          },
+        )
+        if (res.status === 429) {
+          toast.error(t('generate.rate_limited'))
+          return
+        }
+        if (res.status === 409) {
+          toast.error(t('generate.no_reviewed'))
+          return
+        }
+        const data = (await res.json().catch(() => ({}))) as {
+          status?: 'completed' | 'failed'
+          error?: string
+          scenariosCount?: number
+        }
+        if (data.status === 'completed') {
+          toast.success(
+            t('generate.success_feature', {
+              count: data.scenariosCount ?? 0,
+              name: feature.name,
+            }),
+          )
+        } else if (data.status === 'failed') {
+          toast.error(t('generate.failed', { reason: data.error ?? '—' }))
+        }
+        await onChanged()
+      } catch {
+        toast.error(t('generate.network'))
+      }
+    })
+  }
 
   const reviewedAll = useMemo(
     () =>
@@ -657,6 +716,25 @@ function FeatureCard({
         </div>
 
         <div className="flex shrink-0 items-center gap-1">
+          {mode === 'reviewed' && hasCandidate ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={generateTestsForFeature}
+              disabled={generating}
+              className="gap-1.5 border-blue-500/40 text-blue-600 hover:bg-blue-500/10 dark:text-blue-400"
+            >
+              {generating ? (
+                <Loader2 className="size-3.5 animate-spin" />
+              ) : (
+                <Zap className="size-3.5" />
+              )}
+              {generating
+                ? t('generate.feature_running', { seconds: genElapsed })
+                : t('generate.feature_button', { count: candidateCount })}
+            </Button>
+          ) : null}
           <IconBtn
             title={
               isMarkReviewedBlocked
