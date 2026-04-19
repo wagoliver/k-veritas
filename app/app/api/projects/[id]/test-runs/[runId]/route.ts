@@ -6,6 +6,8 @@ import { generatedTests, projectTestRuns } from '@/lib/db/schema'
 import { getServerSession } from '@/lib/auth/session'
 import { Problems } from '@/lib/auth/errors'
 import { authorizeProject } from '@/lib/auth/project-access'
+import { audit } from '@/lib/auth/audit'
+import { clientIp, userAgent } from '@/lib/auth/request'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -73,4 +75,42 @@ export async function GET(
     },
     { headers: { 'Cache-Control': 'no-store' } },
   )
+}
+
+export async function DELETE(
+  req: NextRequest,
+  ctx: { params: Promise<{ id: string; runId: string }> },
+) {
+  const session = await getServerSession()
+  if (!session) return Problems.unauthorized()
+  if (req.headers.get('x-requested-with') !== 'fetch') {
+    return Problems.invalidBody()
+  }
+
+  const { id, runId } = await ctx.params
+  const project = await authorizeProject(session.user.id, id)
+  if (!project) return Problems.forbidden()
+
+  const deleted = await db
+    .delete(projectTestRuns)
+    .where(
+      and(
+        eq(projectTestRuns.id, runId),
+        eq(projectTestRuns.projectId, project.id),
+      ),
+    )
+    .returning({ id: projectTestRuns.id })
+
+  if (deleted.length === 0) return Problems.forbidden()
+
+  await audit({
+    userId: session.user.id,
+    event: 'test_run_deleted',
+    ip: clientIp(req),
+    userAgent: userAgent(req),
+    meta: { projectId: project.id, runId },
+    outcome: 'success',
+  })
+
+  return new NextResponse(null, { status: 204 })
 }

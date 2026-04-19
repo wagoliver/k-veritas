@@ -275,11 +275,19 @@
         "run_running": "Generating…",
         "run_failed": "Failed",
         "download_zip": "Download ZIP",
+        "delete": "Delete this run",
+        "deleted": "Run deleted.",
+        "confirm_delete": "Delete this run and all generated files? This cannot be undone.",
         "loading_files": "Loading files…",
         "no_files": "No files in this run.",
         "copy": "Copy code",
         "copied": "Code copied.",
         "copy_failed": "Couldn't copy.",
+        "progress": {
+          "waiting": "Waiting for first token · {seconds}s",
+          "waiting_hint": "Large or cloud-hosted models can take 30–90s to warm up.",
+          "generating": "Generating · {tokens} tokens · {seconds}s"
+        },
         "empty": {
           "description": "No tests generated yet. Click \"Generate tests\" above once you have reviewed scenarios."
         },
@@ -287,6 +295,7 @@
           "no_reviewed": "Mark at least one scenario as reviewed before generating.",
           "rate_limited": "Wait a moment before generating again.",
           "failed": "Generation failed: {reason}",
+          "delete": "Couldn't delete.",
           "network": "Connection failed."
         }
       },

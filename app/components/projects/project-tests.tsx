@@ -10,6 +10,7 @@ import {
   Loader2,
   Play,
   Sparkles,
+  Trash2,
 } from 'lucide-react'
 import { useEffect, useState, useTransition } from 'react'
 import { useTranslations } from 'next-intl'
@@ -56,6 +57,9 @@ export function ProjectTests({ projectId }: { projectId: string }) {
   const [summary, setSummary] = useState<Summary | null>(null)
   const [generating, startGenerate] = useTransition()
   const [expandedRunId, setExpandedRunId] = useState<string | null>(null)
+  const [tick, setTick] = useState(0)
+  // referência a tick força re-render a cada 1s durante running
+  void tick
 
   const loadRuns = async () => {
     const res = await fetch(`/api/projects/${projectId}/test-runs`, {
@@ -102,9 +106,20 @@ export function ProjectTests({ projectId }: { projectId: string }) {
       (r) => r.status === 'pending' || r.status === 'running',
     )
     if (!running) return
-    const i = setInterval(loadRuns, 2500)
+    const i = setInterval(loadRuns, 2000)
     return () => clearInterval(i)
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [runs])
+
+  // Tick de 1s pra timer subir sem refetch
+  useEffect(() => {
+    if (!runs) return
+    const running = runs.some(
+      (r) => r.status === 'pending' || r.status === 'running',
+    )
+    if (!running) return
+    const i = setInterval(() => setTick((x) => x + 1), 1000)
+    return () => clearInterval(i)
   }, [runs])
 
   const trigger = () => {
@@ -112,7 +127,37 @@ export function ProjectTests({ projectId }: { projectId: string }) {
       toast.error(t('errors.no_reviewed'))
       return
     }
+
+    // Optimistic: insere um run stub já como 'running' no topo da lista pra
+    // a UI reagir imediatamente. O polling substitui pelo registro real
+    // assim que o server insere a linha.
+    const now = new Date().toISOString()
+    setRuns((prev) => [
+      {
+        id: 'optimistic',
+        status: 'running',
+        provider: '…',
+        model: '…',
+        scenariosIncludedCount: summary.reviewedScenarios,
+        featuresCount: 0,
+        filesCount: 0,
+        tokensIn: null,
+        tokensOut: 0,
+        durationMs: 0,
+        error: null,
+        startedAt: now,
+        finishedAt: null,
+        createdAt: now,
+      },
+      ...(prev ?? []),
+    ])
+
     startGenerate(async () => {
+      // 500ms depois puxa o row real do banco (que acabou de ser inserido
+      // pelo runTestGeneration). Polling continua normal em seguida.
+      setTimeout(() => {
+        void loadRuns()
+      }, 500)
       try {
         const res = await fetch(
           `/api/projects/${projectId}/ai/generate-tests`,
@@ -127,10 +172,14 @@ export function ProjectTests({ projectId }: { projectId: string }) {
         )
         if (res.status === 429) {
           toast.error(t('errors.rate_limited'))
+          setRuns((prev) => (prev ?? []).filter((r) => r.id !== 'optimistic'))
+          await loadRuns()
           return
         }
         if (res.status === 409) {
           toast.error(t('errors.no_reviewed'))
+          setRuns((prev) => (prev ?? []).filter((r) => r.id !== 'optimistic'))
+          await loadRuns()
           return
         }
         const data = (await res.json().catch(() => ({}))) as {
@@ -148,8 +197,31 @@ export function ProjectTests({ projectId }: { projectId: string }) {
         await loadRuns()
       } catch {
         toast.error(t('errors.network'))
+        await loadRuns()
       }
     })
+  }
+
+  const handleDelete = async (runId: string) => {
+    if (!confirm(t('confirm_delete'))) return
+    try {
+      const res = await fetch(
+        `/api/projects/${projectId}/test-runs/${runId}`,
+        {
+          method: 'DELETE',
+          headers: { 'X-Requested-With': 'fetch' },
+        },
+      )
+      if (!res.ok) {
+        toast.error(t('errors.delete'))
+        return
+      }
+      toast.success(t('deleted'))
+      if (expandedRunId === runId) setExpandedRunId(null)
+      await loadRuns()
+    } catch {
+      toast.error(t('errors.network'))
+    }
   }
 
   if (runs === null || summary === null) {
@@ -222,6 +294,7 @@ export function ProjectTests({ projectId }: { projectId: string }) {
                 onToggle={() =>
                   setExpandedRunId((prev) => (prev === run.id ? null : run.id))
                 }
+                onDelete={() => handleDelete(run.id)}
               />
             ))}
           </div>
@@ -236,9 +309,16 @@ interface RunCardProps {
   projectId: string
   expanded: boolean
   onToggle: () => void
+  onDelete: () => void
 }
 
-function RunCard({ run, projectId, expanded, onToggle }: RunCardProps) {
+function RunCard({
+  run,
+  projectId,
+  expanded,
+  onToggle,
+  onDelete,
+}: RunCardProps) {
   const t = useTranslations('projects.overview.tests')
   const [files, setFiles] = useState<GeneratedFile[] | null>(null)
   const [loadingFiles, setLoadingFiles] = useState(false)
@@ -265,6 +345,16 @@ function RunCard({ run, projectId, expanded, onToggle }: RunCardProps) {
 
   const isInFlight = run.status === 'pending' || run.status === 'running'
 
+  const liveElapsedSeconds = run.startedAt
+    ? Math.max(
+        0,
+        Math.floor((Date.now() - new Date(run.startedAt).getTime()) / 1000),
+      )
+    : Math.max(
+        0,
+        Math.floor((Date.now() - new Date(run.createdAt).getTime()) / 1000),
+      )
+
   return (
     <div
       className={cn(
@@ -273,17 +363,20 @@ function RunCard({ run, projectId, expanded, onToggle }: RunCardProps) {
         run.status === 'completed' && 'border-border',
       )}
     >
-      <button
-        type="button"
-        onClick={onToggle}
-        className="flex w-full items-start gap-3 p-4 text-left transition-colors hover:bg-accent/20"
-      >
-        <ChevronRight
-          className={cn(
-            'mt-0.5 size-4 shrink-0 text-muted-foreground transition-transform',
-            expanded && 'rotate-90',
-          )}
-        />
+      <div className="flex items-start gap-3 p-4">
+        <button
+          type="button"
+          onClick={onToggle}
+          aria-label={expanded ? 'collapse' : 'expand'}
+          className="mt-0.5 shrink-0 text-muted-foreground transition-colors hover:text-foreground"
+        >
+          <ChevronRight
+            className={cn(
+              'size-4 transition-transform',
+              expanded && 'rotate-90',
+            )}
+          />
+        </button>
         <div className="mt-0.5 shrink-0">
           {run.status === 'completed' ? (
             <CheckCircle2 className="size-5 text-fin-gain" />
@@ -293,10 +386,14 @@ function RunCard({ run, projectId, expanded, onToggle }: RunCardProps) {
             <Loader2 className="size-5 animate-spin text-primary" />
           )}
         </div>
-        <div className="min-w-0 flex-1 space-y-1">
+        <button
+          type="button"
+          onClick={onToggle}
+          className="min-w-0 flex-1 space-y-1 text-left"
+        >
           <div className="flex flex-wrap items-center gap-2">
             <span className="font-medium">
-              {run.filesCount > 0
+              {run.status === 'completed'
                 ? t('run_summary', {
                     files: run.filesCount,
                     features: run.featuresCount,
@@ -306,39 +403,73 @@ function RunCard({ run, projectId, expanded, onToggle }: RunCardProps) {
                   ? t('run_running')
                   : t('run_failed')}
             </span>
-            {run.durationMs ? (
+            {!isInFlight && run.durationMs ? (
               <span className="font-mono text-xs text-muted-foreground">
                 {(run.durationMs / 1000).toFixed(1)}s
               </span>
             ) : null}
           </div>
-          <div className="flex flex-wrap gap-x-3 text-xs text-muted-foreground">
-            <span className="font-mono">
-              {run.provider}/{run.model}
-            </span>
-            <DateTime value={run.createdAt} />
-            {run.tokensIn || run.tokensOut ? (
-              <span className="tabular-nums">
-                {run.tokensIn ?? 0} in · {run.tokensOut ?? 0} out
+
+          {isInFlight ? (
+            <div className="space-y-0.5">
+              <div className="font-medium text-primary tabular-nums">
+                {(run.tokensOut ?? 0) === 0
+                  ? t('progress.waiting', { seconds: liveElapsedSeconds })
+                  : t('progress.generating', {
+                      tokens: run.tokensOut ?? 0,
+                      seconds: liveElapsedSeconds,
+                    })}
+              </div>
+              {(run.tokensOut ?? 0) === 0 && liveElapsedSeconds > 20 ? (
+                <div className="text-[11px] text-muted-foreground">
+                  {t('progress.waiting_hint')}
+                </div>
+              ) : null}
+            </div>
+          ) : (
+            <div className="flex flex-wrap gap-x-3 text-xs text-muted-foreground">
+              <span className="font-mono">
+                {run.provider}/{run.model}
               </span>
-            ) : null}
-          </div>
+              <DateTime value={run.createdAt} />
+              {run.tokensIn || run.tokensOut ? (
+                <span className="tabular-nums">
+                  {run.tokensIn ?? 0} in · {run.tokensOut ?? 0} out
+                </span>
+              ) : null}
+            </div>
+          )}
+        </button>
+        <div className="flex shrink-0 items-center gap-1">
+          {run.status === 'completed' ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={(e) => {
+                e.stopPropagation()
+                download()
+              }}
+            >
+              <Download className="size-4" />
+              {t('download_zip')}
+            </Button>
+          ) : null}
+          {run.id !== 'optimistic' ? (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation()
+                onDelete()
+              }}
+              title={t('delete')}
+              className="inline-flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+            >
+              <Trash2 className="size-4" />
+            </button>
+          ) : null}
         </div>
-        {run.status === 'completed' ? (
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={(e) => {
-              e.stopPropagation()
-              download()
-            }}
-          >
-            <Download className="size-4" />
-            {t('download_zip')}
-          </Button>
-        ) : null}
-      </button>
+      </div>
 
       {expanded && run.status === 'failed' && run.error ? (
         <div className="border-t border-destructive/20 bg-destructive/5 p-4">

@@ -275,11 +275,19 @@
         "run_running": "Gerando…",
         "run_failed": "Falhou",
         "download_zip": "Baixar ZIP",
+        "delete": "Excluir este run",
+        "deleted": "Run excluído.",
+        "confirm_delete": "Excluir este run e todos os arquivos gerados? A ação é irreversível.",
         "loading_files": "Carregando arquivos…",
         "no_files": "Nenhum arquivo neste run.",
         "copy": "Copiar código",
         "copied": "Código copiado.",
         "copy_failed": "Não foi possível copiar.",
+        "progress": {
+          "waiting": "Aguardando primeiro token · {seconds}s",
+          "waiting_hint": "Modelos grandes ou na nuvem podem levar 30–90s pra aquecer.",
+          "generating": "Gerando · {tokens} tokens · {seconds}s"
+        },
         "empty": {
           "description": "Nenhum teste gerado ainda. Clique em \"Gerar testes\" acima quando tiver cenários revisados."
         },
@@ -287,6 +295,7 @@
           "no_reviewed": "Marque ao menos um cenário como revisado antes de gerar.",
           "rate_limited": "Aguarde um pouco antes de gerar novamente.",
           "failed": "Geração falhou: {reason}",
+          "delete": "Não foi possível excluir.",
           "network": "Falha de conexão."
         }
       },
