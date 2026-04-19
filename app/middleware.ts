@@ -50,7 +50,30 @@ export default async function middleware(req: NextRequest) {
   const isRoot = bare === '/'
 
   const accessToken = req.cookies.get(ACCESS_COOKIE)?.value
-  const claims = accessToken ? await verifyAccessToken(accessToken) : null
+  let claims = accessToken ? await verifyAccessToken(accessToken) : null
+
+  // Silent refresh: access expirou mas tem refresh. Emite novo access sem
+  // rotacionar refresh (evita race entre abas). Usuário nunca cai no login
+  // enquanto estiver ativo — sessão só expira se ficar inativo 30 dias.
+  if (!claims) {
+    const refreshToken = req.cookies.get(REFRESH_COOKIE)?.value
+    if (refreshToken) {
+      const refreshed = await silentRefreshAccess(refreshToken)
+      if (refreshed.status === 'ok') {
+        claims = await verifyAccessToken(refreshed.accessToken)
+        res.cookies.set({
+          name: ACCESS_COOKIE,
+          value: refreshed.accessToken,
+          httpOnly: true,
+          secure: process.env.AUTH_COOKIE_SECURE === 'true',
+          sameSite: 'lax',
+          path: '/',
+          maxAge: Number(process.env.AUTH_ACCESS_TTL_SECONDS ?? 3600),
+        })
+      }
+    }
+  }
+
   const isAuthenticated = claims !== null && claims.mfaLevel !== 'none'
   // "Sessão em trânsito" = logou, falta MFA
   const pendingMfa = claims !== null && claims.mfaLevel === 'none'
@@ -114,6 +137,9 @@ export default async function middleware(req: NextRequest) {
 }
 
 export const config = {
+  // Node runtime é necessário pra fazer silent refresh contra o Postgres.
+  // Edge runtime não suporta postgres-js.
+  runtime: 'nodejs',
   matcher: [
     '/((?!_next|favicon.ico|icon.svg|apple-icon.png|icon-.*\\.png).*)',
   ],
