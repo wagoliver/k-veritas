@@ -1,6 +1,13 @@
 'use client'
 
-import { Map, RotateCw, ScrollText, Loader2, Sparkles } from 'lucide-react'
+import {
+  FileCode2,
+  Map,
+  RotateCw,
+  ScrollText,
+  Loader2,
+  Sparkles,
+} from 'lucide-react'
 import { useEffect, useState, useTransition } from 'react'
 import { useTranslations } from 'next-intl'
 import { toast } from 'sonner'
@@ -10,6 +17,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 import { useRouter } from '@/lib/i18n/navigation'
 import { ProjectAnalysis } from './project-analysis'
+import { ProjectTests } from './project-tests'
 import { ScenariosEditor } from './scenarios-editor'
 import { SiteMapList } from './site-map-list'
 
@@ -22,7 +30,7 @@ interface ProjectOverviewProps {
   }
 }
 
-type Tab = 'map' | 'scenarios' | 'analysis'
+type Tab = 'map' | 'scenarios' | 'analysis' | 'tests'
 
 export function ProjectOverview({ project }: ProjectOverviewProps) {
   const t = useTranslations('projects.overview')
@@ -97,6 +105,12 @@ export function ProjectOverview({ project }: ProjectOverviewProps) {
           icon={<Sparkles className="size-4" />}
           label={t('tabs.analysis')}
         />
+        <TabBtn
+          active={tab === 'tests'}
+          onClick={() => setTab('tests')}
+          icon={<FileCode2 className="size-4" />}
+          label={t('tabs.tests')}
+        />
         <div className="ml-auto flex items-center gap-2 pb-2">
           <Button
             variant="outline"
@@ -128,6 +142,10 @@ export function ProjectOverview({ project }: ProjectOverviewProps) {
 
       <section className={cn(tab === 'analysis' ? 'block' : 'hidden')}>
         <ProjectAnalysis projectId={project.id} />
+      </section>
+
+      <section className={cn(tab === 'tests' ? 'block' : 'hidden')}>
+        <ProjectTests projectId={project.id} />
       </section>
     </div>
   )

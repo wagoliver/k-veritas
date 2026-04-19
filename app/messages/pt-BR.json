@@ -261,7 +261,34 @@
       "tabs": {
         "map": "Mapa do site",
         "scenarios": "Cenários",
-        "analysis": "Análise IA"
+        "analysis": "Análise IA",
+        "tests": "Testes"
+      },
+      "tests": {
+        "heading": "Gerar testes Playwright",
+        "subheading": "{reviewed}/{total} cenários revisados prontos pra virar código",
+        "empty_hint": "Marque pelo menos um cenário como revisado na aba Análise IA antes de gerar testes.",
+        "generate_cta": "Gerar testes",
+        "generate_success": "{count} arquivos gerados.",
+        "history": "Histórico",
+        "run_summary": "{files} arquivos · {features} features · {scenarios} cenários",
+        "run_running": "Gerando…",
+        "run_failed": "Falhou",
+        "download_zip": "Baixar ZIP",
+        "loading_files": "Carregando arquivos…",
+        "no_files": "Nenhum arquivo neste run.",
+        "copy": "Copiar código",
+        "copied": "Código copiado.",
+        "copy_failed": "Não foi possível copiar.",
+        "empty": {
+          "description": "Nenhum teste gerado ainda. Clique em \"Gerar testes\" acima quando tiver cenários revisados."
+        },
+        "errors": {
+          "no_reviewed": "Marque ao menos um cenário como revisado antes de gerar.",
+          "rate_limited": "Aguarde um pouco antes de gerar novamente.",
+          "failed": "Geração falhou: {reason}",
+          "network": "Falha de conexão."
+        }
       },
       "analysis": {
         "summary": "Resumo",

@@ -108,4 +108,9 @@ export const BUCKETS = {
     capacity: 20,
     refillPerSecond: 20 / 3600,
   }),
+  aiGenerateTests: (projectId: string): BucketSpec => ({
+    key: `ai:gen-tests:${projectId}`,
+    capacity: 10,
+    refillPerSecond: 10 / 3600,
+  }),
 }

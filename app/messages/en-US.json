@@ -261,7 +261,34 @@
       "tabs": {
         "map": "Site map",
         "scenarios": "Scenarios",
-        "analysis": "AI Analysis"
+        "analysis": "AI Analysis",
+        "tests": "Tests"
+      },
+      "tests": {
+        "heading": "Generate Playwright tests",
+        "subheading": "{reviewed}/{total} reviewed scenarios ready to become code",
+        "empty_hint": "Mark at least one scenario as reviewed in the AI Analysis tab before generating tests.",
+        "generate_cta": "Generate tests",
+        "generate_success": "{count} files generated.",
+        "history": "History",
+        "run_summary": "{files} files · {features} features · {scenarios} scenarios",
+        "run_running": "Generating…",
+        "run_failed": "Failed",
+        "download_zip": "Download ZIP",
+        "loading_files": "Loading files…",
+        "no_files": "No files in this run.",
+        "copy": "Copy code",
+        "copied": "Code copied.",
+        "copy_failed": "Couldn't copy.",
+        "empty": {
+          "description": "No tests generated yet. Click \"Generate tests\" above once you have reviewed scenarios."
+        },
+        "errors": {
+          "no_reviewed": "Mark at least one scenario as reviewed before generating.",
+          "rate_limited": "Wait a moment before generating again.",
+          "failed": "Generation failed: {reason}",
+          "network": "Connection failed."
+        }
       },
       "analysis": {
         "summary": "Summary",

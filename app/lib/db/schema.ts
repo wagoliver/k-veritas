@@ -452,9 +452,77 @@ export const analysisScenarios = pgTable(
   }),
 )
 
+export const projectTestRuns = pgTable(
+  'project_test_runs',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    projectId: uuid('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    status: text('status').notNull().default('pending'),
+    provider: text('provider').notNull(),
+    model: text('model').notNull(),
+    requestedBy: uuid('requested_by')
+      .notNull()
+      .references(() => users.id),
+    scenariosIncludedCount: integer('scenarios_included_count')
+      .notNull()
+      .default(0),
+    featuresCount: integer('features_count').notNull().default(0),
+    filesCount: integer('files_count').notNull().default(0),
+    tokensIn: integer('tokens_in'),
+    tokensOut: integer('tokens_out'),
+    durationMs: integer('duration_ms'),
+    error: text('error'),
+    rawResponse: text('raw_response'),
+    startedAt: timestamp('started_at', { withTimezone: true }),
+    finishedAt: timestamp('finished_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    projectIdx: index('project_test_runs_project_idx').on(
+      t.projectId,
+      t.createdAt,
+    ),
+    statusIdx: index('project_test_runs_status_idx').on(t.status),
+  }),
+)
+
+export const generatedTests = pgTable(
+  'generated_tests',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    projectId: uuid('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    testRunId: uuid('test_run_id')
+      .notNull()
+      .references(() => projectTestRuns.id, { onDelete: 'cascade' }),
+    featureId: uuid('feature_id').references(() => analysisFeatures.id, {
+      onDelete: 'set null',
+    }),
+    featureNameSnapshot: text('feature_name_snapshot').notNull(),
+    filePath: text('file_path').notNull(),
+    fileContent: text('file_content').notNull(),
+    scenariosJson: jsonb('scenarios_json').notNull().default(sql`'[]'::jsonb`),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    runIdx: index('generated_tests_run_idx').on(t.testRunId),
+    projectIdx: index('generated_tests_project_idx').on(t.projectId),
+  }),
+)
+
 export type Project = typeof projects.$inferSelect
 export type NewProject = typeof projects.$inferInsert
 export type ProjectScenario = typeof projectScenarios.$inferSelect
+export type ProjectTestRun = typeof projectTestRuns.$inferSelect
+export type GeneratedTest = typeof generatedTests.$inferSelect
+export type TestRunStatus = 'pending' | 'running' | 'completed' | 'failed'
 export type CrawlJob = typeof crawlJobs.$inferSelect
 export type CrawlPage = typeof crawlPages.$inferSelect
 export type CrawlElement = typeof crawlElements.$inferSelect

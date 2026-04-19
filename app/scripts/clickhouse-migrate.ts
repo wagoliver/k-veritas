@@ -20,10 +20,18 @@ async function main(): Promise<void> {
   for (const file of files) {
     const path = join(MIGRATIONS_DIR, file)
     const content = await readFile(path, 'utf8')
-    const statements = content
+
+    // Remove linhas de comentário (`-- ...`) antes do split, pra que
+    // statements iniciados por comentário não sejam descartados.
+    const stripped = content
+      .split('\n')
+      .filter((line) => !line.trim().startsWith('--'))
+      .join('\n')
+
+    const statements = stripped
       .split(/;\s*\n/)
       .map((s) => s.trim())
-      .filter((s) => s.length > 0 && !s.startsWith('--'))
+      .filter((s) => s.length > 0)
 
     console.log(`[clickhouse] ${file} (${statements.length} statements)`)
 
