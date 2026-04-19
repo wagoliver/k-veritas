@@ -169,17 +169,20 @@ const STEP_ICONS: Record<StepKind, typeof MousePointer2> = {
   raw: Code,
 }
 
+// Paleta neutra: todos os ícones em foreground neutro. A fase colorida
+// (Given/When/Then) já carrega o significado semântico; os steps
+// internos ficam limpos pra não competir visualmente.
 const STEP_ICON_COLORS: Record<StepKind, string> = {
-  goto: 'text-sky-600 dark:text-sky-400',
-  click: 'text-blue-600 dark:text-blue-400',
-  fill: 'text-violet-600 dark:text-violet-400',
-  select: 'text-violet-600 dark:text-violet-400',
-  hover: 'text-blue-600 dark:text-blue-400',
-  check: 'text-blue-600 dark:text-blue-400',
-  press: 'text-violet-600 dark:text-violet-400',
+  goto: 'text-muted-foreground',
+  click: 'text-muted-foreground',
+  fill: 'text-muted-foreground',
+  select: 'text-muted-foreground',
+  hover: 'text-muted-foreground',
+  check: 'text-muted-foreground',
+  press: 'text-muted-foreground',
   locator: 'text-muted-foreground',
-  assertion: 'text-fin-gain',
-  wait: 'text-amber-600 dark:text-amber-400',
+  assertion: 'text-muted-foreground',
+  wait: 'text-muted-foreground',
   raw: 'text-muted-foreground',
 }
 
