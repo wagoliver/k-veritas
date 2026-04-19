@@ -73,7 +73,7 @@ export function MfaEnrollForm() {
         return
       }
       toast.success(t('success'))
-      router.replace('/dashboard')
+      router.replace('/projects')
       router.refresh()
     } catch {
       toast.error(t('errors.network'))

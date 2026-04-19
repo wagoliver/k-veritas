@@ -109,6 +109,142 @@
       "label": "Sign out"
     }
   },
+  "shell": {
+    "nav": {
+      "overview": "Overview",
+      "projects": "Projects",
+      "activity": "Activity",
+      "team": "Team",
+      "settings": "Settings",
+      "help": "Help",
+      "soon": "Coming soon"
+    },
+    "search": {
+      "open": "Open search",
+      "placeholder": "Search..."
+    },
+    "avatar": {
+      "open": "Open account menu",
+      "profile": "Profile",
+      "security": "Security",
+      "logout": "Sign out"
+    },
+    "theme": {
+      "label": "Appearance",
+      "light": "Light",
+      "dark": "Dark",
+      "system": "System"
+    },
+    "command": {
+      "title": "Command palette",
+      "description": "Search and run an action",
+      "placeholder": "Type a command...",
+      "empty": "No results.",
+      "groups": {
+        "navigate": "Navigate",
+        "appearance": "Appearance",
+        "account": "Account"
+      },
+      "actions": {
+        "projects": "Projects",
+        "profile": "Profile",
+        "security": "Security",
+        "theme_light": "Light theme",
+        "theme_dark": "Dark theme",
+        "theme_system": "System theme",
+        "logout": "Sign out"
+      }
+    },
+    "footer": {
+      "docs": "Documentation",
+      "terms": "Terms"
+    }
+  },
+  "breadcrumbs": {
+    "projects": "Projects",
+    "settings": "Settings",
+    "profile": "Profile",
+    "security": "Security",
+    "activity": "Activity",
+    "team": "Team",
+    "mfa": "MFA",
+    "mfa_enroll": "Enroll",
+    "mfa_verify": "Verify"
+  },
+  "projects": {
+    "title": "Projects",
+    "subtitle": "Organize your tests by app, environment, or team.",
+    "empty": {
+      "title": "No projects yet",
+      "description": "Soon you'll be able to create projects and start writing tests with AI help.",
+      "cta": "Create first project",
+      "hint": "Available in the next version."
+    }
+  },
+  "settings": {
+    "nav": {
+      "label": "Settings",
+      "profile": "Profile",
+      "security": "Security"
+    },
+    "profile": {
+      "meta_title": "Profile",
+      "title": "Profile",
+      "subtitle": "Update your name and preferred language.",
+      "email_hint": "Email cannot be changed yet.",
+      "locale_label": "Interface language",
+      "locale_hint": "The page reloads in the new language after saving.",
+      "save": "Save changes",
+      "discard": "Discard",
+      "saved": "Profile updated."
+    },
+    "security": {
+      "meta_title": "Security",
+      "title": "Security",
+      "subtitle": "Protect your account with MFA, change your password, and manage active sessions.",
+      "mfa": {
+        "section_title": "Two-factor authentication",
+        "section_subtitle": "Add an extra layer of protection at sign-in.",
+        "title": "MFA (TOTP)",
+        "enabled_desc": "Your account is protected by an authenticator app.",
+        "disabled_desc": "MFA is off. We recommend enabling it for better security.",
+        "enable": "Enable MFA",
+        "disable": "Disable",
+        "disabled_toast": "MFA disabled.",
+        "disable_confirm_title": "Disable MFA",
+        "disable_confirm_description": "To confirm, enter your current password. Two-factor protection will be removed.",
+        "password_label": "Current password",
+        "cancel": "Cancel",
+        "confirm_disable": "Disable MFA",
+        "errors": {
+          "load": "Couldn't load MFA state.",
+          "wrong_password": "Wrong password.",
+          "disable": "Couldn't disable MFA."
+        }
+      },
+      "password": {
+        "section_title": "Password",
+        "section_subtitle": "Change your password. Other sessions are revoked automatically.",
+        "current": "Current password",
+        "submit": "Update password",
+        "success": "Password updated. Other sessions ended.",
+        "errors": {
+          "current_invalid": "Current password is incorrect."
+        }
+      },
+      "sessions": {
+        "section_title": "Active sessions",
+        "section_subtitle": "Devices currently connected to your account.",
+        "current": "this device",
+        "revoke": "Revoke",
+        "revoked": "Session ended.",
+        "errors": {
+          "load": "Couldn't load sessions.",
+          "revoke": "Couldn't revoke session."
+        }
+      }
+    }
+  },
   "dashboard": {
     "welcome": "Hi, {name}",
     "subtitle": "Your k-veritas foundation is ready.",

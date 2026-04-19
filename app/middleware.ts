@@ -57,8 +57,16 @@ export default async function middleware(req: NextRequest) {
   if (isRoot) {
     const url = req.nextUrl.clone()
     url.pathname = isAuthenticated
-      ? `/${routing.defaultLocale}/dashboard`
+      ? `/${routing.defaultLocale}/projects`
       : `/${routing.defaultLocale}/login`
+    return NextResponse.redirect(url)
+  }
+
+  // Legacy redirect: /[locale]/dashboard → /[locale]/projects
+  if (bare === '/dashboard' || bare.startsWith('/dashboard/')) {
+    const locale = pathname.split('/')[1] ?? routing.defaultLocale
+    const url = req.nextUrl.clone()
+    url.pathname = `/${locale}/projects`
     return NextResponse.redirect(url)
   }
 
@@ -73,7 +81,7 @@ export default async function middleware(req: NextRequest) {
   if (isAuthenticated && isAuthRoute) {
     const locale = pathname.split('/')[1] ?? routing.defaultLocale
     const url = req.nextUrl.clone()
-    url.pathname = `/${locale}/dashboard`
+    url.pathname = `/${locale}/projects`
     url.searchParams.delete('next')
     return NextResponse.redirect(url)
   }

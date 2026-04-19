@@ -10,6 +10,7 @@ import {
   customType,
   index,
   uniqueIndex,
+  primaryKey,
 } from 'drizzle-orm/pg-core'
 
 const citext = customType<{ data: string }>({
@@ -149,7 +150,52 @@ export const auditLog = pgTable(
   }),
 )
 
+export const orgs = pgTable(
+  'orgs',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    name: text('name').notNull(),
+    slug: text('slug').notNull(),
+    ownerUserId: uuid('owner_user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'restrict' }),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    slugUnique: uniqueIndex('orgs_slug_unique').on(t.slug),
+    ownerIdx: index('orgs_owner_idx').on(t.ownerUserId),
+  }),
+)
+
+export const orgMembers = pgTable(
+  'org_members',
+  {
+    orgId: uuid('org_id')
+      .notNull()
+      .references(() => orgs.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    role: text('role').notNull().default('member'),
+    joinedAt: timestamp('joined_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.orgId, t.userId] }),
+    userIdx: index('org_members_user_idx').on(t.userId),
+  }),
+)
+
 export type User = typeof users.$inferSelect
 export type NewUser = typeof users.$inferInsert
 export type Session = typeof sessions.$inferSelect
 export type MfaFactor = typeof mfaFactors.$inferSelect
+export type Org = typeof orgs.$inferSelect
+export type OrgMember = typeof orgMembers.$inferSelect
+export type OrgRole = 'owner' | 'admin' | 'editor' | 'member' | 'viewer'

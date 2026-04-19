@@ -109,6 +109,142 @@
       "label": "Sair"
     }
   },
+  "shell": {
+    "nav": {
+      "overview": "Visão geral",
+      "projects": "Projetos",
+      "activity": "Atividade",
+      "team": "Equipe",
+      "settings": "Configurações",
+      "help": "Ajuda",
+      "soon": "Em breve"
+    },
+    "search": {
+      "open": "Abrir busca",
+      "placeholder": "Buscar..."
+    },
+    "avatar": {
+      "open": "Abrir menu da conta",
+      "profile": "Perfil",
+      "security": "Segurança",
+      "logout": "Sair"
+    },
+    "theme": {
+      "label": "Aparência",
+      "light": "Claro",
+      "dark": "Escuro",
+      "system": "Sistema"
+    },
+    "command": {
+      "title": "Paleta de comandos",
+      "description": "Busque e execute uma ação",
+      "placeholder": "Digite um comando...",
+      "empty": "Nenhum resultado.",
+      "groups": {
+        "navigate": "Ir para",
+        "appearance": "Aparência",
+        "account": "Conta"
+      },
+      "actions": {
+        "projects": "Projetos",
+        "profile": "Perfil",
+        "security": "Segurança",
+        "theme_light": "Tema claro",
+        "theme_dark": "Tema escuro",
+        "theme_system": "Tema do sistema",
+        "logout": "Sair"
+      }
+    },
+    "footer": {
+      "docs": "Documentação",
+      "terms": "Termos"
+    }
+  },
+  "breadcrumbs": {
+    "projects": "Projetos",
+    "settings": "Configurações",
+    "profile": "Perfil",
+    "security": "Segurança",
+    "activity": "Atividade",
+    "team": "Equipe",
+    "mfa": "MFA",
+    "mfa_enroll": "Configurar",
+    "mfa_verify": "Verificar"
+  },
+  "projects": {
+    "title": "Projetos",
+    "subtitle": "Organize seus testes em projetos por aplicação, ambiente ou equipe.",
+    "empty": {
+      "title": "Ainda não há projetos",
+      "description": "Em breve você poderá criar projetos e começar a escrever testes com ajuda da IA.",
+      "cta": "Criar primeiro projeto",
+      "hint": "Disponível na próxima versão."
+    }
+  },
+  "settings": {
+    "nav": {
+      "label": "Configurações",
+      "profile": "Perfil",
+      "security": "Segurança"
+    },
+    "profile": {
+      "meta_title": "Perfil",
+      "title": "Perfil",
+      "subtitle": "Atualize seu nome e idioma preferido.",
+      "email_hint": "O e-mail não pode ser alterado por enquanto.",
+      "locale_label": "Idioma da interface",
+      "locale_hint": "A página recarrega no novo idioma após salvar.",
+      "save": "Salvar alterações",
+      "discard": "Descartar",
+      "saved": "Perfil atualizado."
+    },
+    "security": {
+      "meta_title": "Segurança",
+      "title": "Segurança",
+      "subtitle": "Proteja sua conta com MFA, troque sua senha e gerencie sessões ativas.",
+      "mfa": {
+        "section_title": "Autenticação em 2 etapas",
+        "section_subtitle": "Adicione uma camada extra de proteção ao login.",
+        "title": "MFA (TOTP)",
+        "enabled_desc": "Você está protegido por um app autenticador.",
+        "disabled_desc": "MFA desativado. Recomendamos ativar para mais segurança.",
+        "enable": "Ativar MFA",
+        "disable": "Desativar",
+        "disabled_toast": "MFA desativado.",
+        "disable_confirm_title": "Desativar MFA",
+        "disable_confirm_description": "Para confirmar, informe sua senha atual. A proteção em duas etapas será removida.",
+        "password_label": "Senha atual",
+        "cancel": "Cancelar",
+        "confirm_disable": "Desativar MFA",
+        "errors": {
+          "load": "Não foi possível carregar o estado do MFA.",
+          "wrong_password": "Senha incorreta.",
+          "disable": "Não foi possível desativar o MFA."
+        }
+      },
+      "password": {
+        "section_title": "Senha",
+        "section_subtitle": "Troque sua senha. Isso revoga suas outras sessões automaticamente.",
+        "current": "Senha atual",
+        "submit": "Atualizar senha",
+        "success": "Senha atualizada. Outras sessões foram encerradas.",
+        "errors": {
+          "current_invalid": "Senha atual incorreta."
+        }
+      },
+      "sessions": {
+        "section_title": "Sessões ativas",
+        "section_subtitle": "Dispositivos conectados à sua conta agora.",
+        "current": "este dispositivo",
+        "revoke": "Encerrar",
+        "revoked": "Sessão encerrada.",
+        "errors": {
+          "load": "Não foi possível carregar as sessões.",
+          "revoke": "Não foi possível encerrar a sessão."
+        }
+      }
+    }
+  },
   "dashboard": {
     "welcome": "Olá, {name}",
     "subtitle": "Sua fundação k-veritas está pronta.",

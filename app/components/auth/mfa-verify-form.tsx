@@ -45,7 +45,7 @@ export function MfaVerifyForm() {
         toast.error(t('errors.generic'))
         return
       }
-      router.replace('/dashboard')
+      router.replace('/projects')
       router.refresh()
     } catch {
       toast.error(t('errors.network'))

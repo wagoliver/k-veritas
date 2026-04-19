@@ -8,5 +8,5 @@ export default async function LocaleRoot({
 }) {
   const { locale } = await params
   const session = await getServerSession()
-  redirect({ href: session ? '/dashboard' : '/login', locale })
+  redirect({ href: session ? '/projects' : '/login', locale })
 }

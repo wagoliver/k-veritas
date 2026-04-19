@@ -10,6 +10,7 @@ import { BUCKETS, consumeToken } from '@/lib/auth/rate-limit'
 import { Problems } from '@/lib/auth/errors'
 import { clientIp, userAgent } from '@/lib/auth/request'
 import { audit } from '@/lib/auth/audit'
+import { ensurePersonalOrg } from '@/lib/auth/current-org'
 import { isLocale, DEFAULT_LOCALE } from '@/lib/i18n/config'
 
 export const runtime = 'nodejs'
@@ -71,17 +72,22 @@ export async function POST(req: NextRequest) {
 
   const passwordHash = await hashPassword(parsed.data.password)
 
-  const [created] = await db
-    .insert(users)
-    .values({
-      email,
-      passwordHash,
-      displayName: parsed.data.displayName,
-      locale,
-    })
-    .returning({ id: users.id })
+  const created = await db.transaction(async (tx) => {
+    const [row] = await tx
+      .insert(users)
+      .values({
+        email,
+        passwordHash,
+        displayName: parsed.data.displayName,
+        locale,
+      })
+      .returning({ id: users.id })
 
-  if (!created) return Problems.server()
+    if (!row) throw new Error('insert_user_failed')
+
+    await ensurePersonalOrg(row.id, tx as typeof db)
+    return row
+  })
 
   await audit({
     userId: created.id,

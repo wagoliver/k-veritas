@@ -33,7 +33,7 @@ export function LoginForm() {
   const t = useTranslations('auth')
   const router = useRouter()
   const params = useSearchParams()
-  const next = params.get('next') ?? '/dashboard'
+  const next = params.get('next') ?? '/projects'
   const [submitting, setSubmitting] = useState(false)
 
   const form = useForm<Values>({
@@ -73,7 +73,7 @@ export function LoginForm() {
       if (body.mfaRequired) {
         router.push('/mfa/verify')
       } else {
-        router.push(next.startsWith('/') ? next : '/dashboard')
+        router.push(next.startsWith('/') ? next : '/projects')
         router.refresh()
       }
     } catch {
