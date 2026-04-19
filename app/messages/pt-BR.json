@@ -1,0 +1,118 @@
+{
+  "auth": {
+    "fields": {
+      "email": "E-mail",
+      "password": "Senha",
+      "new_password": "Nova senha",
+      "confirm_password": "Confirmar senha",
+      "display_name": "Nome"
+    },
+    "errors": {
+      "generic": "Algo deu errado. Tente novamente.",
+      "network": "Falha de conexão. Verifique sua internet.",
+      "required": "Campo obrigatório",
+      "email": "E-mail inválido",
+      "mismatch": "As senhas não conferem",
+      "terms": "Você precisa aceitar os termos",
+      "min_2": "Mínimo de 2 caracteres",
+      "max_80": "Máximo de 80 caracteres"
+    },
+    "password_strength": {
+      "very_weak": "Muito fraca",
+      "weak": "Fraca",
+      "ok": "Aceitável",
+      "good": "Boa",
+      "strong": "Forte"
+    },
+    "policy": {
+      "min_length": "Mínimo de 12 caracteres",
+      "max_length": "Máximo de 256 caracteres",
+      "lowercase": "Inclua ao menos 1 letra minúscula",
+      "uppercase": "Inclua ao menos 1 letra maiúscula",
+      "digit": "Inclua ao menos 1 dígito",
+      "symbol": "Inclua ao menos 1 símbolo"
+    },
+    "login": {
+      "meta_title": "Entrar",
+      "title": "Entrar",
+      "description": "Acesse sua conta k-veritas para gerenciar testes.",
+      "submit": "Entrar",
+      "forgot_password": "Esqueci minha senha",
+      "no_account": "Não tem conta?",
+      "register": "Criar conta",
+      "errors": {
+        "invalid_credentials": "E-mail ou senha inválidos.",
+        "rate_limited": "Muitas tentativas. Tente novamente em instantes."
+      }
+    },
+    "register": {
+      "meta_title": "Criar conta",
+      "title": "Criar conta",
+      "description": "Comece a escrever testes em minutos.",
+      "submit": "Criar conta",
+      "success": "Conta criada. Agora é só entrar.",
+      "have_account": "Já tem conta?",
+      "login": "Entrar",
+      "accept_terms": "Aceito os termos de uso e a política de privacidade.",
+      "errors": {
+        "conflict": "Este e-mail já está em uso.",
+        "rate_limited": "Limite de cadastros atingido. Tente novamente mais tarde."
+      }
+    },
+    "forgot": {
+      "meta_title": "Esqueci a senha",
+      "title": "Esqueci a senha",
+      "description": "Enviaremos um link para redefinir sua senha se o e-mail estiver cadastrado.",
+      "submit": "Enviar link",
+      "sent": "Se o e-mail estiver cadastrado, você receberá um link em instantes.",
+      "back_to_login": "Voltar para entrar"
+    },
+    "reset": {
+      "meta_title": "Redefinir senha",
+      "title": "Redefinir senha",
+      "description": "Escolha uma nova senha para sua conta.",
+      "submit": "Atualizar senha",
+      "success": "Senha atualizada. Entre novamente.",
+      "back_to_login": "Voltar para entrar",
+      "errors": {
+        "invalid_token": "Link inválido ou expirado.",
+        "missing_token": "Link de redefinição ausente ou malformado."
+      }
+    },
+    "mfa_enroll": {
+      "meta_title": "Configurar MFA",
+      "title": "Proteger a conta com MFA",
+      "description": "Escaneie o QR com seu app autenticador e informe o código gerado.",
+      "instructions": "Use Google Authenticator, 1Password, Authy ou outro app TOTP.",
+      "submit": "Confirmar e ativar",
+      "success": "MFA ativado com sucesso.",
+      "errors": {
+        "invalid": "Código incorreto. Tente novamente.",
+        "generic": "Não foi possível iniciar o cadastro de MFA.",
+        "network": "Falha de conexão."
+      }
+    },
+    "mfa_verify": {
+      "meta_title": "Verificação em 2 etapas",
+      "title": "Código de verificação",
+      "description": "Insira o código de 6 dígitos do seu app autenticador.",
+      "submit": "Verificar",
+      "back_to_login": "Sair e tentar outra conta",
+      "errors": {
+        "invalid": "Código inválido.",
+        "rate_limited": "Muitas tentativas. Aguarde e tente novamente.",
+        "generic": "Algo deu errado.",
+        "network": "Falha de conexão."
+      }
+    },
+    "logout": {
+      "label": "Sair"
+    }
+  },
+  "dashboard": {
+    "welcome": "Olá, {name}",
+    "subtitle": "Sua fundação k-veritas está pronta.",
+    "placeholder_title": "Próximos passos",
+    "placeholder_body": "Em breve: editor de testes Playwright com assistente LLM."
+  }
+}

@@ -1,0 +1,118 @@
+{
+  "auth": {
+    "fields": {
+      "email": "Email",
+      "password": "Password",
+      "new_password": "New password",
+      "confirm_password": "Confirm password",
+      "display_name": "Name"
+    },
+    "errors": {
+      "generic": "Something went wrong. Please try again.",
+      "network": "Connection failed. Check your internet.",
+      "required": "Required",
+      "email": "Invalid email",
+      "mismatch": "Passwords don't match",
+      "terms": "You must accept the terms",
+      "min_2": "Minimum 2 characters",
+      "max_80": "Maximum 80 characters"
+    },
+    "password_strength": {
+      "very_weak": "Very weak",
+      "weak": "Weak",
+      "ok": "OK",
+      "good": "Good",
+      "strong": "Strong"
+    },
+    "policy": {
+      "min_length": "Minimum 12 characters",
+      "max_length": "Maximum 256 characters",
+      "lowercase": "Include at least 1 lowercase letter",
+      "uppercase": "Include at least 1 uppercase letter",
+      "digit": "Include at least 1 digit",
+      "symbol": "Include at least 1 symbol"
+    },
+    "login": {
+      "meta_title": "Sign in",
+      "title": "Sign in",
+      "description": "Access your k-veritas account to manage tests.",
+      "submit": "Sign in",
+      "forgot_password": "Forgot password?",
+      "no_account": "No account?",
+      "register": "Create account",
+      "errors": {
+        "invalid_credentials": "Invalid email or password.",
+        "rate_limited": "Too many attempts. Please try again shortly."
+      }
+    },
+    "register": {
+      "meta_title": "Create account",
+      "title": "Create account",
+      "description": "Start writing tests in minutes.",
+      "submit": "Create account",
+      "success": "Account created. You can sign in now.",
+      "have_account": "Already have an account?",
+      "login": "Sign in",
+      "accept_terms": "I agree to the terms of service and privacy policy.",
+      "errors": {
+        "conflict": "This email is already in use.",
+        "rate_limited": "Registration limit reached. Try again later."
+      }
+    },
+    "forgot": {
+      "meta_title": "Forgot password",
+      "title": "Forgot password",
+      "description": "We'll send a reset link if the email is registered.",
+      "submit": "Send link",
+      "sent": "If the email exists, you'll receive a link shortly.",
+      "back_to_login": "Back to sign in"
+    },
+    "reset": {
+      "meta_title": "Reset password",
+      "title": "Reset password",
+      "description": "Choose a new password for your account.",
+      "submit": "Update password",
+      "success": "Password updated. Please sign in again.",
+      "back_to_login": "Back to sign in",
+      "errors": {
+        "invalid_token": "Invalid or expired link.",
+        "missing_token": "Reset link missing or malformed."
+      }
+    },
+    "mfa_enroll": {
+      "meta_title": "Set up MFA",
+      "title": "Secure your account with MFA",
+      "description": "Scan the QR with your authenticator app and enter the generated code.",
+      "instructions": "Use Google Authenticator, 1Password, Authy or any TOTP app.",
+      "submit": "Confirm and enable",
+      "success": "MFA enabled successfully.",
+      "errors": {
+        "invalid": "Incorrect code. Try again.",
+        "generic": "Couldn't start MFA enrollment.",
+        "network": "Connection failed."
+      }
+    },
+    "mfa_verify": {
+      "meta_title": "Two-step verification",
+      "title": "Verification code",
+      "description": "Enter the 6-digit code from your authenticator app.",
+      "submit": "Verify",
+      "back_to_login": "Sign out and try another account",
+      "errors": {
+        "invalid": "Invalid code.",
+        "rate_limited": "Too many attempts. Wait a moment and try again.",
+        "generic": "Something went wrong.",
+        "network": "Connection failed."
+      }
+    },
+    "logout": {
+      "label": "Sign out"
+    }
+  },
+  "dashboard": {
+    "welcome": "Hi, {name}",
+    "subtitle": "Your k-veritas foundation is ready.",
+    "placeholder_title": "Next steps",
+    "placeholder_body": "Coming soon: Playwright test editor with LLM assistant."
+  }
+}
