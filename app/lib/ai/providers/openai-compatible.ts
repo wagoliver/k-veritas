@@ -93,14 +93,27 @@ export class OpenAICompatibleClient implements AIClient {
   }
 
   async listModels(): Promise<Array<{ name: string; size?: number }>> {
+    const primary = await this.fetchModels('/v1/models')
+    if (primary.length > 0) return primary
+    // Fallback específico do LM Studio: lista modelos baixados mesmo
+    // que não estejam carregados em memória. Em providers que não são
+    // LM Studio, esse endpoint responde 404 e o retorno fica vazio.
+    return this.fetchModels('/api/v0/models')
+  }
+
+  private async fetchModels(
+    path: string,
+  ): Promise<Array<{ name: string; size?: number }>> {
     try {
-      const res = await fetch(`${this.base()}/v1/models`, {
+      const res = await fetch(`${this.base()}${path}`, {
         headers: this.headers(),
         signal: AbortSignal.timeout(10_000),
       })
       if (!res.ok) return []
       const data = (await res.json()) as ModelListResponse
-      return (data.data ?? []).map((m) => ({ name: m.id }))
+      return (data.data ?? [])
+        .map((m) => ({ name: m.id }))
+        .filter((m) => typeof m.name === 'string' && m.name.length > 0)
     } catch {
       return []
     }
