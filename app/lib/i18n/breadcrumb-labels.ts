@@ -4,6 +4,7 @@
  */
 export const BREADCRUMB_LABELS: Record<string, string> = {
   projects: 'breadcrumbs.projects',
+  new: 'breadcrumbs.new',
   settings: 'breadcrumbs.settings',
   profile: 'breadcrumbs.profile',
   security: 'breadcrumbs.security',

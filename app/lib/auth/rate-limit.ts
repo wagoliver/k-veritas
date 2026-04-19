@@ -83,4 +83,14 @@ export const BUCKETS = {
     capacity: 5,
     refillPerSecond: 5 / 60,
   }),
+  projectCreate: (orgId: string): BucketSpec => ({
+    key: `project:create:${orgId}`,
+    capacity: 10,
+    refillPerSecond: 10 / 3600,
+  }),
+  crawlProject: (projectId: string): BucketSpec => ({
+    key: `crawl:project:${projectId}`,
+    capacity: 2,
+    refillPerSecond: 1 / 30,
+  }),
 }

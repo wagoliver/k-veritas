@@ -162,6 +162,7 @@
   },
   "breadcrumbs": {
     "projects": "Projects",
+    "new": "New",
     "settings": "Settings",
     "profile": "Profile",
     "security": "Security",
@@ -174,11 +175,135 @@
   "projects": {
     "title": "Projects",
     "subtitle": "Organize your tests by app, environment, or team.",
+    "actions": {
+      "new": "New project"
+    },
+    "table": {
+      "name": "Name",
+      "target_url": "URL",
+      "status": "Status",
+      "pages": "Pages",
+      "updated": "Updated"
+    },
+    "status": {
+      "draft": "Draft",
+      "crawling": "Crawling",
+      "ready": "Ready",
+      "failed": "Failed"
+    },
     "empty": {
       "title": "No projects yet",
-      "description": "Soon you'll be able to create projects and start writing tests with AI help.",
-      "cta": "Create first project",
-      "hint": "Available in the next version."
+      "description": "Create your first project so the AI can learn your app.",
+      "cta": "Create first project"
+    },
+    "wizard": {
+      "meta_title": "New project",
+      "title": "New project",
+      "subtitle": "Tell us about the app and key scenarios. The AI uses this to generate tests.",
+      "step_labels": {
+        "basics": "Basics",
+        "context": "Context"
+      },
+      "step1": {
+        "name_label": "Project name",
+        "name_placeholder": "checkout-flow",
+        "url_label": "App URL",
+        "url_hint": "Use staging or preview. Avoid production when testing destructive flows.",
+        "auth_label": "Does the app require login?",
+        "auth_hint": "If yes, provide test credentials so the crawler can authenticate before exploring.",
+        "login_url_label": "Login page URL",
+        "username_label": "Username / email",
+        "password_label": "Password",
+        "credentials_note": "Credentials are encrypted with AES-256-GCM and used only by the crawler."
+      },
+      "step2": {
+        "description_label": "Description (optional)",
+        "description_placeholder": "An e-commerce for natural products with cart, Stripe checkout, customer area...",
+        "description_hint": "A few sentences explaining what the app does.",
+        "scenarios_label": "Key scenarios",
+        "scenarios_placeholder": "Add product to cart\nCheckout with approved card\nEmpty cart shows message",
+        "scenarios_hint": "One scenario per line. At least 1, up to 50."
+      },
+      "buttons": {
+        "cancel": "Cancel",
+        "back": "Back",
+        "next": "Continue",
+        "create": "Create project"
+      },
+      "success": "Project created. Starting crawl...",
+      "errors": {
+        "generic": "Couldn't create project.",
+        "network": "Connection failed.",
+        "rate_limited": "Creation limit reached. Try again later.",
+        "private_host": "Local/private URLs are not allowed.",
+        "invalid_url": "Invalid URL.",
+        "min_2": "Minimum 2 characters",
+        "max_80": "Maximum 80 characters",
+        "required": "Required",
+        "min_scenarios": "Provide at least 1 scenario"
+      }
+    },
+    "overview": {
+      "settings": "Settings",
+      "recrawl": "Re-crawl",
+      "crawling_progress": "Crawling...",
+      "recrawl_started": "New crawl started.",
+      "tabs": {
+        "map": "Site map",
+        "scenarios": "Scenarios"
+      },
+      "errors": {
+        "crawl_running": "A crawl is already in progress.",
+        "rate_limited": "Wait a moment before starting another crawl.",
+        "generic": "Couldn't start the crawl."
+      },
+      "map": {
+        "crawling_title": "Crawling your app",
+        "crawling_description": "This may take a few minutes. The page updates automatically.",
+        "empty_title": "No pages found",
+        "empty_description": "Check the URL you provided and try re-crawling.",
+        "elements": "elements"
+      },
+      "scenarios": {
+        "placeholder": "Add scenario",
+        "add": "Add",
+        "delete": "Remove",
+        "empty": "No scenarios yet. Add the first one above.",
+        "errors": {
+          "create": "Couldn't add scenario.",
+          "delete": "Couldn't remove scenario."
+        }
+      }
+    },
+    "settings": {
+      "meta_title": "Project settings",
+      "title": "Project settings",
+      "subtitle": "Adjust \"{name}\" information.",
+      "back": "Back to project",
+      "fields": {
+        "name": "Name",
+        "target_url": "App URL",
+        "target_url_hint": "Changing the URL requires a new crawl to reflect the new target.",
+        "description": "Description"
+      },
+      "save": "Save changes",
+      "discard": "Discard",
+      "saved": "Project updated.",
+      "deleted": "Project deleted.",
+      "errors": {
+        "update": "Couldn't save changes.",
+        "delete": "Couldn't delete project.",
+        "network": "Connection failed."
+      },
+      "danger": {
+        "title": "Danger zone",
+        "description": "Deleting the project removes scenarios, crawls, pages and screenshots. This action is irreversible.",
+        "button": "Delete project",
+        "confirm_title": "Delete project",
+        "confirm_description": "You are about to delete \"{name}\" and everything in it. This cannot be undone.",
+        "type_name": "Type \"{name}\" to confirm",
+        "cancel": "Cancel"
+      }
     }
   },
   "settings": {

@@ -90,6 +90,28 @@ services:
       NODE_ENV: production
     ports:
       - "3000:3000"
+    volumes:
+      - artifacts:/data
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    networks:
+      - kv-net
+
+  crawler:
+    build:
+      context: ./crawler
+      dockerfile: Dockerfile
+    container_name: kveritas-crawler
+    restart: unless-stopped
+    env_file:
+      - ./app/.env.local
+    environment:
+      DATABASE_URL: postgres://kveritas:kveritas@postgres:5432/kveritas
+      DATA_DIR: /data
+      NODE_ENV: production
+    volumes:
+      - artifacts:/data
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -104,3 +126,4 @@ volumes:
   postgres_data:
   clickhouse_data:
   clickhouse_logs:
+  artifacts:

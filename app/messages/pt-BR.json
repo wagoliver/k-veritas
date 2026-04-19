@@ -162,6 +162,7 @@
   },
   "breadcrumbs": {
     "projects": "Projetos",
+    "new": "Novo",
     "settings": "Configurações",
     "profile": "Perfil",
     "security": "Segurança",
@@ -174,11 +175,135 @@
   "projects": {
     "title": "Projetos",
     "subtitle": "Organize seus testes em projetos por aplicação, ambiente ou equipe.",
+    "actions": {
+      "new": "Novo projeto"
+    },
+    "table": {
+      "name": "Nome",
+      "target_url": "URL",
+      "status": "Status",
+      "pages": "Páginas",
+      "updated": "Atualizado"
+    },
+    "status": {
+      "draft": "Rascunho",
+      "crawling": "Explorando",
+      "ready": "Pronto",
+      "failed": "Falhou"
+    },
     "empty": {
       "title": "Ainda não há projetos",
-      "description": "Em breve você poderá criar projetos e começar a escrever testes com ajuda da IA.",
-      "cta": "Criar primeiro projeto",
-      "hint": "Disponível na próxima versão."
+      "description": "Crie seu primeiro projeto para que a IA possa conhecer sua aplicação.",
+      "cta": "Criar primeiro projeto"
+    },
+    "wizard": {
+      "meta_title": "Novo projeto",
+      "title": "Novo projeto",
+      "subtitle": "Informe sua aplicação e os cenários que importam. A IA usa isso para gerar testes.",
+      "step_labels": {
+        "basics": "Básico",
+        "context": "Contexto"
+      },
+      "step1": {
+        "name_label": "Nome do projeto",
+        "name_placeholder": "checkout-flow",
+        "url_label": "URL da aplicação",
+        "url_hint": "Use staging, homologação ou preview. Evite apontar para produção ao testar fluxos destrutivos.",
+        "auth_label": "A aplicação exige login?",
+        "auth_hint": "Se sim, forneça credenciais de teste para o crawler autenticar antes de explorar.",
+        "login_url_label": "URL da tela de login",
+        "username_label": "Usuário / e-mail",
+        "password_label": "Senha",
+        "credentials_note": "Credenciais são cifradas com AES-256-GCM e usadas apenas pelo crawler."
+      },
+      "step2": {
+        "description_label": "Descrição (opcional)",
+        "description_placeholder": "É um e-commerce de produtos naturais com carrinho, checkout Stripe e área do cliente...",
+        "description_hint": "Explique em poucas frases o propósito da aplicação.",
+        "scenarios_label": "Cenários importantes",
+        "scenarios_placeholder": "Adicionar produto ao carrinho\nFinalizar compra com cartão aprovado\nCarrinho vazio exibe mensagem",
+        "scenarios_hint": "Um cenário por linha. Mínimo 1, máximo 50."
+      },
+      "buttons": {
+        "cancel": "Cancelar",
+        "back": "Voltar",
+        "next": "Continuar",
+        "create": "Criar projeto"
+      },
+      "success": "Projeto criado. Iniciando exploração...",
+      "errors": {
+        "generic": "Não foi possível criar o projeto.",
+        "network": "Falha de conexão.",
+        "rate_limited": "Limite de criação atingido. Tente novamente mais tarde.",
+        "private_host": "URLs locais/privadas não são permitidas.",
+        "invalid_url": "URL inválida.",
+        "min_2": "Mínimo 2 caracteres",
+        "max_80": "Máximo 80 caracteres",
+        "required": "Obrigatório",
+        "min_scenarios": "Informe ao menos 1 cenário"
+      }
+    },
+    "overview": {
+      "settings": "Configurações",
+      "recrawl": "Recrawlear",
+      "crawling_progress": "Explorando...",
+      "recrawl_started": "Nova exploração iniciada.",
+      "tabs": {
+        "map": "Mapa do site",
+        "scenarios": "Cenários"
+      },
+      "errors": {
+        "crawl_running": "Já existe uma exploração em andamento.",
+        "rate_limited": "Aguarde um pouco antes de iniciar outra exploração.",
+        "generic": "Não foi possível iniciar a exploração."
+      },
+      "map": {
+        "crawling_title": "Explorando sua aplicação",
+        "crawling_description": "Pode levar alguns minutos. A página atualiza automaticamente.",
+        "empty_title": "Nenhuma página encontrada",
+        "empty_description": "Verifique a URL informada e tente recrawlear.",
+        "elements": "elementos"
+      },
+      "scenarios": {
+        "placeholder": "Adicionar cenário",
+        "add": "Adicionar",
+        "delete": "Remover",
+        "empty": "Nenhum cenário ainda. Adicione o primeiro acima.",
+        "errors": {
+          "create": "Não foi possível adicionar o cenário.",
+          "delete": "Não foi possível remover o cenário."
+        }
+      }
+    },
+    "settings": {
+      "meta_title": "Configurações do projeto",
+      "title": "Configurações do projeto",
+      "subtitle": "Ajuste informações de \"{name}\".",
+      "back": "Voltar ao projeto",
+      "fields": {
+        "name": "Nome",
+        "target_url": "URL da aplicação",
+        "target_url_hint": "Alterar a URL requer um novo crawl para refletir o novo alvo.",
+        "description": "Descrição"
+      },
+      "save": "Salvar alterações",
+      "discard": "Descartar",
+      "saved": "Projeto atualizado.",
+      "deleted": "Projeto excluído.",
+      "errors": {
+        "update": "Não foi possível salvar as alterações.",
+        "delete": "Não foi possível excluir o projeto.",
+        "network": "Falha de conexão."
+      },
+      "danger": {
+        "title": "Zona de perigo",
+        "description": "Excluir o projeto remove cenários, crawls, páginas e screenshots. Esta ação é irreversível.",
+        "button": "Excluir projeto",
+        "confirm_title": "Excluir projeto",
+        "confirm_description": "Você vai excluir \"{name}\" e tudo dentro dele. Não dá para desfazer.",
+        "type_name": "Digite \"{name}\" para confirmar",
+        "cancel": "Cancelar"
+      }
     }
   },
   "settings": {
