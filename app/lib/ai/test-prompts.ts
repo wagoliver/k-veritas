@@ -65,7 +65,17 @@ CORPO DOS TESTES:
 SELETORES — REGRA CRÍTICA:
 - Você só pode usar seletores que aparecem no input (campo \`selector\`). JAMAIS invente seletores que não foram capturados pelo crawler.
 - Se um cenário exige interagir com um controle que não aparece no mapa de elementos, escreva um comentário \`// TODO: controle não capturado pelo crawler — revisar manualmente\` e faça o melhor palpite com \`page.getByText\`.
-- Quando houver múltiplos elementos com o mesmo role/label, prefira o primeiro ou use \`.first()\`.
+
+ESTRITUDADE (Playwright strict mode):
+- Playwright falha se um locator resolver múltiplos elementos (modo estrito padrão). Teste sempre gera locators que resolvem a EXATAMENTE 1 elemento.
+- **Use strings exatas em \`name:\`** — \`{ name: 'Nome da empresa' }\` em vez de \`{ name: /empresa/i }\`. Regex é permitida apenas se o label exato não estiver disponível no input.
+- Se dois elementos do input compartilham o mesmo role+name, prefira nessa ordem:
+  1. Identificador único: \`getByTestId('...')\` ou \`getByPlaceholder('...')\`
+  2. Filtro: \`getByRole('textbox').filter({ hasText: '...' })\`
+  3. Qualificar com mais contexto: \`page.locator('form#company').getByRole('textbox', { name: '...' })\`
+  4. Último recurso: \`.first()\` com comentário \`// TODO\` explicando a ambiguidade
+- NÃO use \`.first()\` como default "porque é mais seguro". É um cheat que esconde ambiguidade e faz o teste passar validando o elemento errado.
+- Antes de cada locator, mentalmente conte quantos elementos no input têm esse role+name. Se >1, desambigue.
 
 ASSERTIVAS:
 - Toda ação deve ter pelo menos uma assertiva verificando o resultado.
