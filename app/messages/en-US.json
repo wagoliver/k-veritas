@@ -261,6 +261,12 @@
         "data_needed": "Data needed",
         "reanalyze": "Re-analyze",
         "success": "Analysis completed.",
+        "progress": {
+          "pending": "Preparing context…",
+          "waiting_model": "Waiting for the model to start responding…",
+          "generating": "Generating · {tokens} tokens · {seconds}s",
+          "elapsed": "{seconds}s"
+        },
         "empty": {
           "title": "No analysis yet",
           "description": "AI will read the site map and captured elements to suggest features and test scenarios automatically.",

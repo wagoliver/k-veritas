@@ -74,11 +74,36 @@ export async function runProjectAnalysis(
     const payload = await buildProjectPayload(project, lastCrawl.id)
     const userMessage = buildAnalysisUserMessage(payload)
 
-    const response = await client.generate({
-      system: ANALYSIS_SYSTEM_PROMPT,
-      prompt: userMessage,
-      format: 'json',
-    })
+    // Heartbeat: enquanto o provider stream, gravamos tokens_out + duracao
+    // a cada ~1s no row running — a UI fica polling esse row.
+    let lastFlush = 0
+    const response = await client.generate(
+      {
+        system: ANALYSIS_SYSTEM_PROMPT,
+        prompt: userMessage,
+        format: 'json',
+      },
+      {
+        onProgress: ({ tokensOut, done }) => {
+          const now = Date.now()
+          if (!done && now - lastFlush < 1000) return
+          lastFlush = now
+          void (async () => {
+            try {
+              await db
+                .update(projectAnalyses)
+                .set({
+                  tokensOut,
+                  durationMs: now - startTime,
+                })
+                .where(eq(projectAnalyses.id, analysisId))
+            } catch {
+              // heartbeat: ignorar falhas intermitentes de conexão
+            }
+          })()
+        },
+      },
+    )
 
     const durationMs = Date.now() - startTime
     const sanitized = sanitizeJsonResponse(response.text)

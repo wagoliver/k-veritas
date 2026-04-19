@@ -56,6 +56,7 @@ export function ProjectAnalysis({ projectId }: { projectId: string }) {
     undefined,
   )
   const [running, startRun] = useTransition()
+  const [tick, setTick] = useState(0)
 
   const load = async () => {
     const res = await fetch(`/api/projects/${projectId}/ai/analyze`, {
@@ -72,37 +73,83 @@ export function ProjectAnalysis({ projectId }: { projectId: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId])
 
+  // Polling enquanto há análise em andamento — reidrata tokens/duracao.
+  useEffect(() => {
+    const s = analysis?.status
+    if (s !== 'pending' && s !== 'running') return
+    const intv = setInterval(() => load(), 2000)
+    return () => clearInterval(intv)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [analysis?.status, projectId])
+
+  // Tick de 1s para a UI atualizar o tempo decorrido sem novo fetch.
+  useEffect(() => {
+    const s = analysis?.status
+    if (s !== 'pending' && s !== 'running') return
+    const intv = setInterval(() => setTick((x) => x + 1), 1000)
+    return () => clearInterval(intv)
+  }, [analysis?.status])
+
   const trigger = () => {
     startRun(async () => {
       try {
-        const res = await fetch(`/api/projects/${projectId}/ai/analyze`, {
+        // Dispara a requisição (bloqueia até terminar), mas em paralelo
+        // fazemos um primeiro load rápido para pegar a linha running.
+        const postPromise = fetch(`/api/projects/${projectId}/ai/analyze`, {
           method: 'POST',
           headers: { 'X-Requested-With': 'fetch' },
         })
+        setTimeout(() => {
+          void load()
+        }, 400)
+
+        const res = await postPromise
+
         if (res.status === 429) {
           toast.error(t('errors.rate_limited'))
+          await load()
           return
         }
         if (res.status === 409) {
           toast.error(t('errors.conflict'))
+          await load()
           return
         }
-        const data = (await res.json()) as {
-          status: 'completed' | 'failed'
+        const data = (await res.json().catch(() => ({}))) as {
+          status?: 'completed' | 'failed'
           error?: string
         }
         if (data.status === 'completed') {
           toast.success(t('success'))
-          await load()
-        } else {
+        } else if (data.status === 'failed') {
           toast.error(t('errors.failed', { reason: data.error ?? '—' }))
-          await load()
         }
+        await load()
       } catch {
         toast.error(t('errors.network'))
       }
     })
   }
+
+  const isInFlight =
+    analysis?.status === 'pending' || analysis?.status === 'running'
+
+  const liveElapsedSeconds = analysis?.startedAt
+    ? Math.max(
+        0,
+        Math.floor((Date.now() - new Date(analysis.startedAt).getTime()) / 1000),
+      )
+    : analysis?.createdAt
+      ? Math.max(
+          0,
+          Math.floor(
+            (Date.now() - new Date(analysis.createdAt).getTime()) / 1000,
+          ),
+        )
+      : 0
+
+  // referência a `tick` garante re-render a cada segundo durante running
+  void tick
 
   if (analysis === undefined) {
     return (
@@ -157,30 +204,44 @@ export function ProjectAnalysis({ projectId }: { projectId: string }) {
               <span className="font-mono">
                 {analysis.provider}/{analysis.model}
               </span>
-              {analysis.durationMs ? (
+              {isInFlight ? null : analysis.durationMs ? (
                 <span className="tabular-nums">
                   {(analysis.durationMs / 1000).toFixed(1)}s
                 </span>
               ) : null}
-              {analysis.tokensIn || analysis.tokensOut ? (
+              {!isInFlight &&
+              (analysis.tokensIn || analysis.tokensOut) ? (
                 <span className="tabular-nums">
                   {analysis.tokensIn ?? 0} in · {analysis.tokensOut ?? 0} out
                 </span>
               ) : null}
             </div>
-            <div>
-              {format.dateTime(new Date(analysis.createdAt), {
-                dateStyle: 'medium',
-                timeStyle: 'short',
-              })}
-            </div>
+            {isInFlight ? (
+              <div className="font-medium text-primary tabular-nums">
+                {analysis.status === 'pending'
+                  ? t('progress.pending')
+                  : (analysis.tokensOut ?? 0) === 0
+                    ? t('progress.waiting_model')
+                    : t('progress.generating', {
+                        tokens: analysis.tokensOut ?? 0,
+                        seconds: liveElapsedSeconds,
+                      })}
+              </div>
+            ) : (
+              <div>
+                {format.dateTime(new Date(analysis.createdAt), {
+                  dateStyle: 'medium',
+                  timeStyle: 'short',
+                })}
+              </div>
+            )}
           </div>
         </div>
         <Button
           variant="outline"
           size="sm"
           onClick={trigger}
-          disabled={running || analysis.status === 'running'}
+          disabled={running || isInFlight}
         >
           {running ? (
             <Loader2 className="size-4 animate-spin" />

@@ -261,6 +261,12 @@
         "data_needed": "Dados necessários",
         "reanalyze": "Reanalisar",
         "success": "Análise concluída.",
+        "progress": {
+          "pending": "Preparando contexto…",
+          "waiting_model": "Aguardando modelo começar a responder…",
+          "generating": "Gerando · {tokens} tokens · {seconds}s",
+          "elapsed": "{seconds}s"
+        },
         "empty": {
           "title": "Ainda não há análise deste projeto",
           "description": "A IA vai ler o mapa do site e os elementos capturados para sugerir features e cenários de teste automaticamente.",

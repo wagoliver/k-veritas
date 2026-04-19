@@ -25,9 +25,25 @@ export interface AIGenerateResponse {
   totalDurationMs?: number
 }
 
+export interface AIStreamProgress {
+  tokensOut: number
+  done: boolean
+}
+
+export interface AIGenerateOptions {
+  /**
+   * Se fornecido, a geração usa streaming e chama este callback
+   * conforme os tokens vão chegando (throttled pelo chamador).
+   */
+  onProgress?: (p: AIStreamProgress) => void
+}
+
 export interface AIClient {
   readonly config: AIProviderConfig
-  generate(req: AIGenerateRequest): Promise<AIGenerateResponse>
+  generate(
+    req: AIGenerateRequest,
+    opts?: AIGenerateOptions,
+  ): Promise<AIGenerateResponse>
   listModels(): Promise<Array<{ name: string; size?: number }>>
   ping(): Promise<{ ok: boolean; error?: string; latencyMs?: number }>
 }
