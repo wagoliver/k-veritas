@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server'
-import { desc, eq, sql } from 'drizzle-orm'
+import { and, desc, eq, sql } from 'drizzle-orm'
 
 import { db } from '@/lib/db/pg'
 import { crawlElements, crawlJobs, crawlPages } from '@/lib/db/schema'
@@ -26,10 +26,17 @@ export async function GET(
   const project = await authorizeProject(session.user.id, id)
   if (!project) return Problems.forbidden()
 
+  // Ignora jobs single_path — eles não têm pages próprios e não representam
+  // um "estado do mapa". O feed ao vivo só observa crawls full.
   const [job] = await db
     .select()
     .from(crawlJobs)
-    .where(eq(crawlJobs.projectId, project.id))
+    .where(
+      and(
+        eq(crawlJobs.projectId, project.id),
+        eq(crawlJobs.scope, 'full'),
+      ),
+    )
     .orderBy(desc(crawlJobs.createdAt))
     .limit(1)
 

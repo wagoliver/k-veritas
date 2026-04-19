@@ -12,6 +12,8 @@ export interface PendingJob {
   id: string
   project_id: string
   requested_by: string
+  scope: 'full' | 'single_path'
+  scope_url: string | null
 }
 
 export interface Project {
@@ -42,7 +44,7 @@ export async function claimNextJob(
       FOR UPDATE SKIP LOCKED
       LIMIT 1
     )
-    RETURNING id, project_id, requested_by
+    RETURNING id, project_id, requested_by, scope, scope_url
   `
 
   const job = rows[0]
@@ -124,6 +126,10 @@ export interface SavedPageInput {
   statusCode: number | null
   screenshotPath: string | null
   domPath: string | null
+  /** URL final quando o site redirecionou (ex: /register → /). Null
+   *  quando a URL visitada bate com a solicitada. Quando != null, a UI
+   *  mostra "redirecionou pra X" e a extração de elementos é pulada. */
+  redirectedTo: string | null
   elements: Array<{
     kind: string
     role: string | null
@@ -140,10 +146,10 @@ export async function savePage(
   await sql.begin(async (tx) => {
     const inserted = await tx<{ id: string }[]>`
       INSERT INTO crawl_pages
-        (crawl_id, url, title, status_code, screenshot_path, dom_path)
+        (crawl_id, url, title, status_code, screenshot_path, dom_path, redirected_to)
       VALUES
         (${crawlId}, ${page.url}, ${page.title}, ${page.statusCode},
-         ${page.screenshotPath}, ${page.domPath})
+         ${page.screenshotPath}, ${page.domPath}, ${page.redirectedTo})
       RETURNING id
     `
     const pageId = inserted[0]?.id
@@ -161,6 +167,110 @@ export async function savePage(
       await tx`INSERT INTO crawl_elements ${tx(values)}`
     }
   })
+}
+
+/**
+ * UPSERT de uma única page em um crawl existente. Usado pelo re-crawler
+ * de path único: se já existe crawl_pages com mesma url+crawl_id, substitui
+ * os elementos; caso contrário, cria. Garante que não acumule duplicatas.
+ */
+export async function upsertPage(
+  crawlId: string,
+  page: SavedPageInput,
+): Promise<void> {
+  await sql.begin(async (tx) => {
+    const existing = await tx<{ id: string }[]>`
+      SELECT id FROM crawl_pages
+      WHERE crawl_id = ${crawlId} AND url = ${page.url}
+      LIMIT 1
+    `
+
+    let pageId: string | undefined
+    if (existing[0]) {
+      pageId = existing[0].id
+      await tx`
+        UPDATE crawl_pages SET
+          title = ${page.title},
+          status_code = ${page.statusCode},
+          screenshot_path = ${page.screenshotPath},
+          dom_path = ${page.domPath},
+          redirected_to = ${page.redirectedTo},
+          discovered_at = now()
+        WHERE id = ${pageId}
+      `
+      await tx`DELETE FROM crawl_elements WHERE page_id = ${pageId}`
+    } else {
+      const inserted = await tx<{ id: string }[]>`
+        INSERT INTO crawl_pages
+          (crawl_id, url, title, status_code, screenshot_path, dom_path, redirected_to)
+        VALUES
+          (${crawlId}, ${page.url}, ${page.title}, ${page.statusCode},
+           ${page.screenshotPath}, ${page.domPath}, ${page.redirectedTo})
+        RETURNING id
+      `
+      pageId = inserted[0]?.id
+    }
+
+    if (!pageId) return
+    if (page.elements.length > 0) {
+      const values = page.elements.map((e) => ({
+        page_id: pageId,
+        kind: e.kind,
+        role: e.role,
+        label: e.label,
+        selector: e.selector,
+        meta: e.meta ?? {},
+      }))
+      await tx`INSERT INTO crawl_elements ${tx(values)}`
+    }
+  })
+}
+
+/**
+ * Acha o crawl completed mais recente do projeto. O re-crawler de path
+ * único anexa nele em vez de criar seu próprio conjunto de páginas.
+ */
+export async function findLatestCompletedCrawl(
+  projectId: string,
+): Promise<string | null> {
+  // Só crawls FULL contam como "base" pra upsert. Ignora single_path
+  // (que não tem pages próprias — refere ao crawl full).
+  const rows = await sql<{ id: string }[]>`
+    SELECT id FROM crawl_jobs
+    WHERE project_id = ${projectId}
+      AND status = 'completed'
+      AND scope = 'full'
+    ORDER BY finished_at DESC NULLS LAST
+    LIMIT 1
+  `
+  return rows[0]?.id ?? null
+}
+
+/**
+ * Marca um job single_path como concluído. Diferente de markCompleted:
+ *   - Não mexe no status do projeto (não é um crawl full)
+ *   - pages_count reflete o número de paths re-crawleados (sempre 1 ou 0)
+ */
+export async function markSinglePathCompleted(
+  jobId: string,
+  pagesCount: number,
+): Promise<void> {
+  await sql`
+    UPDATE crawl_jobs SET
+      status='completed', finished_at=now(), pages_count=${pagesCount}
+    WHERE id=${jobId}
+  `
+}
+
+export async function markSinglePathFailed(
+  jobId: string,
+  error: string,
+): Promise<void> {
+  await sql`
+    UPDATE crawl_jobs SET
+      status='failed', finished_at=now(), error=${error.slice(0, 1000)}
+    WHERE id=${jobId}
+  `
 }
 
 export interface CrawlHistorySnapshot {

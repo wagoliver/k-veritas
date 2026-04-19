@@ -117,7 +117,15 @@
       "team": "Team",
       "settings": "Settings",
       "help": "Help",
-      "soon": "Coming soon"
+      "soon": "Coming soon",
+      "project": {
+        "section": "Project",
+        "map": "Site map",
+        "scenarios": "Scenarios",
+        "analysis": "AI Analysis",
+        "test_scenarios": "Test Scenarios",
+        "execution": "Execution"
+      }
     },
     "search": {
       "open": "Open search",
@@ -255,7 +263,7 @@
     },
     "overview": {
       "settings": "Settings",
-      "recrawl": "Re-crawl",
+      "recrawl": "Re-crawl (all)",
       "crawling_progress": "Crawling...",
       "recrawl_started": "New crawl started.",
       "tabs": {
@@ -415,7 +423,12 @@
             "confirm_delete": "Delete the generated test for this scenario? The scenario will become a candidate for regeneration.",
             "view_visual": "Visual",
             "view_code": "Code",
-            "flow_not_detected": "Flow could not be auto-detected. See the raw code below."
+            "flow_not_detected": "Flow could not be auto-detected. See the raw code below.",
+            "edit_step": "Edit this step",
+            "edit_save": "Save",
+            "edit_cancel": "Cancel",
+            "edit_saved": "Step updated.",
+            "edit_failed": "Couldn't update the step."
           },
           "add_feature": "New feature",
           "add_scenario": "Add scenario",
@@ -509,6 +522,36 @@
         "generic": "Couldn't start the crawl."
       },
       "map": {
+        "recrawl_path": {
+          "label": "Re-crawl this page",
+          "enqueued": "Re-crawl queued for this page.",
+          "errors": {
+            "generic": "Couldn't start the re-crawl.",
+            "rate_limited": "Wait a moment before triggering another re-crawl.",
+            "network": "Connection failed."
+          }
+        },
+        "add_path": {
+          "button": "Add path",
+          "placeholder": "/register",
+          "submit": "Add and fetch elements",
+          "cancel": "Cancel",
+          "enqueued": "Path added. Fetching elements...",
+          "errors": {
+            "invalid_path": "Invalid path. Use /something or same-origin URL.",
+            "rate_limited": "Wait a moment before adding another path.",
+            "generic": "Couldn't add the path.",
+            "network": "Connection failed."
+          }
+        },
+        "subtabs": {
+          "crawler": "Crawler",
+          "code": "Code"
+        },
+        "code": {
+          "title": "Code analysis coming soon",
+          "description": "Here you'll connect your project's repository to extract routes, components and elements directly from source — complementing (or replacing) the runtime crawler."
+        },
         "crawling_title": "Crawling your app",
         "crawling_description": "This may take a few minutes. The page updates automatically.",
         "empty_title": "No pages found",
@@ -521,7 +564,8 @@
         },
         "row": {
           "open_detail": "View captured elements",
-          "no_elements_hint": "No elements captured. The SPA likely didn't finish hydrating — try re-crawling."
+          "no_elements_hint": "No elements captured. The SPA likely didn't finish hydrating — try re-crawling.",
+          "redirected_to": "Redirected to {target} — elements not extracted"
         },
         "view": {
           "tree": "Tree",

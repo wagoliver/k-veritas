@@ -1039,6 +1039,30 @@ function ScenarioTestBlock({
     }
   }
 
+  const saveStepEdit = async (newCode: string) => {
+    try {
+      const res = await fetch(
+        `/api/projects/${projectId}/ai-scenarios/${scenarioId}/tests`,
+        {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'fetch',
+          },
+          body: JSON.stringify({ code: newCode }),
+        },
+      )
+      if (!res.ok) {
+        toast.error(t('test.edit_failed'))
+        return
+      }
+      toast.success(t('test.edit_saved'))
+      await onChanged()
+    } catch {
+      toast.error(t('errors.network'))
+    }
+  }
+
   return (
     <div className="rounded-md border border-primary/30 bg-primary/5">
       <button
@@ -1120,7 +1144,11 @@ function ScenarioTestBlock({
       </button>
       {open ? (
         view === 'visual' ? (
-          <TestFlowView code={test.code} />
+          <TestFlowView
+            code={test.code}
+            editable
+            onCodeChange={saveStepEdit}
+          />
         ) : (
           <pre className="max-h-80 overflow-auto border-t border-primary/20 bg-muted/40 p-3 font-mono text-[10px] leading-relaxed">
             <code>{test.code}</code>

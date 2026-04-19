@@ -2,15 +2,19 @@ import {
   claimNextJob,
   deleteCrawl,
   fetchCrawlForHistory,
+  findLatestCompletedCrawl,
   findOldCompletedCrawls,
   markCompleted,
   markFailed,
+  markSinglePathCompleted,
+  markSinglePathFailed,
   requeueStaleJobs,
   savePage,
+  upsertPage,
   heartbeat,
   type Project,
 } from './db.ts'
-import { collectDom } from './dom-collector.ts'
+import { collectDom, isPublicAuthPath } from './dom-collector.ts'
 import { recordCrawlHistory } from './clickhouse.ts'
 import { deleteCrawlArtifacts } from './artifact-cleanup.ts'
 
@@ -59,31 +63,39 @@ export async function runWorkerLoop(): Promise<void> {
 
       const startedAtMs = Date.now()
       try {
-        const { pagesCount } = await collectDom(project, job.id, {
-          onPage: async (page) => {
-            await savePage(job.id, page)
-          },
-          onProgress: async (info) => {
-            console.log(
-              `[crawler] ${job.id} page ${info.index}/${info.total}: ${info.url}`,
-            )
-          },
-        })
-        await markCompleted(job.id, project.id, pagesCount)
-        console.log(`[crawler] job ${job.id} completed (${pagesCount} pages)`)
+        if (job.scope === 'single_path') {
+          await runSinglePathJob(project, job.id, job.scope_url)
+        } else {
+          const { pagesCount } = await collectDom(project, job.id, {
+            onPage: async (page) => {
+              await savePage(job.id, page)
+            },
+            onProgress: async (info) => {
+              console.log(
+                `[crawler] ${job.id} page ${info.index}/${info.total}: ${info.url}`,
+              )
+            },
+          })
+          await markCompleted(job.id, project.id, pagesCount)
+          console.log(`[crawler] job ${job.id} completed (${pagesCount} pages)`)
 
-        // Pós-conclusão: histórico no CH + GC de crawls antigos.
-        // Erros aqui não invalidam o crawl recém-concluído.
-        await finalizeHistory(project, job.id, startedAtMs).catch((err) => {
-          console.error(
-            `[crawler] job ${job.id} history/cleanup failed:`,
-            err instanceof Error ? err.message : err,
-          )
-        })
+          // Pós-conclusão: histórico no CH + GC de crawls antigos.
+          // Erros aqui não invalidam o crawl recém-concluído.
+          await finalizeHistory(project, job.id, startedAtMs).catch((err) => {
+            console.error(
+              `[crawler] job ${job.id} history/cleanup failed:`,
+              err instanceof Error ? err.message : err,
+            )
+          })
+        }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
         console.error(`[crawler] job ${job.id} failed:`, msg)
-        await markFailed(job.id, project.id, msg)
+        if (job.scope === 'single_path') {
+          await markSinglePathFailed(job.id, msg)
+        } else {
+          await markFailed(job.id, project.id, msg)
+        }
       } finally {
         clearInterval(heartbeatTimer)
       }
@@ -98,6 +110,61 @@ export async function runWorkerLoop(): Promise<void> {
 
 function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms))
+}
+
+/**
+ * Executa um job de re-crawler de path único. Não cria crawl_pages no
+ * próprio job — atualiza os do último crawl completed do projeto. Se não
+ * existe nenhum crawl completed ainda, o job falha (esperar o primeiro
+ * crawl full completar antes de permitir re-crawler).
+ */
+async function runSinglePathJob(
+  project: Project,
+  jobId: string,
+  scopeUrl: string | null,
+): Promise<void> {
+  if (!scopeUrl) {
+    await markSinglePathFailed(jobId, 'scope_url_missing')
+    return
+  }
+
+  const targetCrawlId = await findLatestCompletedCrawl(project.id)
+  if (!targetCrawlId) {
+    await markSinglePathFailed(jobId, 'no_completed_crawl')
+    return
+  }
+
+  // Rotas públicas de auth (ex: /register) redirecionam usuários logados
+  // pro dashboard. Pra essas, visitamos SEM sessão — contexto limpo.
+  const noAuth = isPublicAuthPath(scopeUrl)
+  if (noAuth) {
+    console.log(
+      `[crawler] ${jobId} detected public auth path, using noAuth context`,
+    )
+  }
+
+  let saved = 0
+  const { pagesCount } = await collectDom(
+    project,
+    jobId,
+    {
+      onPage: async (page) => {
+        await upsertPage(targetCrawlId, page)
+        saved++
+      },
+      onProgress: async (info) => {
+        console.log(
+          `[crawler] ${jobId} single_path ${info.index}: ${info.url}`,
+        )
+      },
+    },
+    { singlePathUrl: scopeUrl, noAuth },
+  )
+  void pagesCount
+  await markSinglePathCompleted(jobId, saved)
+  console.log(
+    `[crawler] job ${jobId} single_path completed (${saved} page${saved === 1 ? '' : 's'}, url=${scopeUrl})`,
+  )
 }
 
 /**

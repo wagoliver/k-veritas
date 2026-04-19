@@ -6,12 +6,14 @@ import { useState, useTransition } from 'react'
 import { toast } from 'sonner'
 
 import { cn } from '@/lib/utils'
+import { RecrawlPathButton } from './recrawl-path-button'
 
 export interface TreePage {
   id: string
   url: string
   title: string | null
   statusCode: number | null
+  redirectedTo: string | null
   elementsCount: number
   path: string
 }
@@ -311,10 +313,19 @@ function TreeRow({
       <div className="flex shrink-0 items-center gap-1.5">
         {node.page ? (
           <>
-            <Badge tone={hasElements ? 'neutral' : 'warning'}>
-              <span className="tabular-nums">{node.page.elementsCount}</span>
-              <span className="opacity-60">el</span>
-            </Badge>
+            {node.page.redirectedTo ? (
+              <Badge tone="warning" title={node.page.redirectedTo}>
+                <span>↪</span>
+                <span className="font-mono">
+                  {shortPath(node.page.redirectedTo)}
+                </span>
+              </Badge>
+            ) : (
+              <Badge tone={hasElements ? 'neutral' : 'warning'}>
+                <span className="tabular-nums">{node.page.elementsCount}</span>
+                <span className="opacity-60">el</span>
+              </Badge>
+            )}
             {node.page.statusCode ? (
               <Badge tone={node.page.statusCode < 400 ? 'neutral' : 'error'}>
                 <span className="font-mono tabular-nums">
@@ -322,6 +333,11 @@ function TreeRow({
                 </span>
               </Badge>
             ) : null}
+            <RecrawlPathButton
+              projectId={projectId}
+              url={node.page.url}
+              onUpdated={onUpdated}
+            />
             {hasError ? (
               <RecheckButton
                 projectId={projectId}
@@ -425,6 +441,15 @@ function lastSegment(path: string): string {
   if (path === '/' || path === '') return '/'
   const parts = path.split('/').filter(Boolean)
   return '/' + (parts[parts.length - 1] ?? '')
+}
+
+function shortPath(raw: string): string {
+  try {
+    const u = new URL(raw)
+    return u.pathname === '/' ? '/' : u.pathname.replace(/\/$/, '')
+  } catch {
+    return raw
+  }
 }
 
 function buildTree(pages: TreePage[]): TreeNode {

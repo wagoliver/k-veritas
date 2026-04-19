@@ -252,6 +252,8 @@ export const crawlJobs = pgTable(
       .notNull()
       .references(() => projects.id, { onDelete: 'cascade' }),
     status: text('status').notNull().default('pending'),
+    scope: text('scope').notNull().default('full'),
+    scopeUrl: text('scope_url'),
     requestedBy: uuid('requested_by')
       .notNull()
       .references(() => users.id),
@@ -282,6 +284,7 @@ export const crawlPages = pgTable(
     statusCode: integer('status_code'),
     screenshotPath: text('screenshot_path'),
     domPath: text('dom_path'),
+    redirectedTo: text('redirected_to'),
     discoveredAt: timestamp('discovered_at', { withTimezone: true })
       .notNull()
       .defaultNow(),

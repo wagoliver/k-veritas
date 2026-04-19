@@ -30,8 +30,10 @@ import { useTranslations } from 'next-intl'
 
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
+import { AddPathInput } from './add-path-input'
 import { CrawlLogStream } from './crawl-log-stream'
 import { PageDetailSheet } from './page-detail-sheet'
+import { RecrawlPathButton } from './recrawl-path-button'
 import { SiteTree, type TreePage } from './site-tree'
 
 interface Page {
@@ -39,6 +41,7 @@ interface Page {
   url: string
   title: string | null
   statusCode: number | null
+  redirectedTo: string | null
   elementsCount: number
   discoveredAt: string
 }
@@ -155,35 +158,38 @@ export function SiteMapList({ projectId, status }: SiteMapListProps) {
           ) : null}
         </div>
 
-        <div className="inline-flex rounded-md border border-border bg-secondary/50 p-0.5 text-xs font-medium">
-          <button
-            type="button"
-            onClick={() => switchView('tree')}
-            aria-pressed={view === 'tree'}
-            className={cn(
-              'inline-flex items-center gap-1 rounded-[4px] px-2 py-1 transition-colors',
-              view === 'tree'
-                ? 'bg-primary text-primary-foreground'
-                : 'text-muted-foreground hover:text-foreground',
-            )}
-          >
-            <Network className="size-3.5" />
-            {t('view.tree')}
-          </button>
-          <button
-            type="button"
-            onClick={() => switchView('list')}
-            aria-pressed={view === 'list'}
-            className={cn(
-              'inline-flex items-center gap-1 rounded-[4px] px-2 py-1 transition-colors',
-              view === 'list'
-                ? 'bg-primary text-primary-foreground'
-                : 'text-muted-foreground hover:text-foreground',
-            )}
-          >
-            <List className="size-3.5" />
-            {t('view.list')}
-          </button>
+        <div className="flex items-center gap-2">
+          <AddPathInput projectId={projectId} onAdded={load} />
+          <div className="inline-flex rounded-md border border-border bg-secondary/50 p-0.5 text-xs font-medium">
+            <button
+              type="button"
+              onClick={() => switchView('tree')}
+              aria-pressed={view === 'tree'}
+              className={cn(
+                'inline-flex items-center gap-1 rounded-[4px] px-2 py-1 transition-colors',
+                view === 'tree'
+                  ? 'bg-primary text-primary-foreground'
+                  : 'text-muted-foreground hover:text-foreground',
+              )}
+            >
+              <Network className="size-3.5" />
+              {t('view.tree')}
+            </button>
+            <button
+              type="button"
+              onClick={() => switchView('list')}
+              aria-pressed={view === 'list'}
+              className={cn(
+                'inline-flex items-center gap-1 rounded-[4px] px-2 py-1 transition-colors',
+                view === 'list'
+                  ? 'bg-primary text-primary-foreground'
+                  : 'text-muted-foreground hover:text-foreground',
+              )}
+            >
+              <List className="size-3.5" />
+              {t('view.list')}
+            </button>
+          </div>
         </div>
       </div>
 
@@ -342,24 +348,47 @@ function PageRow({
         <div className="truncate font-mono text-sm font-semibold leading-tight group-hover:underline">
           {page.path}
         </div>
-        {page.title ? (
+        {page.redirectedTo ? (
+          <p
+            className="truncate text-xs text-amber-600 dark:text-amber-400"
+            title={page.redirectedTo}
+          >
+            {t('row.redirected_to', {
+              target: pathFromUrl(page.redirectedTo),
+            })}
+          </p>
+        ) : page.title ? (
           <p className="truncate text-xs text-muted-foreground">{page.title}</p>
         ) : null}
       </button>
 
       <div className="flex shrink-0 items-center gap-1.5">
-        <Badge
-          tone={hasElements ? 'neutral' : 'warning'}
-          title={hasElements ? undefined : t('row.no_elements_hint')}
-        >
-          <span className="tabular-nums">{page.elementsCount}</span>
-          <span className="opacity-60">el</span>
-        </Badge>
+        {page.redirectedTo ? (
+          <Badge tone="warning" title={page.redirectedTo}>
+            <span>↪</span>
+            <span className="font-mono">
+              {pathFromUrl(page.redirectedTo)}
+            </span>
+          </Badge>
+        ) : (
+          <Badge
+            tone={hasElements ? 'neutral' : 'warning'}
+            title={hasElements ? undefined : t('row.no_elements_hint')}
+          >
+            <span className="tabular-nums">{page.elementsCount}</span>
+            <span className="opacity-60">el</span>
+          </Badge>
+        )}
         {page.statusCode ? (
           <Badge tone={page.statusCode < 400 ? 'neutral' : 'error'}>
             <span className="font-mono tabular-nums">{page.statusCode}</span>
           </Badge>
         ) : null}
+        <RecrawlPathButton
+          projectId={projectId}
+          url={page.url}
+          onUpdated={onUpdated}
+        />
         {hasError ? (
           <RecheckButton
             projectId={projectId}
@@ -493,6 +522,15 @@ function splitUrl(raw: string): { host: string; path: string } {
     return { host: u.hostname, path: pathname + u.search }
   } catch {
     return { host: '', path: raw }
+  }
+}
+
+function pathFromUrl(raw: string): string {
+  try {
+    const u = new URL(raw)
+    return u.pathname === '/' ? '/' : u.pathname.replace(/\/$/, '')
+  } catch {
+    return raw
   }
 }
 

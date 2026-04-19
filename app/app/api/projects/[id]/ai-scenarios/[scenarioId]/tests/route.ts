@@ -8,6 +8,7 @@ import { Problems } from '@/lib/auth/errors'
 import { authorizeProject } from '@/lib/auth/project-access'
 import { audit } from '@/lib/auth/audit'
 import { clientIp, userAgent } from '@/lib/auth/request'
+import { sql } from 'drizzle-orm'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -108,4 +109,75 @@ export async function DELETE(
     { deletedCount: deleted.length },
     { headers: { 'Cache-Control': 'no-store' } },
   )
+}
+
+/**
+ * PATCH — edita o código da última versão do teste desse cenário.
+ * Usado pelo edit-per-step inline: a UI calcula o code completo com a
+ * linha substituída e manda aqui.
+ *
+ * Atualiza em-place (não cria nova linha no histórico). Pra restaurar
+ * o código original, regere o teste (trash + "Gerar").
+ */
+export async function PATCH(
+  req: NextRequest,
+  ctx: { params: Promise<{ id: string; scenarioId: string }> },
+) {
+  const session = await getServerSession()
+  if (!session) return Problems.unauthorized()
+  if (!req.headers.get('content-type')?.includes('application/json')) {
+    return Problems.invalidBody()
+  }
+  if (req.headers.get('x-requested-with') !== 'fetch') {
+    return Problems.invalidBody()
+  }
+
+  const { id, scenarioId } = await ctx.params
+  const project = await authorizeProject(session.user.id, id)
+  if (!project) return Problems.forbidden()
+
+  const body = (await req.json().catch(() => null)) as {
+    code?: unknown
+  } | null
+  if (!body || typeof body.code !== 'string' || body.code.length < 10) {
+    return Problems.invalidBody()
+  }
+  if (body.code.length > 100_000) return Problems.invalidBody()
+
+  // Atualiza apenas o scenario_tests mais recente daquele scenario.
+  const result = await db.execute<{ id: string }>(sql`
+    UPDATE scenario_tests
+    SET code = ${body.code}
+    WHERE id = (
+      SELECT id FROM scenario_tests
+      WHERE project_id = ${project.id}
+        AND scenario_id_snapshot = ${scenarioId}
+      ORDER BY created_at DESC
+      LIMIT 1
+    )
+    RETURNING id
+  `)
+
+  if (result.length === 0) {
+    return Problems.conflict(
+      'no_test_to_edit',
+      'Este cenário não tem teste gerado pra editar.',
+    )
+  }
+
+  await audit({
+    userId: session.user.id,
+    event: 'scenario_test_edited',
+    ip: clientIp(req),
+    userAgent: userAgent(req),
+    meta: {
+      projectId: project.id,
+      scenarioId,
+      testId: result[0].id,
+      codeBytes: body.code.length,
+    },
+    outcome: 'success',
+  })
+
+  return new NextResponse(null, { status: 204 })
 }

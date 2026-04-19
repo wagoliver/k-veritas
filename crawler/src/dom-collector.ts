@@ -25,10 +25,73 @@ export interface CollectorCallbacks {
   onProgress?: (info: { url: string; index: number; total: number }) => void | Promise<void>
 }
 
+export interface CollectorOptions {
+  /**
+   * Quando setado, o crawler visita apenas essa URL (sem BFS). Usado
+   * pelo re-crawler de path único e pelo "adicionar path" manual.
+   */
+  singlePathUrl?: string | null
+  /**
+   * Quando true, pula o login e abre o contexto do browser limpo (sem
+   * cookies). Usado pra visitar rotas públicas de auth (/login, /register)
+   * sem serem redirecionadas pro dashboard.
+   */
+  noAuth?: boolean
+}
+
+/**
+ * Paths onde o crawler deve visitar SEM sessão — páginas públicas de
+ * auth que redirecionam usuários logados. Usado pelo re-crawler de
+ * path único pra evitar extrair elementos do dashboard no lugar.
+ */
+const PUBLIC_AUTH_PATHS = [
+  '/login',
+  '/sign-in',
+  '/signin',
+  '/register',
+  '/sign-up',
+  '/signup',
+  '/cadastro',
+  '/forgot-password',
+  '/esqueci-senha',
+  '/reset-password',
+  '/recuperar-senha',
+]
+
+export function isPublicAuthPath(url: string): boolean {
+  try {
+    const u = new URL(url)
+    const path = u.pathname.replace(/\/+$/, '').toLowerCase()
+    return PUBLIC_AUTH_PATHS.includes(path || '/')
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Compara duas URLs ignorando trailing slash, hash e normalizando.
+ * Usado pra detectar redirect (URL final != URL solicitada).
+ */
+function sameUrl(a: string, b: string): boolean {
+  try {
+    const ua = new URL(a)
+    const ub = new URL(b)
+    if (ua.host !== ub.host) return false
+    if (ua.protocol !== ub.protocol) return false
+    const pa = ua.pathname.replace(/\/+$/, '') || '/'
+    const pb = ub.pathname.replace(/\/+$/, '') || '/'
+    if (pa !== pb) return false
+    return ua.search === ub.search
+  } catch {
+    return false
+  }
+}
+
 export async function collectDom(
   project: Project,
   crawlId: string,
   callbacks: CollectorCallbacks = {},
+  options: CollectorOptions = {},
 ): Promise<{ pagesCount: number }> {
   const baseUrl = new URL(project.target_url)
   const artifactsDir = join(DATA_DIR, 'projects', project.id, 'crawls', crawlId)
@@ -51,8 +114,16 @@ export async function collectDom(
       viewport: { width: 1280, height: 800 },
     })
 
-    if (project.auth_kind === 'form' && project.auth_credentials) {
+    // Pula login quando noAuth=true (modo usado pra rotas públicas de
+    // auth como /register que redirecionam usuários já logados).
+    if (
+      !options.noAuth &&
+      project.auth_kind === 'form' &&
+      project.auth_credentials
+    ) {
       await performFormLogin(context, project.auth_credentials)
+    } else if (options.noAuth) {
+      console.log('[crawler] noAuth mode: pulando login pra rota pública')
     }
 
     interface QueuedUrl {
@@ -60,12 +131,20 @@ export async function collectDom(
       depth: number
     }
 
-    const queue: QueuedUrl[] = [{ url: project.target_url, depth: 0 }]
+    const singlePath = options.singlePathUrl ?? null
+    // Quando single_path, pula BFS e visita só a URL fornecida.
+    // maxDepth virtual=0 pra não enfileirar links descobertos.
+    const effectiveMaxDepth = singlePath ? 0 : maxDepth
+    const startUrl = singlePath ?? project.target_url
+
+    const queue: QueuedUrl[] = [{ url: startUrl, depth: 0 }]
     const seen = new Set<string>()
-    const enqueued = new Set<string>([project.target_url])
+    const enqueued = new Set<string>([startUrl])
 
     console.log(
-      `[crawler] starting crawl max_depth=${maxDepth} max_pages=${MAX_PAGES}`,
+      singlePath
+        ? `[crawler] starting SINGLE_PATH crawl url=${startUrl}`
+        : `[crawler] starting crawl max_depth=${maxDepth} max_pages=${MAX_PAGES}`,
     )
 
     while (queue.length > 0 && pagesCount < MAX_PAGES) {
@@ -108,39 +187,53 @@ export async function collectDom(
 
         await callbacks.onProgress?.({ url, index: pageIndex, total: MAX_PAGES })
 
+        // Detecta redirect: se a URL final difere da solicitada, não extrai
+        // elementos (o DOM é de outra página). Grava redirected_to pra UI
+        // mostrar. Comum em rotas públicas de auth sendo visitadas logado.
+        const finalUrl = page.url()
+        const redirected = !sameUrl(url, finalUrl)
+        if (redirected) {
+          console.log(
+            `[crawler] REDIRECT ${url} → ${finalUrl} (not extracting elements)`,
+          )
+        }
+
         const hash = hashUrl(url)
         const screenshotPath = join(artifactsDir, `page-${hash}.png`)
         const domPath = join(artifactsDir, `page-${hash}.html`)
 
-        try {
-          await page.screenshot({
-            path: screenshotPath,
-            fullPage: true,
-            timeout: 15_000,
-          })
-        } catch {
-          // seguir mesmo sem screenshot
+        if (!redirected) {
+          try {
+            await page.screenshot({
+              path: screenshotPath,
+              fullPage: true,
+              timeout: 15_000,
+            })
+          } catch {
+            // seguir mesmo sem screenshot
+          }
+
+          const html = await page.content().catch(() => '')
+          await writeFile(domPath, html, 'utf8')
         }
 
-        const html = await page.content().catch(() => '')
-        await writeFile(domPath, html, 'utf8')
-
-        const elements = await extractElements(page)
+        const elements = redirected ? [] : await extractElements(page)
 
         const saved: SavedPageInput = {
           url,
-          title,
+          title: redirected ? null : title,
           statusCode,
-          screenshotPath,
-          domPath,
+          screenshotPath: redirected ? null : screenshotPath,
+          domPath: redirected ? null : domPath,
+          redirectedTo: redirected ? finalUrl : null,
           elements,
         }
 
         // Diagnóstico: se extraiu 0 elementos mas a página claramente tem DOM,
         // logar um aviso com o tamanho do HTML pra facilitar debug
-        if (elements.length === 0) {
+        if (!redirected && elements.length === 0) {
           console.warn(
-            `[crawler] ${url} extracted 0 elements (html length: ${html.length})`,
+            `[crawler] ${url} extracted 0 elements (html may not have rendered)`,
           )
         }
 
@@ -149,14 +242,17 @@ export async function collectDom(
 
         // Só segue links se o próximo depth estiver dentro do limite
         const nextDepth = depth + 1
-        const links = await collectSameOriginLinks(page, baseUrl)
+        const links =
+          effectiveMaxDepth === 0 && singlePath
+            ? []
+            : await collectSameOriginLinks(page, baseUrl)
 
         for (const l of links) {
           if (seen.has(l) || enqueued.has(l)) continue
 
-          if (nextDepth > maxDepth) {
+          if (nextDepth > effectiveMaxDepth) {
             console.log(
-              `[crawler] BLOCK ${l} depth=${nextDepth} reason=exceeds_max_depth (max=${maxDepth})`,
+              `[crawler] BLOCK ${l} depth=${nextDepth} reason=exceeds_max_depth (max=${effectiveMaxDepth})`,
             )
             continue
           }

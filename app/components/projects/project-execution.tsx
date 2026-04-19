@@ -380,6 +380,9 @@ function ScenarioRunRow({
               <FailedFlow
                 code={scenario.latestTest.code}
                 errorMessage={latest.errorMessage}
+                projectId={projectId}
+                scenarioId={scenario.id}
+                onChanged={onChanged}
               />
             ) : null}
           </>
@@ -437,14 +440,45 @@ function LiveFlow({
 function FailedFlow({
   code,
   errorMessage,
+  projectId,
+  scenarioId,
+  onChanged,
 }: {
   code: string
   errorMessage: string
+  projectId: string
+  scenarioId: string
+  onChanged: () => Promise<void> | void
 }) {
   const t = useTranslations('projects.overview.execution')
+  const tEditor = useTranslations('projects.overview.analysis.editor')
   const [open, setOpen] = useState(false)
   const parsed = parseTestCode(code)
   const failedStepIndex = locateFailedStepIndex(parsed, errorMessage)
+
+  const saveStepEdit = async (newCode: string) => {
+    try {
+      const res = await fetch(
+        `/api/projects/${projectId}/ai-scenarios/${scenarioId}/tests`,
+        {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'fetch',
+          },
+          body: JSON.stringify({ code: newCode }),
+        },
+      )
+      if (!res.ok) {
+        toast.error(tEditor('test.edit_failed'))
+        return
+      }
+      toast.success(tEditor('test.edit_saved'))
+      await onChanged()
+    } catch {
+      toast.error(tEditor('errors.network'))
+    }
+  }
 
   // Status derivado: antes do falho → passed (já executou), o falho →
   // failed, depois → idle (nunca chegou). Sem detecção → todos idle
@@ -487,6 +521,8 @@ function FailedFlow({
           code={code}
           failedStepIndex={failedStepIndex}
           stepStatuses={stepStatuses}
+          editable
+          onCodeChange={saveStepEdit}
         />
       ) : null}
     </div>

@@ -31,8 +31,30 @@ export interface ParsedStep {
   verb: string
   /** Linha original do código, pra mostrar ao expandir o step. */
   rawLine: string
+  /** Índice absoluto em code.split('\n'). Usado pra edit-per-step. */
+  lineIndex: number
   /** Nome do elemento, quando extraível (getByRole({name:'X'})). */
   target: string | null
+}
+
+/**
+ * Substitui uma única linha do código original preservando a indentação
+ * da linha substituída. Usado pela UI de edit inline — usuário ajusta
+ * apenas o texto útil, sem se preocupar com indent.
+ */
+export function replaceCodeLine(
+  code: string,
+  lineIndex: number,
+  newLine: string,
+): string {
+  const lines = code.split('\n')
+  if (lineIndex < 0 || lineIndex >= lines.length) return code
+  const orig = lines[lineIndex]
+  const indentMatch = orig.match(/^(\s*)/)
+  const indent = indentMatch?.[1] ?? ''
+  const newTrimmed = newLine.replace(/^\s*/, '')
+  lines[lineIndex] = indent + newTrimmed
+  return lines.join('\n')
 }
 
 export interface ParsedPhase {
@@ -122,9 +144,11 @@ export function parseTestCode(code: string): ParsedTest {
   const tag = tagMatch?.[2] ?? null
 
   // 2. Corta wrapper: remove primeira linha (test(...)) e última (})/ })
-  const body = trimWrapper(lines)
+  // Retorna os offsets absolutos do corpo dentro de `lines`.
+  const { start, end } = trimWrapperBounds(lines)
 
-  // 3. Varre linha a linha agrupando em fases
+  // 3. Varre linha a linha agrupando em fases, preservando lineIndex
+  //    absoluto pra edit-per-step.
   const phases: ParsedPhase[] = []
   let current: ParsedPhase | null = null
   let recognized = false
@@ -138,7 +162,8 @@ export function parseTestCode(code: string): ParsedTest {
     return fresh
   }
 
-  for (const rawLine of body) {
+  for (let absIdx = start; absIdx < end; absIdx++) {
+    const rawLine = lines[absIdx]
     const line = rawLine.trim()
     if (line.length === 0) continue
 
@@ -159,7 +184,7 @@ export function parseTestCode(code: string): ParsedTest {
       current = pushPhaseIfNeeded('setup', null)
     }
 
-    const step = classifyLine(rawLine)
+    const step = classifyLine(rawLine, absIdx)
     current.steps.push(step)
     if (step.kind !== 'raw') recognized = true
   }
@@ -170,10 +195,11 @@ export function parseTestCode(code: string): ParsedTest {
 }
 
 /**
- * Remove a primeira linha que casa com `test(...)` e a última `})` /  `})`.
- * Tolerante: se não bater, retorna tudo.
+ * Retorna os índices [start, end) do CORPO do test(), excluindo a
+ * chamada test('...', async ({page}) => { e o fechamento }).
+ * Tolerante: se não bater nada, retorna a fatia inteira.
  */
-function trimWrapper(lines: string[]): string[] {
+function trimWrapperBounds(lines: string[]): { start: number; end: number } {
   let start = 0
   let end = lines.length
 
@@ -204,14 +230,14 @@ function trimWrapper(lines: string[]): string[] {
     break
   }
 
-  return lines.slice(start, end)
+  return { start, end }
 }
 
 /**
  * Classifica uma linha de código Playwright em um ParsedStep.
  * Ordem das checagens é significativa — mais específico primeiro.
  */
-function classifyLine(rawLine: string): ParsedStep {
+function classifyLine(rawLine: string, lineIndex: number): ParsedStep {
   const line = rawLine.trim()
 
   // expect(...).toXxx(...)
@@ -227,6 +253,7 @@ function classifyLine(rawLine: string): ParsedStep {
       kind: 'assertion',
       verb: assertionVerb(matcher, subject, arg),
       rawLine,
+      lineIndex,
       target,
     }
   }
@@ -238,6 +265,7 @@ function classifyLine(rawLine: string): ParsedStep {
       kind: 'goto',
       verb: `Abrir "${gotoMatch[2]}"`,
       rawLine,
+      lineIndex,
       target: gotoMatch[2],
     }
   }
@@ -249,6 +277,7 @@ function classifyLine(rawLine: string): ParsedStep {
       kind: 'click',
       verb: target ? `Clicar em "${target}"` : 'Clicar',
       rawLine,
+      lineIndex,
       target,
     }
   }
@@ -264,6 +293,7 @@ function classifyLine(rawLine: string): ParsedStep {
         ? `Preencher "${target}"${value ? ` com ${value}` : ''}`
         : `Preencher campo${value ? ` com ${value}` : ''}`,
       rawLine,
+      lineIndex,
       target,
     }
   }
@@ -275,6 +305,7 @@ function classifyLine(rawLine: string): ParsedStep {
       kind: 'select',
       verb: target ? `Selecionar opção em "${target}"` : 'Selecionar opção',
       rawLine,
+      lineIndex,
       target,
     }
   }
@@ -286,6 +317,7 @@ function classifyLine(rawLine: string): ParsedStep {
       kind: 'hover',
       verb: target ? `Passar mouse sobre "${target}"` : 'Passar mouse',
       rawLine,
+      lineIndex,
       target,
     }
   }
@@ -302,6 +334,7 @@ function classifyLine(rawLine: string): ParsedStep {
           ? 'Desmarcar'
           : 'Marcar',
       rawLine,
+      lineIndex,
       target,
     }
   }
@@ -313,6 +346,7 @@ function classifyLine(rawLine: string): ParsedStep {
       kind: 'press',
       verb: `Pressionar tecla "${pressMatch[2]}"`,
       rawLine,
+      lineIndex,
       target: pressMatch[2],
     }
   }
@@ -323,6 +357,7 @@ function classifyLine(rawLine: string): ParsedStep {
       kind: 'wait',
       verb: 'Aguardar condição',
       rawLine,
+      lineIndex,
       target: null,
     }
   }
@@ -339,6 +374,7 @@ function classifyLine(rawLine: string): ParsedStep {
         ? `Localizar "${target}"`
         : `Criar locator (${locatorMatch[2]})`,
       rawLine,
+      lineIndex,
       target,
     }
   }
@@ -348,6 +384,7 @@ function classifyLine(rawLine: string): ParsedStep {
     kind: 'raw',
     verb: line.replace(/^await\s+/, '').slice(0, 80),
     rawLine,
+    lineIndex,
     target: null,
   }
 }

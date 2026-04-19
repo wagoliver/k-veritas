@@ -117,7 +117,15 @@
       "team": "Equipe",
       "settings": "Configurações",
       "help": "Ajuda",
-      "soon": "Em breve"
+      "soon": "Em breve",
+      "project": {
+        "section": "Projeto",
+        "map": "Mapa do site",
+        "scenarios": "Cenários",
+        "analysis": "Análise IA",
+        "test_scenarios": "Cenários de Teste",
+        "execution": "Execução"
+      }
     },
     "search": {
       "open": "Abrir busca",
@@ -255,7 +263,7 @@
     },
     "overview": {
       "settings": "Configurações",
-      "recrawl": "Recrawlear",
+      "recrawl": "Re-crawler (tudo)",
       "crawling_progress": "Explorando...",
       "recrawl_started": "Nova exploração iniciada.",
       "tabs": {
@@ -415,7 +423,12 @@
             "confirm_delete": "Excluir o teste gerado deste cenário? O cenário voltará a ser candidato para nova geração.",
             "view_visual": "Visual",
             "view_code": "Código",
-            "flow_not_detected": "Fluxo não detectado automaticamente. Veja o código abaixo."
+            "flow_not_detected": "Fluxo não detectado automaticamente. Veja o código abaixo.",
+            "edit_step": "Editar esta etapa",
+            "edit_save": "Salvar",
+            "edit_cancel": "Cancelar",
+            "edit_saved": "Etapa atualizada.",
+            "edit_failed": "Não foi possível atualizar a etapa."
           },
           "add_feature": "Nova feature",
           "add_scenario": "Adicionar cenário",
@@ -509,6 +522,36 @@
         "generic": "Não foi possível iniciar a exploração."
       },
       "map": {
+        "recrawl_path": {
+          "label": "Re-crawler esta página",
+          "enqueued": "Re-crawler disparado para esta página.",
+          "errors": {
+            "generic": "Não foi possível iniciar o re-crawler.",
+            "rate_limited": "Aguarde um momento antes de disparar outro re-crawler.",
+            "network": "Falha de conexão."
+          }
+        },
+        "add_path": {
+          "button": "Adicionar path",
+          "placeholder": "/register",
+          "submit": "Adicionar e buscar elementos",
+          "cancel": "Cancelar",
+          "enqueued": "Path adicionado. Buscando elementos...",
+          "errors": {
+            "invalid_path": "Path inválido. Use formato /algo ou URL same-origin.",
+            "rate_limited": "Aguarde um momento antes de adicionar outro path.",
+            "generic": "Não foi possível adicionar o path.",
+            "network": "Falha de conexão."
+          }
+        },
+        "subtabs": {
+          "crawler": "Crawler",
+          "code": "Code"
+        },
+        "code": {
+          "title": "Análise de código em breve",
+          "description": "Aqui você conectará o repositório do seu projeto para extrair rotas, componentes e elementos direto do código-fonte — complementando (ou substituindo) o crawler de runtime."
+        },
         "crawling_title": "Explorando sua aplicação",
         "crawling_description": "Pode levar alguns minutos. A página atualiza automaticamente.",
         "empty_title": "Nenhuma página encontrada",
@@ -521,7 +564,8 @@
         },
         "row": {
           "open_detail": "Ver elementos capturados",
-          "no_elements_hint": "Nenhum elemento capturado. Provavelmente a SPA não finalizou de hidratar — tente recrawlear."
+          "no_elements_hint": "Nenhum elemento capturado. Provavelmente a SPA não finalizou de hidratar — tente recrawlear.",
+          "redirected_to": "Redirecionou para {target} — elementos não extraídos"
         },
         "view": {
           "tree": "Árvore",

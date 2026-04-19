@@ -58,22 +58,46 @@ export async function POST(
   const rl = await consumeToken(BUCKETS.crawlProject(project.id))
   if (!rl.allowed) return Problems.rateLimited(rl.retryAfterSeconds)
 
-  // Impede job duplo se já há um rodando
-  const [running] = await db
-    .select({ id: crawlJobs.id })
-    .from(crawlJobs)
-    .where(
-      and(
-        eq(crawlJobs.projectId, project.id),
-        eq(crawlJobs.status, 'running'),
-      ),
-    )
-    .limit(1)
-  if (running) {
-    return Problems.conflict(
-      'crawl_already_running',
-      'Aguarde o crawl atual terminar.',
-    )
+  // Corpo opcional: { scope: 'full' | 'single_path', url: '/register' }
+  // Se vazio ou Content-Type não-JSON, assume full (retrocompat).
+  let scope: 'full' | 'single_path' = 'full'
+  let scopeUrl: string | null = null
+  if (req.headers.get('content-type')?.includes('application/json')) {
+    const body = (await req.json().catch(() => null)) as {
+      scope?: unknown
+      url?: unknown
+    } | null
+    if (body?.scope === 'single_path') {
+      if (typeof body.url !== 'string' || body.url.length === 0) {
+        return Problems.invalidBody()
+      }
+      const resolved = resolveScopeUrl(project.targetUrl, body.url)
+      if (!resolved) return Problems.invalidBody()
+      scope = 'single_path'
+      scopeUrl = resolved
+    }
+  }
+
+  // Impede job duplo só quando for full crawl. Re-crawler single_path
+  // pode acumular vários em paralelo sem invalidar o mapa.
+  if (scope === 'full') {
+    const [running] = await db
+      .select({ id: crawlJobs.id })
+      .from(crawlJobs)
+      .where(
+        and(
+          eq(crawlJobs.projectId, project.id),
+          eq(crawlJobs.status, 'running'),
+          eq(crawlJobs.scope, 'full'),
+        ),
+      )
+      .limit(1)
+    if (running) {
+      return Problems.conflict(
+        'crawl_already_running',
+        'Aguarde o crawl atual terminar.',
+      )
+    }
   }
 
   const [job] = await db
@@ -82,23 +106,54 @@ export async function POST(
       projectId: project.id,
       requestedBy: session.user.id,
       status: 'pending',
+      scope,
+      scopeUrl,
     })
     .returning({ id: crawlJobs.id })
   if (!job) return Problems.server()
 
-  await db
-    .update(projects)
-    .set({ status: 'crawling', updatedAt: new Date() })
-    .where(eq(projects.id, project.id))
+  // Só muda o status do projeto pra 'crawling' em full crawl. Single_path
+  // não deixa o projeto em estado "crawling" (ele é auxiliar).
+  if (scope === 'full') {
+    await db
+      .update(projects)
+      .set({ status: 'crawling', updatedAt: new Date() })
+      .where(eq(projects.id, project.id))
+  }
 
   await audit({
     userId: session.user.id,
-    event: 'crawl_requested',
+    event: scope === 'single_path' ? 'crawl_single_path_requested' : 'crawl_requested',
     ip: clientIp(req),
     userAgent: userAgent(req),
-    meta: { projectId: project.id, crawlId: job.id },
+    meta: { projectId: project.id, crawlId: job.id, scope, scopeUrl },
     outcome: 'success',
   })
 
-  return NextResponse.json({ id: job.id, status: 'pending' }, { status: 202 })
+  return NextResponse.json(
+    { id: job.id, status: 'pending', scope },
+    { status: 202 },
+  )
+}
+
+/**
+ * Resolve o URL do scope (ex: '/register') contra o target_url do projeto,
+ * retornando uma URL absoluta same-origin. Rejeita qualquer coisa fora do
+ * host do target. Aceita tanto path relativo quanto URL completa.
+ */
+function resolveScopeUrl(targetUrl: string, input: string): string | null {
+  try {
+    const base = new URL(targetUrl)
+    const resolved = new URL(input, base)
+    if (resolved.host !== base.host) return null
+    if (resolved.protocol !== base.protocol) return null
+    resolved.hash = ''
+    // Normaliza trailing slash pra casar com o padrão do crawler
+    if (resolved.pathname.length > 1 && resolved.pathname.endsWith('/')) {
+      resolved.pathname = resolved.pathname.replace(/\/+$/, '')
+    }
+    return resolved.toString()
+  } catch {
+    return null
+  }
 }

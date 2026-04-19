@@ -25,6 +25,10 @@ export async function GET(
   const project = await authorizeProject(session.user.id, id)
   if (!project) return Problems.forbidden()
 
+  // IMPORTANTE: filtra scope='full'. Jobs single_path completam com o
+  // mesmo status='completed' mas não têm crawl_pages próprios (eles fazem
+  // upsert no crawl full mais recente). Se não filtrar, um single_path
+  // recém-concluído vira o "último" e retorna lista vazia.
   const [lastCompleted] = await db
     .select({ id: crawlJobs.id })
     .from(crawlJobs)
@@ -32,6 +36,7 @@ export async function GET(
       and(
         eq(crawlJobs.projectId, project.id),
         eq(crawlJobs.status, 'completed'),
+        eq(crawlJobs.scope, 'full'),
       ),
     )
     .orderBy(desc(crawlJobs.finishedAt))
@@ -47,6 +52,7 @@ export async function GET(
       url: crawlPages.url,
       title: crawlPages.title,
       statusCode: crawlPages.statusCode,
+      redirectedTo: crawlPages.redirectedTo,
       discoveredAt: crawlPages.discoveredAt,
       elementsCount: sql<number>`count(${crawlElements.id})::int`,
     })

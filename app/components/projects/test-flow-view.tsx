@@ -10,17 +10,21 @@ import {
   Globe,
   Keyboard,
   List,
+  Loader2,
   MousePointer2,
+  Pencil,
   Search,
   Sparkles,
   Type,
+  X,
 } from 'lucide-react'
-import { useState } from 'react'
+import { useState, type MouseEvent } from 'react'
 import { useTranslations } from 'next-intl'
 
 import { cn } from '@/lib/utils'
 import {
   parseTestCode,
+  replaceCodeLine,
   type ParsedPhase,
   type ParsedStep,
   type PhaseKind,
@@ -37,12 +41,18 @@ interface TestFlowViewProps {
   /** Status por step (índice global, mesmo comprimento de flatten(phases)).
    *  Quando fornecido, cada step ganha bolinha colorida. */
   stepStatuses?: StepStatus[] | null
+  /** Quando true, cada step ganha botão de edição inline. O callback
+   *  recebe o code completo já recalculado com a linha substituída. */
+  editable?: boolean
+  onCodeChange?: (newCode: string) => Promise<void> | void
 }
 
 export function TestFlowView({
   code,
   failedStepIndex,
   stepStatuses,
+  editable = false,
+  onCodeChange,
 }: TestFlowViewProps) {
   const t = useTranslations('projects.overview.analysis.editor.test')
   const parsed = parseTestCode(code)
@@ -85,6 +95,9 @@ export function TestFlowView({
         {parsed.phases.map((phase, idx) => {
           const phaseStart = globalStepCursor
           globalStepCursor += phase.steps.length
+          const slice = stepStatuses
+            ? stepStatuses.slice(phaseStart, phaseStart + phase.steps.length)
+            : null
           return (
             <PhaseBlock
               key={idx}
@@ -93,17 +106,36 @@ export function TestFlowView({
               failedStepIndex={
                 failedOffset?.phase === idx ? failedOffset.step : null
               }
-              stepStatuses={
-                stepStatuses
-                  ? stepStatuses.slice(phaseStart, phaseStart + phase.steps.length)
-                  : null
-              }
+              stepStatuses={slice}
+              phaseStatus={derivePhaseStatus(slice)}
+              editable={editable}
+              fullCode={code}
+              onCodeChange={onCodeChange}
             />
           )
         })}
       </div>
     </div>
   )
+}
+
+/**
+ * Status agregado de uma fase a partir dos status dos seus steps.
+ * Regras (ordem importa):
+ *   - algum step falhado → 'failed'
+ *   - algum step rodando → 'running'
+ *   - todos passaram (não vazio) → 'passed'
+ *   - caso contrário → 'idle'
+ * Retorna null quando não há informação de execução (mantém cor semântica).
+ */
+function derivePhaseStatus(
+  statuses: StepStatus[] | null,
+): StepStatus | null {
+  if (!statuses || statuses.length === 0) return null
+  if (statuses.some((s) => s === 'failed')) return 'failed'
+  if (statuses.some((s) => s === 'running')) return 'running'
+  if (statuses.every((s) => s === 'passed')) return 'passed'
+  return 'idle'
 }
 
 const PHASE_COLORS: Record<
@@ -144,13 +176,60 @@ function PhaseBlock({
   isLast,
   failedStepIndex,
   stepStatuses,
+  phaseStatus,
+  editable,
+  fullCode,
+  onCodeChange,
 }: {
   phase: ParsedPhase
   isLast: boolean
   failedStepIndex: number | null
   stepStatuses: StepStatus[] | null
+  phaseStatus: StepStatus | null
+  editable: boolean
+  fullCode: string
+  onCodeChange?: (newCode: string) => Promise<void> | void
 }) {
   const colors = PHASE_COLORS[phase.kind]
+
+  // Cor do dot/conector:
+  //   - Com phaseStatus (execução): cinza/verde/vermelho/azul derivados.
+  //   - Sem phaseStatus (ex: aba Cenários de Teste): mantém paleta
+  //     semântica (Given=amber, When=blue, Then=green) pra identificar
+  //     a fase visualmente.
+  const statusDotClass =
+    phaseStatus === 'failed'
+      ? 'bg-destructive'
+      : phaseStatus === 'running'
+        ? 'bg-blue-500 animate-pulse'
+        : phaseStatus === 'passed'
+          ? 'bg-fin-gain'
+          : phaseStatus === 'idle'
+            ? 'bg-muted-foreground/40'
+            : null
+  const statusLineClass =
+    phaseStatus === 'failed'
+      ? 'bg-destructive/30'
+      : phaseStatus === 'running'
+        ? 'bg-blue-500/30'
+        : phaseStatus === 'passed'
+          ? 'bg-fin-gain/30'
+          : phaseStatus === 'idle'
+            ? 'bg-muted-foreground/20'
+            : null
+  const statusLabelClass =
+    phaseStatus === 'failed'
+      ? 'text-destructive'
+      : phaseStatus === 'running'
+        ? 'text-blue-700 dark:text-blue-400'
+        : phaseStatus === 'passed'
+          ? 'text-fin-gain'
+          : phaseStatus === 'idle'
+            ? 'text-muted-foreground'
+            : null
+
+  const dotClass = statusDotClass ?? colors.dot
+  const labelClass = statusLabelClass ?? colors.label
   return (
     <div className="relative">
       {/* Linha vertical conectora (exceto na última phase) */}
@@ -158,10 +237,14 @@ function PhaseBlock({
         <div
           className={cn(
             'absolute left-[5px] top-3 h-full w-px',
-            phase.kind === 'given' && 'bg-amber-500/30',
-            phase.kind === 'when' && 'bg-blue-500/30',
-            phase.kind === 'then' && 'bg-fin-gain/30',
-            phase.kind === 'setup' && 'bg-border',
+            statusLineClass ??
+              (phase.kind === 'given'
+                ? 'bg-amber-500/30'
+                : phase.kind === 'when'
+                  ? 'bg-blue-500/30'
+                  : phase.kind === 'then'
+                    ? 'bg-fin-gain/30'
+                    : 'bg-border'),
           )}
           aria-hidden
         />
@@ -171,7 +254,7 @@ function PhaseBlock({
         <div
           className={cn(
             'mt-1 size-3 shrink-0 rounded-full ring-2 ring-background',
-            colors.dot,
+            dotClass,
           )}
           aria-hidden
         />
@@ -179,7 +262,7 @@ function PhaseBlock({
           <div
             className={cn(
               'flex flex-wrap items-baseline gap-2 font-mono text-[10px] font-bold uppercase tracking-wider',
-              colors.label,
+              labelClass,
             )}
           >
             <span>{PHASE_LABELS[phase.kind]}</span>
@@ -198,6 +281,9 @@ function PhaseBlock({
                   step={step}
                   failed={failedStepIndex === i}
                   status={stepStatuses?.[i] ?? null}
+                  editable={editable}
+                  fullCode={fullCode}
+                  onCodeChange={onCodeChange}
                 />
               ))}
             </ul>
@@ -243,20 +329,61 @@ function StepRow({
   step,
   failed = false,
   status = null,
+  editable = false,
+  fullCode,
+  onCodeChange,
 }: {
   step: ParsedStep
   failed?: boolean
   status?: StepStatus | null
+  editable?: boolean
+  fullCode: string
+  onCodeChange?: (newCode: string) => Promise<void> | void
 }) {
+  const t = useTranslations('projects.overview.analysis.editor.test')
   const effectiveStatus: StepStatus =
     status ?? (failed ? 'failed' : 'idle')
   const [open, setOpen] = useState(effectiveStatus === 'failed')
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState(step.rawLine.replace(/^\s*/, ''))
+  const [saving, setSaving] = useState(false)
   const Icon = STEP_ICONS[step.kind]
   const iconColor = STEP_ICON_COLORS[step.kind]
 
   const isFailed = effectiveStatus === 'failed'
   const isRunning = effectiveStatus === 'running'
   const isPassed = effectiveStatus === 'passed'
+  const canEdit = editable && !!onCodeChange && !isRunning
+
+  const openEditor = (e: MouseEvent) => {
+    e.stopPropagation()
+    setDraft(step.rawLine.replace(/^\s*/, ''))
+    setEditing(true)
+    setOpen(true)
+  }
+
+  const cancelEdit = () => {
+    setEditing(false)
+    setDraft(step.rawLine.replace(/^\s*/, ''))
+  }
+
+  const saveEdit = async () => {
+    if (!onCodeChange) return
+    const trimmed = draft.trim()
+    if (trimmed.length === 0) return
+    if (trimmed === step.rawLine.trim()) {
+      setEditing(false)
+      return
+    }
+    setSaving(true)
+    try {
+      const nextCode = replaceCodeLine(fullCode, step.lineIndex, draft)
+      await onCodeChange(nextCode)
+      setEditing(false)
+    } finally {
+      setSaving(false)
+    }
+  }
 
   return (
     <li
@@ -269,11 +396,9 @@ function StepRow({
             : 'border-border/60',
       )}
     >
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
+      <div
         className={cn(
-          'flex w-full items-center gap-2 px-2 py-1.5 text-left text-xs transition-colors',
+          'flex items-center gap-2 px-2 py-1.5 text-xs transition-colors',
           isFailed
             ? 'hover:bg-destructive/10'
             : isRunning
@@ -281,48 +406,108 @@ function StepRow({
               : 'hover:bg-accent/40',
         )}
       >
-        <ChevronRight
-          className={cn(
-            'size-3 shrink-0 text-muted-foreground transition-transform',
-            open && 'rotate-90',
-          )}
-        />
-        <StatusDot status={effectiveStatus} />
-        {isFailed ? (
-          <AlertTriangle className="size-3.5 shrink-0 text-destructive" />
-        ) : (
-          <Icon
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          className="flex min-w-0 flex-1 items-center gap-2 text-left"
+        >
+          <ChevronRight
             className={cn(
-              'size-3.5 shrink-0',
-              isPassed
-                ? 'text-fin-gain'
-                : isRunning
-                  ? 'text-blue-600 dark:text-blue-400'
-                  : iconColor,
+              'size-3 shrink-0 text-muted-foreground transition-transform',
+              open && 'rotate-90',
             )}
           />
-        )}
-        <span
-          className={cn(
-            'min-w-0 flex-1 truncate',
-            isFailed && 'font-medium text-destructive',
-            isRunning && 'font-medium text-blue-700 dark:text-blue-300',
+          <StatusDot status={effectiveStatus} />
+          {isFailed ? (
+            <AlertTriangle className="size-3.5 shrink-0 text-destructive" />
+          ) : (
+            <Icon
+              className={cn(
+                'size-3.5 shrink-0',
+                isPassed
+                  ? 'text-fin-gain'
+                  : isRunning
+                    ? 'text-blue-600 dark:text-blue-400'
+                    : iconColor,
+              )}
+            />
           )}
-        >
-          {step.verb}
-        </span>
-      </button>
+          <span
+            className={cn(
+              'min-w-0 flex-1 truncate',
+              isFailed && 'font-medium text-destructive',
+              isRunning && 'font-medium text-blue-700 dark:text-blue-300',
+            )}
+          >
+            {step.verb}
+          </span>
+        </button>
+        {canEdit && !editing ? (
+          <button
+            type="button"
+            onClick={openEditor}
+            title={t('edit_step')}
+            aria-label={t('edit_step')}
+            className="inline-flex size-6 shrink-0 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          >
+            <Pencil className="size-3" />
+          </button>
+        ) : null}
+      </div>
       {open ? (
-        <pre
-          className={cn(
-            'overflow-auto border-t px-3 py-2 font-mono text-[10px] leading-relaxed',
-            isFailed
-              ? 'border-destructive/30 bg-destructive/5'
-              : 'border-border/40 bg-muted/30',
-          )}
-        >
-          <code>{step.rawLine}</code>
-        </pre>
+        editing ? (
+          <div
+            className={cn(
+              'border-t px-2 py-2',
+              isFailed ? 'border-destructive/30 bg-destructive/5' : 'border-border/40 bg-muted/30',
+            )}
+          >
+            <textarea
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              rows={Math.max(2, draft.split('\n').length)}
+              autoFocus
+              disabled={saving}
+              className="w-full resize-y rounded border border-border bg-background px-2 py-1.5 font-mono text-[11px] leading-relaxed focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+              spellCheck={false}
+            />
+            <div className="mt-2 flex items-center justify-end gap-1.5">
+              <button
+                type="button"
+                onClick={cancelEdit}
+                disabled={saving}
+                className="inline-flex items-center gap-1 rounded border border-border bg-background px-2 py-1 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-40"
+              >
+                <X className="size-3" />
+                {t('edit_cancel')}
+              </button>
+              <button
+                type="button"
+                onClick={saveEdit}
+                disabled={saving || draft.trim().length === 0}
+                className="inline-flex items-center gap-1 rounded bg-primary px-2 py-1 text-[11px] font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-40"
+              >
+                {saving ? (
+                  <Loader2 className="size-3 animate-spin" />
+                ) : (
+                  <CircleCheck className="size-3" />
+                )}
+                {t('edit_save')}
+              </button>
+            </div>
+          </div>
+        ) : (
+          <pre
+            className={cn(
+              'overflow-auto border-t px-3 py-2 font-mono text-[10px] leading-relaxed',
+              isFailed
+                ? 'border-destructive/30 bg-destructive/5'
+                : 'border-border/40 bg-muted/30',
+            )}
+          >
+            <code>{step.rawLine}</code>
+          </pre>
+        )
       ) : null}
     </li>
   )
