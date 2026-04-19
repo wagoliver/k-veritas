@@ -232,12 +232,32 @@ export class OpenAICompatibleClient implements AIClient {
   async ping(): Promise<{ ok: boolean; error?: string; latencyMs?: number }> {
     const start = Date.now()
     try {
-      const res = await fetch(`${this.base()}/v1/models`, {
+      // Pra OpenRouter, /v1/models é público (não valida API key). Usar
+      // /v1/auth/key que exige auth e dá retorno real.
+      const path = this.base().includes('openrouter.ai')
+        ? '/v1/auth/key'
+        : '/v1/models'
+
+      const res = await fetch(`${this.base()}${path}`, {
         headers: this.headers(),
         signal: AbortSignal.timeout(5_000),
       })
       if (!res.ok) {
-        return { ok: false, error: `HTTP ${res.status} ${res.statusText}` }
+        let detail = `HTTP ${res.status} ${res.statusText}`
+        const raw = await res.text().catch(() => '')
+        try {
+          const parsed = JSON.parse(raw) as {
+            error?: { message?: string } | string
+          }
+          const msg =
+            typeof parsed?.error === 'string'
+              ? parsed.error
+              : parsed?.error?.message
+          if (msg) detail = `${res.status}: ${msg}`
+        } catch {
+          // raw não é JSON
+        }
+        return { ok: false, error: detail }
       }
       return { ok: true, latencyMs: Date.now() - start }
     } catch (err) {
