@@ -263,7 +263,27 @@
         "scenarios": "Cenários",
         "analysis": "Análise IA",
         "tests": "Testes",
-        "test_scenarios": "Cenários de Teste"
+        "test_scenarios": "Cenários de Teste",
+        "execution": "Execução"
+      },
+      "execution": {
+        "empty": "Nenhum cenário com teste gerado ainda. Volte em \"Cenários de Teste\" e gere pelo menos um teste pra poder executar.",
+        "summary": "{total} cenários executáveis",
+        "passed_count": "{count} cenários passaram",
+        "failed_count": "{count} cenários falharam",
+        "legend_passed": "Passou",
+        "legend_failed": "Falhou",
+        "legend_never_run": "Nunca executou",
+        "run": "Rodar",
+        "running": "Executando · {seconds}s",
+        "never_run": "Ainda não executado",
+        "enqueued": "Execução enfileirada. O runner pega em instantes.",
+        "errors": {
+          "rate_limited": "Aguarde antes de disparar outra execução.",
+          "no_generated_test": "Gere o teste deste cenário antes de rodar.",
+          "generic": "Não foi possível enfileirar a execução.",
+          "network": "Falha de conexão."
+        }
       },
       "tests": {
         "heading": "Gerar testes Playwright",

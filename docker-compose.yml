@@ -123,6 +123,27 @@ services:
     networks:
       - kv-net
 
+  runner:
+    build:
+      context: ./runner
+      dockerfile: Dockerfile
+    container_name: kveritas-runner
+    restart: unless-stopped
+    env_file:
+      - ./app/.env.local
+    environment:
+      DATABASE_URL: postgres://kveritas:kveritas@postgres:5432/kveritas
+      DATA_DIR: /data
+      WORK_DIR: /work
+      NODE_ENV: production
+    volumes:
+      - artifacts:/data
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    networks:
+      - kv-net
+
   ollama:
     image: ollama/ollama:latest
     container_name: kveritas-ollama

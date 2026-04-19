@@ -584,11 +584,84 @@ export const featureTestFiles = pgTable(
 export type Project = typeof projects.$inferSelect
 export type NewProject = typeof projects.$inferInsert
 export type ProjectScenario = typeof projectScenarios.$inferSelect
+export const testExecRuns = pgTable(
+  'test_exec_runs',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    projectId: uuid('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    scope: text('scope').notNull(),
+    scopeId: uuid('scope_id'),
+    status: text('status').notNull().default('pending'),
+    requestedBy: uuid('requested_by')
+      .notNull()
+      .references(() => users.id),
+    lockedBy: text('locked_by'),
+    lockedAt: timestamp('locked_at', { withTimezone: true }),
+    startedAt: timestamp('started_at', { withTimezone: true }),
+    finishedAt: timestamp('finished_at', { withTimezone: true }),
+    error: text('error'),
+    scenariosCount: integer('scenarios_count').notNull().default(0),
+    passedCount: integer('passed_count').notNull().default(0),
+    failedCount: integer('failed_count').notNull().default(0),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    projectIdx: index('test_exec_runs_project_idx').on(
+      t.projectId,
+      t.createdAt,
+    ),
+  }),
+)
+
+export const testExecResults = pgTable(
+  'test_exec_results',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    runId: uuid('run_id')
+      .notNull()
+      .references(() => testExecRuns.id, { onDelete: 'cascade' }),
+    projectId: uuid('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    scenarioId: uuid('scenario_id').references(() => analysisScenarios.id, {
+      onDelete: 'set null',
+    }),
+    scenarioIdSnapshot: uuid('scenario_id_snapshot').notNull(),
+    titleSnapshot: text('title_snapshot').notNull(),
+    status: text('status').notNull(),
+    durationMs: integer('duration_ms'),
+    errorMessage: text('error_message'),
+    errorStack: text('error_stack'),
+    tracePath: text('trace_path'),
+    screenshotPath: text('screenshot_path'),
+    stdout: text('stdout'),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    runIdx: index('test_exec_results_run_idx').on(t.runId),
+    scenarioIdx: index('test_exec_results_scenario_idx').on(
+      t.projectId,
+      t.scenarioIdSnapshot,
+      t.createdAt,
+    ),
+  }),
+)
+
 export type ProjectTestRun = typeof projectTestRuns.$inferSelect
 export type GeneratedTest = typeof generatedTests.$inferSelect
 export type ScenarioTest = typeof scenarioTests.$inferSelect
 export type FeatureTestFile = typeof featureTestFiles.$inferSelect
+export type TestExecRun = typeof testExecRuns.$inferSelect
+export type TestExecResult = typeof testExecResults.$inferSelect
 export type TestRunStatus = 'pending' | 'running' | 'completed' | 'failed'
+export type TestResultStatus = 'passed' | 'failed' | 'skipped' | 'timedout'
+export type TestExecScope = 'scenario' | 'feature' | 'project'
 export type CrawlJob = typeof crawlJobs.$inferSelect
 export type CrawlPage = typeof crawlPages.$inferSelect
 export type CrawlElement = typeof crawlElements.$inferSelect

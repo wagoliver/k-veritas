@@ -3,6 +3,7 @@
 import {
   FileCode2,
   Map,
+  Play,
   RotateCw,
   ScrollText,
   Loader2,
@@ -18,6 +19,7 @@ import { cn } from '@/lib/utils'
 import { useRouter } from '@/lib/i18n/navigation'
 import { AnalysisEditor } from './analysis-editor'
 import { ProjectAnalysis } from './project-analysis'
+import { ProjectExecution } from './project-execution'
 import { ScenariosEditor } from './scenarios-editor'
 import { SiteMapList } from './site-map-list'
 
@@ -30,7 +32,12 @@ interface ProjectOverviewProps {
   }
 }
 
-type Tab = 'map' | 'scenarios' | 'analysis' | 'test-scenarios'
+type Tab =
+  | 'map'
+  | 'scenarios'
+  | 'analysis'
+  | 'test-scenarios'
+  | 'execution'
 
 export function ProjectOverview({ project }: ProjectOverviewProps) {
   const t = useTranslations('projects.overview')
@@ -111,6 +118,12 @@ export function ProjectOverview({ project }: ProjectOverviewProps) {
           icon={<FileCode2 className="size-4" />}
           label={t('tabs.test_scenarios')}
         />
+        <TabBtn
+          active={tab === 'execution'}
+          onClick={() => setTab('execution')}
+          icon={<Play className="size-4" />}
+          label={t('tabs.execution')}
+        />
         <div className="ml-auto flex items-center gap-2 pb-2">
           <Button
             variant="outline"
@@ -148,6 +161,10 @@ export function ProjectOverview({ project }: ProjectOverviewProps) {
         className={cn(tab === 'test-scenarios' ? 'block' : 'hidden')}
       >
         <AnalysisEditor projectId={project.id} mode="reviewed" />
+      </section>
+
+      <section className={cn(tab === 'execution' ? 'block' : 'hidden')}>
+        <ProjectExecution projectId={project.id} />
       </section>
     </div>
   )

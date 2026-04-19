@@ -113,4 +113,9 @@ export const BUCKETS = {
     capacity: 30,
     refillPerSecond: 30 / 3600,
   }),
+  testExecProject: (projectId: string): BucketSpec => ({
+    key: `test-exec:${projectId}`,
+    capacity: 60,
+    refillPerSecond: 60 / 3600,
+  }),
 }

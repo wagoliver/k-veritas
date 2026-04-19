@@ -263,7 +263,27 @@
         "scenarios": "Scenarios",
         "analysis": "AI Analysis",
         "tests": "Tests",
-        "test_scenarios": "Test Scenarios"
+        "test_scenarios": "Test Scenarios",
+        "execution": "Execution"
+      },
+      "execution": {
+        "empty": "No scenarios with a generated test yet. Go back to \"Test Scenarios\" and generate at least one test to run here.",
+        "summary": "{total} executable scenarios",
+        "passed_count": "{count} scenarios passed",
+        "failed_count": "{count} scenarios failed",
+        "legend_passed": "Passed",
+        "legend_failed": "Failed",
+        "legend_never_run": "Never ran",
+        "run": "Run",
+        "running": "Running · {seconds}s",
+        "never_run": "Never executed",
+        "enqueued": "Execution queued. Runner will pick it up shortly.",
+        "errors": {
+          "rate_limited": "Wait before queuing another run.",
+          "no_generated_test": "Generate this scenario's test before running.",
+          "generic": "Couldn't queue the execution.",
+          "network": "Connection failed."
+        }
       },
       "tests": {
         "heading": "Generate Playwright tests",
