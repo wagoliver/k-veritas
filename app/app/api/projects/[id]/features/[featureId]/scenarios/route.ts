@@ -7,6 +7,7 @@ import { getServerSession } from '@/lib/auth/session'
 import { Problems } from '@/lib/auth/errors'
 import { authorizeProject } from '@/lib/auth/project-access'
 import { createScenarioSchema } from '@/lib/validators/analysis-edit'
+import { recomputeFeatureReviewed } from '@/lib/ai/feature-review'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -68,6 +69,10 @@ export async function POST(
       source: 'manual',
     })
     .returning()
+
+  // Novo scenario é unreviewed por default → feature deixa de ser "totalmente
+  // revisada" se era. Recomputa.
+  await recomputeFeatureReviewed(featureId, session.user.id)
 
   return NextResponse.json({ scenario: created }, { status: 201 })
 }

@@ -19,6 +19,7 @@ import {
 import { AnalysisSchema, type Analysis } from './schemas'
 import { buildClient } from './client-factory'
 import { resolveAiConfig } from './config'
+import { recomputeFeatureReviewed } from './feature-review'
 import { AIProviderError } from './types'
 import { sanitizeJsonResponse } from './json-sanitize'
 
@@ -437,6 +438,14 @@ async function populateEditableWorkingCopy(
       await tx
         .delete(analysisFeatures)
         .where(eq(analysisFeatures.id, f.id))
+    }
+
+    // Cascade: após recriar/mesclar scenarios, recomputa o estado
+    // "reviewed" das features que permaneceram. Usuário que disparou a
+    // análise não é um "revisor" semântico, então passamos null — feature
+    // auto-reviewed vira userId=null até um humano tocar os scenarios.
+    for (const fid of keepFeatureIds) {
+      await recomputeFeatureReviewed(fid, null, tx)
     }
   })
 }

@@ -8,6 +8,7 @@ import { Problems } from '@/lib/auth/errors'
 import { authorizeProject } from '@/lib/auth/project-access'
 import { updateScenarioSchema } from '@/lib/validators/analysis-edit'
 import { recordReviewEvent } from '@/lib/db/clickhouse'
+import { recomputeFeatureReviewed } from '@/lib/ai/feature-review'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -68,6 +69,19 @@ export async function PATCH(
     updates.featureId = parsed.data.moveToFeatureId
   }
 
+  // Captura featureId de origem ANTES do update — se for move, precisamos
+  // recomputar o estado "reviewed" da feature origem também.
+  const [beforeUpdate] = await db
+    .select({ featureId: analysisScenarios.featureId })
+    .from(analysisScenarios)
+    .where(
+      and(
+        eq(analysisScenarios.id, scenarioId),
+        eq(analysisScenarios.projectId, project.id),
+      ),
+    )
+    .limit(1)
+
   const result = await db
     .update(analysisScenarios)
     .set(updates)
@@ -91,6 +105,15 @@ export async function PATCH(
       user_display: session.user.displayName ?? session.user.email,
       title_snapshot: result[0].title,
     })
+  }
+
+  // Cascade: recomputa feature.reviewed baseado no estado agregado dos
+  // scenarios. Feature só é revisada se TODOS seus scenarios são revisados.
+  const featuresToRecompute = new Set<string>()
+  if (beforeUpdate?.featureId) featuresToRecompute.add(beforeUpdate.featureId)
+  if (result[0]?.featureId) featuresToRecompute.add(result[0].featureId)
+  for (const fid of featuresToRecompute) {
+    await recomputeFeatureReviewed(fid, session.user.id)
   }
 
   return NextResponse.json({ scenario: result[0] })
@@ -118,8 +141,18 @@ export async function DELETE(
         eq(analysisScenarios.projectId, project.id),
       ),
     )
-    .returning({ id: analysisScenarios.id })
+    .returning({
+      id: analysisScenarios.id,
+      featureId: analysisScenarios.featureId,
+    })
 
   if (deleted.length === 0) return Problems.forbidden()
+
+  // Cascade: feature pode ter virado "totalmente revisada" se o scenario
+  // deletado era o único não revisado restante.
+  if (deleted[0]?.featureId) {
+    await recomputeFeatureReviewed(deleted[0].featureId, session.user.id)
+  }
+
   return new NextResponse(null, { status: 204 })
 }
