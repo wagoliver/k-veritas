@@ -2,6 +2,7 @@ import 'server-only'
 
 import type {
   AIClient,
+  AIGenerateOptions,
   AIGenerateRequest,
   AIGenerateResponse,
   AIProviderConfig,
@@ -21,6 +22,15 @@ interface ChatCompletionResponse {
   error?: { message?: string }
 }
 
+interface ChatCompletionChunk {
+  choices?: Array<{
+    delta?: { content?: string }
+    finish_reason?: string | null
+  }>
+  usage?: { prompt_tokens?: number; completion_tokens?: number }
+  error?: { message?: string }
+}
+
 interface ModelListResponse {
   data?: Array<{ id: string }>
 }
@@ -35,13 +45,24 @@ export class OpenAICompatibleClient implements AIClient {
   private headers(): HeadersInit {
     const h: Record<string, string> = { 'Content-Type': 'application/json' }
     if (this.config.apiKey) h.Authorization = `Bearer ${this.config.apiKey}`
+    // OpenRouter recomenda HTTP-Referer + X-Title pra rate limit melhor,
+    // atribuição no dashboard e ranking no leaderboard. Outros providers
+    // ignoram esses headers silenciosamente.
+    if (this.base().includes('openrouter.ai')) {
+      h['HTTP-Referer'] = process.env.APP_URL ?? 'http://localhost:3000'
+      h['X-Title'] = 'k-veritas'
+    }
     return h
   }
 
-  async generate(req: AIGenerateRequest): Promise<AIGenerateResponse> {
+  async generate(
+    req: AIGenerateRequest,
+    opts: AIGenerateOptions = {},
+  ): Promise<AIGenerateResponse> {
     const controller = new AbortController()
     const timer = setTimeout(() => controller.abort(), this.config.timeoutMs)
     const start = Date.now()
+    const streaming = Boolean(opts.onProgress)
 
     try {
       const body: Record<string, unknown> = {
@@ -51,7 +72,11 @@ export class OpenAICompatibleClient implements AIClient {
           { role: 'system', content: req.system },
           { role: 'user', content: req.prompt },
         ],
-        stream: false,
+        stream: streaming,
+      }
+      if (streaming) {
+        // OpenRouter/OpenAI retornam usage no último chunk se pedirmos
+        body.stream_options = { include_usage: true }
       }
       if (req.format === 'json') {
         body.response_format = { type: 'json_object' }
@@ -66,29 +91,114 @@ export class OpenAICompatibleClient implements AIClient {
 
       if (!res.ok) {
         const raw = await res.text().catch(() => '')
+        let detail = raw.slice(0, 500)
+        try {
+          const parsed = JSON.parse(raw) as { error?: { message?: string } }
+          if (parsed?.error?.message) detail = parsed.error.message
+        } catch {
+          // não era JSON
+        }
         throw new AIProviderError(
-          `OpenAI-compat ${res.status} ${res.statusText}`,
+          `OpenAI-compat ${res.status} ${res.statusText}: ${detail}`,
           res.status,
           raw,
         )
       }
 
-      const data = (await res.json()) as ChatCompletionResponse
-      const text = data.choices?.[0]?.message?.content ?? ''
-      if (!text || typeof text !== 'string') {
-        throw new AIProviderError(
-          data.error?.message ?? 'Provider retornou resposta vazia',
-        )
+      if (!streaming) {
+        const data = (await res.json()) as ChatCompletionResponse
+        const text = data.choices?.[0]?.message?.content ?? ''
+        if (!text || typeof text !== 'string') {
+          throw new AIProviderError(
+            data.error?.message ?? 'Provider retornou resposta vazia',
+          )
+        }
+        return {
+          text,
+          tokensIn: data.usage?.prompt_tokens,
+          tokensOut: data.usage?.completion_tokens,
+          totalDurationMs: Date.now() - start,
+        }
       }
 
-      return {
-        text,
-        tokensIn: data.usage?.prompt_tokens,
-        tokensOut: data.usage?.completion_tokens,
-        totalDurationMs: Date.now() - start,
-      }
+      return await this.readSseStream(res, start, opts.onProgress!)
     } finally {
       clearTimeout(timer)
+    }
+  }
+
+  private async readSseStream(
+    res: Response,
+    startMs: number,
+    onProgress: NonNullable<AIGenerateOptions['onProgress']>,
+  ): Promise<AIGenerateResponse> {
+    if (!res.body) throw new AIProviderError('Stream sem body')
+
+    const reader = res.body.getReader()
+    const decoder = new TextDecoder()
+    let buffer = ''
+    let text = ''
+    let tokensOut = 0
+    let tokensIn: number | undefined
+    let finalError: string | undefined
+
+    try {
+      while (true) {
+        const { value, done } = await reader.read()
+        if (done) break
+        buffer += decoder.decode(value, { stream: true })
+
+        // SSE: mensagens separadas por blank line; cada linha começa com "data: "
+        let sepIdx: number
+        while ((sepIdx = buffer.indexOf('\n')) >= 0) {
+          const line = buffer.slice(0, sepIdx).trim()
+          buffer = buffer.slice(sepIdx + 1)
+          if (!line) continue
+          if (!line.startsWith('data:')) continue
+
+          const payload = line.slice(5).trim()
+          if (payload === '[DONE]') {
+            onProgress({ tokensOut, done: true })
+            continue
+          }
+
+          let chunk: ChatCompletionChunk
+          try {
+            chunk = JSON.parse(payload) as ChatCompletionChunk
+          } catch {
+            continue
+          }
+
+          if (chunk.error?.message) finalError = chunk.error.message
+          const delta = chunk.choices?.[0]?.delta?.content
+          if (typeof delta === 'string' && delta.length > 0) {
+            text += delta
+            // Tokens aproximados por # de deltas até a última chunk trazer usage
+            tokensOut += 1
+            onProgress({ tokensOut, done: false })
+          }
+          if (chunk.usage) {
+            if (typeof chunk.usage.prompt_tokens === 'number') {
+              tokensIn = chunk.usage.prompt_tokens
+            }
+            if (typeof chunk.usage.completion_tokens === 'number') {
+              tokensOut = chunk.usage.completion_tokens
+            }
+          }
+        }
+      }
+    } finally {
+      reader.releaseLock()
+    }
+
+    if (finalError) throw new AIProviderError(finalError)
+    if (!text) throw new AIProviderError('Stream retornou vazio')
+
+    return {
+      text,
+      tokensIn,
+      tokensOut,
+      totalDurationMs: Date.now() - startMs,
     }
   }
 
