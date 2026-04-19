@@ -10,6 +10,11 @@ export function buildClient(config: AIProviderConfig): AIClient {
     case 'ollama':
       return new OllamaClient(config)
     case 'openai-compatible':
+    case 'anthropic':
+      // Anthropic usa o mesmo client OpenAI-compatible: /v1/chat/completions.
+      // Headers específicos (x-api-key, anthropic-version) + supressão de
+      // response_format são detectados automaticamente quando a base URL
+      // aponta pra api.anthropic.com.
       return new OpenAICompatibleClient(config)
     default: {
       const never: never = config.provider

@@ -388,4 +388,4 @@ export type NewOrgAiConfig = typeof orgAiConfig.$inferInsert
 export type ProjectStatus = 'draft' | 'crawling' | 'ready' | 'failed'
 export type AuthKind = 'none' | 'form'
 export type AnalysisStatus = 'pending' | 'running' | 'completed' | 'failed'
-export type AIProvider = 'ollama' | 'openai-compatible'
+export type AIProvider = 'ollama' | 'openai-compatible' | 'anthropic'

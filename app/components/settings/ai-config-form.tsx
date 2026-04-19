@@ -33,7 +33,7 @@ import { cn } from '@/lib/utils'
 import type { AIProvider } from '@/lib/db/schema'
 
 const schema = z.object({
-  provider: z.enum(['ollama', 'openai-compatible']),
+  provider: z.enum(['ollama', 'openai-compatible', 'anthropic']),
   baseUrl: z.string().trim().url(),
   model: z.string().trim().min(1).max(200),
   apiKey: z.string().max(500).optional().or(z.literal('')),
@@ -68,6 +68,10 @@ const PROVIDER_DEFAULTS: Record<AIProvider, Partial<InitialAiConfig>> = {
   'openai-compatible': {
     baseUrl: 'http://host.docker.internal:1234',
     model: '',
+  },
+  anthropic: {
+    baseUrl: 'https://api.anthropic.com',
+    model: 'claude-haiku-4-5-20251001',
   },
 }
 
@@ -246,6 +250,9 @@ export function AiConfigForm({ initial, canEdit }: AiConfigFormProps) {
                 <SelectContent>
                   <SelectItem value="ollama">
                     {t('providers.ollama')}
+                  </SelectItem>
+                  <SelectItem value="anthropic">
+                    {t('providers.anthropic')}
                   </SelectItem>
                   <SelectItem value="openai-compatible">
                     {t('providers.openai-compatible')}

@@ -1,6 +1,10 @@
 import { z } from 'zod'
 
-export const aiProviderSchema = z.enum(['ollama', 'openai-compatible'])
+export const aiProviderSchema = z.enum([
+  'ollama',
+  'openai-compatible',
+  'anthropic',
+])
 
 const baseUrlSchema = z
   .string()

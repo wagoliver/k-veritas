@@ -456,9 +456,10 @@
       "title": "IA",
       "subtitle": "Configure o provider de IA usado para gerar cenários e testes de todos os projetos desta organização.",
       "provider_label": "Provider",
-      "provider_hint": "Ollama usa a API nativa. LM Studio, llama.cpp, vLLM, OpenRouter e OpenAI usam a opção compatível com OpenAI.",
+      "provider_hint": "Ollama e Anthropic têm opção direta. LM Studio, llama.cpp, vLLM, OpenRouter e OpenAI usam a opção compatível com OpenAI.",
       "providers": {
         "ollama": "Ollama",
+        "anthropic": "Anthropic (Claude)",
         "openai-compatible": "Compatível com OpenAI"
       },
       "base_url_label": "URL base",

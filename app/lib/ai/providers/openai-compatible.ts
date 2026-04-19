@@ -93,7 +93,13 @@ export class OpenAICompatibleClient implements AIClient {
         body.stream_options = { include_usage: true }
       }
       if (req.format === 'json') {
-        body.response_format = { type: 'json_object' }
+        // Anthropic rejeita response_format.type='json_object' (só aceita
+        // 'json_schema'). O ANALYSIS_SYSTEM_PROMPT já explicita o schema e
+        // pede JSON puro; o sanitizeJsonResponse corta fences eventuais.
+        // Omitir response_format é mais simples e funciona.
+        if (!this.base().includes('anthropic.com')) {
+          body.response_format = { type: 'json_object' }
+        }
       }
 
       const res = await fetch(`${this.base()}/v1/chat/completions`, {
