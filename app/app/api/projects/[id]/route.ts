@@ -35,6 +35,7 @@ export async function GET(
     authKind: project.authKind,
     ingestionMode: project.ingestionMode,
     crawlMaxDepth: project.crawlMaxDepth,
+    targetLocale: project.targetLocale,
     status: project.status,
     createdAt: project.createdAt,
     updatedAt: project.updatedAt,
@@ -68,6 +69,8 @@ export async function PATCH(
     updates.description = parsed.data.description
   if (parsed.data.crawlMaxDepth !== undefined)
     updates.crawlMaxDepth = parsed.data.crawlMaxDepth
+  if (parsed.data.targetLocale !== undefined)
+    updates.targetLocale = parsed.data.targetLocale
 
   if (parsed.data.targetUrl !== undefined) {
     const check = validateTargetUrl(parsed.data.targetUrl)

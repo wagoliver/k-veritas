@@ -57,6 +57,7 @@ export default async function ProjectSettingsPage({
             description: project.description,
             authKind: project.authKind as 'none' | 'form',
             crawlMaxDepth: project.crawlMaxDepth,
+            targetLocale: project.targetLocale,
           }}
         />
       </div>

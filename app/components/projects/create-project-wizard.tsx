@@ -2,7 +2,7 @@
 
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Loader2 } from 'lucide-react'
-import { useTranslations } from 'next-intl'
+import { useLocale, useTranslations } from 'next-intl'
 import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { toast } from 'sonner'
@@ -20,9 +20,19 @@ import {
   FormMessage,
 } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { useRouter } from '@/lib/i18n/navigation'
 import { cn } from '@/lib/utils'
 import { PasswordInput } from '@/components/auth/password-input'
+
+const TARGET_LOCALES = ['pt-BR', 'en-US', 'es-ES', 'fr-FR', 'de-DE'] as const
+type TargetLocale = (typeof TARGET_LOCALES)[number]
 
 const schema = z
   .object({
@@ -47,6 +57,7 @@ const schema = z
       .or(z.literal('')),
     username: z.string().trim().optional().or(z.literal('')),
     password: z.string().optional().or(z.literal('')),
+    targetLocale: z.enum(TARGET_LOCALES),
   })
   .superRefine((v, ctx) => {
     if (v.requiresAuth) {
@@ -80,6 +91,13 @@ export function CreateProjectWizard() {
   const t = useTranslations('projects.wizard')
   const router = useRouter()
   const [submitting, setSubmitting] = useState(false)
+  const uiLocale = useLocale()
+
+  const defaultTargetLocale: TargetLocale = (TARGET_LOCALES as readonly string[]).includes(
+    uiLocale,
+  )
+    ? (uiLocale as TargetLocale)
+    : 'pt-BR'
 
   const form = useForm<Values>({
     resolver: zodResolver(schema),
@@ -90,6 +108,7 @@ export function CreateProjectWizard() {
       loginUrl: '',
       username: '',
       password: '',
+      targetLocale: defaultTargetLocale,
     },
   })
 
@@ -107,6 +126,7 @@ export function CreateProjectWizard() {
               password: values.password,
             }
           : undefined,
+        targetLocale: values.targetLocale,
         scenarios: [] as string[],
       }
 
@@ -196,6 +216,34 @@ export function CreateProjectWizard() {
                   />
                 </FormControl>
                 <FormDescription>{t('step1.url_hint')}</FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="targetLocale"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>{t('step1.target_locale_label')}</FormLabel>
+                <Select value={field.value} onValueChange={field.onChange}>
+                  <FormControl>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    {TARGET_LOCALES.map((loc) => (
+                      <SelectItem key={loc} value={loc}>
+                        {t(`step1.target_locale_options.${loc}`)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <FormDescription>
+                  {t('step1.target_locale_hint')}
+                </FormDescription>
                 <FormMessage />
               </FormItem>
             )}

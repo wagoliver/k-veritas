@@ -208,6 +208,7 @@ export const projects = pgTable(
     authCredentials: bytea('auth_credentials'),
     ingestionMode: text('ingestion_mode').notNull().default('sample'),
     crawlMaxDepth: integer('crawl_max_depth').notNull().default(3),
+    targetLocale: text('target_locale').notNull().default('pt-BR'),
     status: text('status').notNull().default('draft'),
     createdBy: uuid('created_by')
       .notNull()

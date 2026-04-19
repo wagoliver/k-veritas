@@ -109,6 +109,7 @@ export async function POST(req: NextRequest) {
         description: parsed.data.description,
         authKind: parsed.data.authKind,
         authCredentials,
+        targetLocale: parsed.data.targetLocale ?? session.user.locale,
         createdBy: session.user.id,
         status: 'draft',
       })

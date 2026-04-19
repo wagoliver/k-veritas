@@ -214,7 +214,16 @@
         "login_url_label": "Login page URL",
         "username_label": "Username / email",
         "password_label": "Password",
-        "credentials_note": "Credentials are encrypted with AES-256-GCM and used only by the crawler."
+        "credentials_note": "Credentials are encrypted with AES-256-GCM and used only by the crawler.",
+        "target_locale_label": "AI output language",
+        "target_locale_hint": "The AI will write the summary, features and scenarios in this language regardless of the app's URL structure.",
+        "target_locale_options": {
+          "pt-BR": "Portuguese (Brazil)",
+          "en-US": "English (US)",
+          "es-ES": "Spanish (Spain)",
+          "fr-FR": "French (France)",
+          "de-DE": "German"
+        }
       },
       "step2": {
         "description_label": "Description (optional)",
@@ -260,6 +269,8 @@
         "preconditions": "Preconditions",
         "data_needed": "Data needed",
         "reanalyze": "Re-analyze",
+        "cancel": "Cancel",
+        "cancelled": "Analysis cancelled.",
         "success": "Analysis completed.",
         "progress": {
           "pending": "Preparing context…",
@@ -406,6 +417,19 @@
           "5": "5 — complex (marketplaces)",
           "7": "7 — deep",
           "10": "10 — max"
+        }
+      },
+      "ai": {
+        "section_title": "AI settings",
+        "section_subtitle": "Controls the language the AI uses when generating features and scenarios.",
+        "target_locale_label": "AI output language",
+        "target_locale_hint": "The summary, features and scenarios will be written in this language regardless of the app's URL structure.",
+        "target_locale_options": {
+          "pt-BR": "Portuguese (Brazil)",
+          "en-US": "English (US)",
+          "es-ES": "Spanish (Spain)",
+          "fr-FR": "French (France)",
+          "de-DE": "German"
         }
       },
       "danger": {

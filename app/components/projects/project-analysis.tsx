@@ -6,6 +6,7 @@ import {
   ChevronRight,
   Loader2,
   Sparkles,
+  X,
   Zap,
 } from 'lucide-react'
 import { useEffect, useState, useTransition } from 'react'
@@ -89,6 +90,26 @@ export function ProjectAnalysis({ projectId }: { projectId: string }) {
     const intv = setInterval(() => setTick((x) => x + 1), 1000)
     return () => clearInterval(intv)
   }, [analysis?.status])
+
+  const cancel = async () => {
+    try {
+      const res = await fetch(
+        `/api/projects/${projectId}/ai/analyze/cancel`,
+        {
+          method: 'POST',
+          headers: { 'X-Requested-With': 'fetch' },
+        },
+      )
+      if (!res.ok) {
+        toast.error(t('errors.generic'))
+        return
+      }
+      toast.success(t('cancelled'))
+      await load()
+    } catch {
+      toast.error(t('errors.network'))
+    }
+  }
 
   const trigger = () => {
     startRun(async () => {
@@ -247,19 +268,32 @@ export function ProjectAnalysis({ projectId }: { projectId: string }) {
             )}
           </div>
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={trigger}
-          disabled={running || isInFlight}
-        >
-          {running ? (
-            <Loader2 className="size-4 animate-spin" />
-          ) : (
-            <Zap className="size-4" />
-          )}
-          {t('reanalyze')}
-        </Button>
+        <div className="flex items-center gap-2">
+          {isInFlight && liveElapsedSeconds > 20 ? (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={cancel}
+              className="border-destructive/40 text-destructive hover:bg-destructive/10"
+            >
+              <X className="size-4" />
+              {t('cancel')}
+            </Button>
+          ) : null}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={trigger}
+            disabled={running || isInFlight}
+          >
+            {running ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              <Zap className="size-4" />
+            )}
+            {t('reanalyze')}
+          </Button>
+        </div>
       </div>
 
       {analysis.status === 'failed' ? (

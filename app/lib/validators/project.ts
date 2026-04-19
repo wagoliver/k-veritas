@@ -8,6 +8,12 @@ export const authFormSchema = z.object({
   password: z.string().min(1).max(256),
 })
 
+const targetLocaleSchema = z
+  .string()
+  .trim()
+  .regex(/^[a-z]{2}(-[A-Z]{2})?$/, 'invalid_locale')
+  .max(10)
+
 export const createProjectSchema = z
   .object({
     name: z.string().trim().min(2).max(80),
@@ -15,6 +21,7 @@ export const createProjectSchema = z
     description: z.string().trim().max(4000).optional(),
     authKind: authKindSchema.default('none'),
     authForm: authFormSchema.optional(),
+    targetLocale: targetLocaleSchema.optional(),
     scenarios: z.array(z.string().trim().min(4).max(500)).max(50).default([]),
   })
   .superRefine((v, ctx) => {
@@ -34,6 +41,7 @@ export const updateProjectSchema = z.object({
   authKind: authKindSchema.optional(),
   authForm: authFormSchema.optional(),
   crawlMaxDepth: z.number().int().min(1).max(10).optional(),
+  targetLocale: targetLocaleSchema.optional(),
 })
 
 export const createScenarioSchema = z.object({

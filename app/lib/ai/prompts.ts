@@ -22,6 +22,7 @@ Um JSON único, válido, aderente ao schema descrito em "SCHEMA DE SAÍDA", cont
 
 2. inferredLocale
    Idioma em que a UI está escrita, derivado dos labels reais dos elementos. Formato BCP-47 (pt-BR, en-US, es-ES, etc.).
+   IMPORTANTE: se o payload trouxer <target_locale>, esse valor é o idioma obrigatório para TODA a saída (summary, feature names, descrições, títulos de cenários, rationales, preconditions, dataNeeded). Nesse caso, o valor de inferredLocale deve ser exatamente o targetLocale recebido. Os paths das rotas (em inglês ou outro idioma) NÃO alteram o idioma de saída.
 
 3. features[]
    Agrupamentos funcionais coerentes. Uma feature é uma capacidade de negócio (ex.: "Gestão de fornecedores", "Onboarding de cliente", "Relatórios de auditoria"). Cada feature contém:
@@ -48,7 +49,7 @@ DIRETRIZES DE QUALIDADE
 
 - SINAIS DE HTTP: rotas com 401/403 sugerem gated content; crie cenário negativo de acesso sem permissão. Rotas com 404/5xx devem virar cenário de tratamento de erro. Não assuma acesso público a partir de 200 apenas — leia os labels.
 
-- LINGUAGEM DA UI: detecte o idioma da interface e gere nomes de features, cenários, rationales, preconditions e dataNeeded NESSE idioma. Não misture.
+- LINGUAGEM DE SAÍDA: se <target_locale> foi fornecido, use-o literalmente — é uma instrução inviolável. Caso contrário, detecte pelos labels e use esse idioma. Em qualquer caso, não misture idiomas dentro da saída.
 
 - EVITE CENÁRIOS GENÉRICOS do tipo "Validar layout" ou "Verificar se a página carrega" — sejam específicos ao domínio.
 
@@ -149,6 +150,7 @@ interface BuildInputParams {
   name: string
   targetUrl: string
   description: string | null
+  targetLocale: string | null
   scenarios: string[]
   pages: PagePayload[]
 }
@@ -190,7 +192,13 @@ ${els}
     })
     .join('\n')
 
-  return `<project>
+  const targetLocaleBlock = input.targetLocale
+    ? `<target_locale>${escapeXml(input.targetLocale)}</target_locale>
+
+`
+    : ''
+
+  return `${targetLocaleBlock}<project>
   <name>${escapeXml(input.name)}</name>
   <targetUrl>${escapeXml(input.targetUrl)}</targetUrl>
   <description>${escapeXml(description)}</description>

@@ -232,6 +232,7 @@ async function buildProjectPayload(project: Project, crawlId: string) {
     name: project.name,
     targetUrl: project.targetUrl,
     description: project.description,
+    targetLocale: project.targetLocale,
     scenarios: scenarios.map((s) => s.description),
     pages: pages.map((p) => ({
       path: toPath(p.path),

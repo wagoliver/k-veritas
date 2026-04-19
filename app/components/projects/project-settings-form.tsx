@@ -37,11 +37,15 @@ import {
 import { Separator } from '@/components/ui/separator'
 import { useRouter } from '@/lib/i18n/navigation'
 
+const TARGET_LOCALES = ['pt-BR', 'en-US', 'es-ES', 'fr-FR', 'de-DE'] as const
+type TargetLocale = (typeof TARGET_LOCALES)[number]
+
 const schema = z.object({
   name: z.string().trim().min(2).max(80),
   targetUrl: z.string().trim().url(),
   description: z.string().trim().max(4000).optional().or(z.literal('')),
   crawlMaxDepth: z.coerce.number().int().min(1).max(10),
+  targetLocale: z.enum(TARGET_LOCALES),
 })
 
 type Values = z.infer<typeof schema>
@@ -54,6 +58,7 @@ interface ProjectSettingsFormProps {
     description: string | null
     authKind: 'none' | 'form'
     crawlMaxDepth: number
+    targetLocale: string
   }
 }
 
@@ -65,6 +70,12 @@ export function ProjectSettingsForm({ project }: ProjectSettingsFormProps) {
   const [deleteConfirm, setDeleteConfirm] = useState('')
   const [deleting, setDeleting] = useState(false)
 
+  const initialLocale: TargetLocale = (
+    TARGET_LOCALES as readonly string[]
+  ).includes(project.targetLocale)
+    ? (project.targetLocale as TargetLocale)
+    : 'pt-BR'
+
   const form = useForm<Values>({
     resolver: zodResolver(schema),
     defaultValues: {
@@ -72,6 +83,7 @@ export function ProjectSettingsForm({ project }: ProjectSettingsFormProps) {
       targetUrl: project.targetUrl,
       description: project.description ?? '',
       crawlMaxDepth: project.crawlMaxDepth ?? 3,
+      targetLocale: initialLocale,
     },
   })
 
@@ -89,6 +101,7 @@ export function ProjectSettingsForm({ project }: ProjectSettingsFormProps) {
           targetUrl: values.targetUrl,
           description: values.description || undefined,
           crawlMaxDepth: values.crawlMaxDepth,
+          targetLocale: values.targetLocale,
         }),
       })
       if (!res.ok) {
@@ -226,6 +239,47 @@ export function ProjectSettingsForm({ project }: ProjectSettingsFormProps) {
                   </Select>
                   <FormDescription>
                     {t('crawl.max_depth_hint')}
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </section>
+
+          <Separator />
+
+          <section className="space-y-4">
+            <div>
+              <h2 className="font-display text-base font-semibold">
+                {t('ai.section_title')}
+              </h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {t('ai.section_subtitle')}
+              </p>
+            </div>
+
+            <FormField
+              control={form.control}
+              name="targetLocale"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{t('ai.target_locale_label')}</FormLabel>
+                  <Select value={field.value} onValueChange={field.onChange}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {TARGET_LOCALES.map((loc) => (
+                        <SelectItem key={loc} value={loc}>
+                          {t(`ai.target_locale_options.${loc}`)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormDescription>
+                    {t('ai.target_locale_hint')}
                   </FormDescription>
                   <FormMessage />
                 </FormItem>

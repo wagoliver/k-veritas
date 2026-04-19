@@ -214,7 +214,16 @@
         "login_url_label": "URL da tela de login",
         "username_label": "Usuário / e-mail",
         "password_label": "Senha",
-        "credentials_note": "Credenciais são cifradas com AES-256-GCM e usadas apenas pelo crawler."
+        "credentials_note": "Credenciais são cifradas com AES-256-GCM e usadas apenas pelo crawler.",
+        "target_locale_label": "Idioma da análise IA",
+        "target_locale_hint": "A IA vai gerar o resumo, features e cenários neste idioma, independentemente das URLs da aplicação.",
+        "target_locale_options": {
+          "pt-BR": "Português (Brasil)",
+          "en-US": "Inglês (EUA)",
+          "es-ES": "Espanhol (Espanha)",
+          "fr-FR": "Francês (França)",
+          "de-DE": "Alemão"
+        }
       },
       "step2": {
         "description_label": "Descrição (opcional)",
@@ -260,6 +269,8 @@
         "preconditions": "Pré-condições",
         "data_needed": "Dados necessários",
         "reanalyze": "Reanalisar",
+        "cancel": "Cancelar",
+        "cancelled": "Análise cancelada.",
         "success": "Análise concluída.",
         "progress": {
           "pending": "Preparando contexto…",
@@ -406,6 +417,19 @@
           "5": "5 — complexa (marketplaces)",
           "7": "7 — profunda",
           "10": "10 — máxima"
+        }
+      },
+      "ai": {
+        "section_title": "Configurações de IA",
+        "section_subtitle": "Define o idioma em que a IA vai gerar features e cenários.",
+        "target_locale_label": "Idioma da análise IA",
+        "target_locale_hint": "O resumo, as features e os cenários serão escritos neste idioma, independentemente dos paths da aplicação.",
+        "target_locale_options": {
+          "pt-BR": "Português (Brasil)",
+          "en-US": "Inglês (EUA)",
+          "es-ES": "Espanhol (Espanha)",
+          "fr-FR": "Francês (França)",
+          "de-DE": "Alemão"
         }
       },
       "danger": {
