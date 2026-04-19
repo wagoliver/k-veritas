@@ -1,12 +1,18 @@
 import {
   claimNextJob,
+  deleteCrawl,
+  fetchCrawlForHistory,
+  findOldCompletedCrawls,
   markCompleted,
   markFailed,
   requeueStaleJobs,
   savePage,
   heartbeat,
+  type Project,
 } from './db.ts'
 import { collectDom } from './dom-collector.ts'
+import { recordCrawlHistory } from './clickhouse.ts'
+import { deleteCrawlArtifacts } from './artifact-cleanup.ts'
 
 const WORKER_ID = `crawler-${process.pid}-${Math.random().toString(36).slice(2, 8)}`
 const POLL_INTERVAL_MS = Number(process.env.CRAWLER_POLL_MS ?? 2000)
@@ -51,6 +57,7 @@ export async function runWorkerLoop(): Promise<void> {
         15_000,
       )
 
+      const startedAtMs = Date.now()
       try {
         const { pagesCount } = await collectDom(project, job.id, {
           onPage: async (page) => {
@@ -64,6 +71,15 @@ export async function runWorkerLoop(): Promise<void> {
         })
         await markCompleted(job.id, project.id, pagesCount)
         console.log(`[crawler] job ${job.id} completed (${pagesCount} pages)`)
+
+        // Pós-conclusão: histórico no CH + GC de crawls antigos.
+        // Erros aqui não invalidam o crawl recém-concluído.
+        await finalizeHistory(project, job.id, startedAtMs).catch((err) => {
+          console.error(
+            `[crawler] job ${job.id} history/cleanup failed:`,
+            err instanceof Error ? err.message : err,
+          )
+        })
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
         console.error(`[crawler] job ${job.id} failed:`, msg)
@@ -82,4 +98,54 @@ export async function runWorkerLoop(): Promise<void> {
 
 function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms))
+}
+
+/**
+ * Após um crawl concluir com sucesso:
+ *   1. Grava resumo + snapshot por página no ClickHouse (histórico)
+ *   2. Só depois de confirmar que o CH gravou, apaga os crawls completed
+ *      anteriores do Postgres e seus arquivos do volume.
+ *
+ * Se o CH falhar, nada é apagado — os crawls antigos ficam onde estão
+ * e uma próxima tentativa limpa (comportamento conservador).
+ */
+async function finalizeHistory(
+  project: Project,
+  crawlId: string,
+  startedAtMs: number,
+): Promise<void> {
+  const snapshot = await fetchCrawlForHistory(crawlId)
+
+  await recordCrawlHistory(
+    {
+      project_id: project.id,
+      crawl_id: crawlId,
+      pages_count: snapshot.pages.length,
+      elements_count: snapshot.totalElements,
+      duration_ms: Date.now() - startedAtMs,
+      status: 'completed',
+      trigger: 'manual',
+      requested_by: snapshot.requestedBy,
+    },
+    snapshot.pages.map((p) => ({
+      project_id: project.id,
+      crawl_id: crawlId,
+      page_path: p.page_path,
+      title: p.title,
+      status_code: p.status_code,
+      elements_count: p.elements_count,
+      elements_fingerprint: p.elements_fingerprint,
+    })),
+  )
+
+  const oldCrawlIds = await findOldCompletedCrawls(project.id, crawlId)
+  if (oldCrawlIds.length === 0) return
+
+  console.log(
+    `[crawler] GC: removing ${oldCrawlIds.length} old crawl(s) for project ${project.slug}`,
+  )
+  for (const oldId of oldCrawlIds) {
+    await deleteCrawlArtifacts(project.id, oldId)
+    await deleteCrawl(oldId)
+  }
 }

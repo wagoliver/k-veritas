@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { eq } from 'drizzle-orm'
 
 import { db } from '@/lib/db/pg'
+import { purgeProjectCrawlHistory } from '@/lib/db/clickhouse'
 import { projects } from '@/lib/db/schema'
 import { getServerSession } from '@/lib/auth/session'
 import { Problems } from '@/lib/auth/errors'
@@ -123,6 +124,9 @@ export async function DELETE(
   if (!project) return Problems.forbidden()
 
   await db.delete(projects).where(eq(projects.id, project.id))
+
+  // Limpa histórico temporal no ClickHouse (mutação assíncrona)
+  purgeProjectCrawlHistory(project.id)
 
   await audit({
     userId: session.user.id,

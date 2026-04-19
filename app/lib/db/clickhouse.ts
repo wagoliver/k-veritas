@@ -66,3 +66,30 @@ export function recordAuthEvent(event: AuthEvent): void {
       console.error('[clickhouse] recordAuthEvent failed', err)
     })
 }
+
+/**
+ * Mutação assíncrona no ClickHouse: apaga todo o histórico de crawls
+ * de um projeto. Fire-and-forget — a mutação é processada em background
+ * pelo CH. Se falhar, dados órfãos ficam até o TTL de 2 anos limpar.
+ */
+export function purgeProjectCrawlHistory(projectId: string): void {
+  const ch = getClient()
+  void Promise.all([
+    ch
+      .command({
+        query: `ALTER TABLE crawl_runs DELETE WHERE project_id = {pid:UUID}`,
+        query_params: { pid: projectId },
+      })
+      .catch((err) =>
+        console.error('[clickhouse] purge crawl_runs failed', err),
+      ),
+    ch
+      .command({
+        query: `ALTER TABLE crawl_page_history DELETE WHERE project_id = {pid:UUID}`,
+        query_params: { pid: projectId },
+      })
+      .catch((err) =>
+        console.error('[clickhouse] purge crawl_page_history failed', err),
+      ),
+  ])
+}

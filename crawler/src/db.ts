@@ -162,3 +162,109 @@ export async function savePage(
     }
   })
 }
+
+export interface CrawlHistorySnapshot {
+  requestedBy: string | null
+  pages: Array<{
+    page_path: string
+    title: string
+    status_code: number
+    elements_count: number
+    elements_fingerprint: string
+  }>
+  totalElements: number
+}
+
+/**
+ * Lê páginas + elementos do crawl e constrói um snapshot pro histórico.
+ * Calcula fingerprint por página (SHA-1 da lista ordenada de elementos).
+ */
+export async function fetchCrawlForHistory(
+  crawlId: string,
+): Promise<CrawlHistorySnapshot> {
+  const { createHash } = await import('node:crypto')
+
+  const jobRows = await sql<{ requested_by: string | null }[]>`
+    SELECT requested_by FROM crawl_jobs WHERE id = ${crawlId} LIMIT 1
+  `
+
+  const pages = await sql<
+    {
+      id: string
+      url: string
+      title: string | null
+      status_code: number | null
+    }[]
+  >`
+    SELECT id, url, title, status_code
+    FROM crawl_pages WHERE crawl_id = ${crawlId}
+    ORDER BY discovered_at
+  `
+
+  const snapshots: CrawlHistorySnapshot['pages'] = []
+  let totalElements = 0
+
+  for (const p of pages) {
+    const elements = await sql<
+      { kind: string; role: string | null; label: string | null }[]
+    >`
+      SELECT kind, role, label FROM crawl_elements WHERE page_id = ${p.id}
+      ORDER BY kind, role NULLS LAST, label NULLS LAST
+    `
+    totalElements += elements.length
+
+    const hash = createHash('sha1')
+    for (const e of elements) {
+      hash.update(`${e.kind}|${e.role ?? ''}|${e.label ?? ''}\n`)
+    }
+
+    snapshots.push({
+      page_path: toPath(p.url),
+      title: p.title ?? '',
+      status_code: p.status_code ?? 0,
+      elements_count: elements.length,
+      elements_fingerprint: hash.digest('hex'),
+    })
+  }
+
+  return {
+    requestedBy: jobRows[0]?.requested_by ?? null,
+    pages: snapshots,
+    totalElements,
+  }
+}
+
+function toPath(urlStr: string): string {
+  try {
+    const u = new URL(urlStr)
+    const p = u.pathname === '/' ? '/' : u.pathname.replace(/\/$/, '')
+    return p + u.search
+  } catch {
+    return urlStr
+  }
+}
+
+/**
+ * Retorna crawls completed antigos do projeto (exceto o crawl que acabou
+ * de ser concluído). Usado pra GC após gravar histórico no ClickHouse.
+ */
+export async function findOldCompletedCrawls(
+  projectId: string,
+  keepCrawlId: string,
+): Promise<string[]> {
+  const rows = await sql<{ id: string }[]>`
+    SELECT id FROM crawl_jobs
+    WHERE project_id = ${projectId}
+      AND status = 'completed'
+      AND id != ${keepCrawlId}
+  `
+  return rows.map((r) => r.id)
+}
+
+/**
+ * Apaga um crawl_job do Postgres. A CASCADE configurada via FK remove
+ * crawl_pages e crawl_elements automaticamente.
+ */
+export async function deleteCrawl(crawlId: string): Promise<void> {
+  await sql`DELETE FROM crawl_jobs WHERE id = ${crawlId}`
+}

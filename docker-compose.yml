@@ -109,6 +109,10 @@ services:
       - ./app/.env.local
     environment:
       DATABASE_URL: postgres://kveritas:kveritas@postgres:5432/kveritas
+      CLICKHOUSE_URL: http://clickhouse:8123
+      CLICKHOUSE_DB: kveritas
+      CLICKHOUSE_USER: kveritas
+      CLICKHOUSE_PASSWORD: kveritas
       DATA_DIR: /data
       NODE_ENV: production
     volumes:
