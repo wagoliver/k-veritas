@@ -646,7 +646,7 @@ function FeatureCard({
   return (
     <div
       className={cn(
-        'overflow-hidden rounded-lg border bg-card',
+        'overflow-hidden rounded-lg border bg-card shadow-sm transition-shadow hover:shadow-md',
         hasCandidate
           ? 'border-dashed border-blue-500/60 bg-blue-500/[0.03]'
           : feature.reviewedAt
@@ -767,8 +767,8 @@ function FeatureCard({
       </div>
 
       {open ? (
-        <div className="border-t border-border/40">
-          <ul className="divide-y divide-border/40">
+        <div className="border-t border-border/40 bg-muted/20 p-3">
+          <ul className="space-y-2">
             {feature.scenarios.map((s) => (
               <ScenarioRow
                 key={s.id}
@@ -781,7 +781,7 @@ function FeatureCard({
             ))}
           </ul>
           {mode === 'pending' ? (
-            <div className="p-3">
+            <div className="pt-2">
               <Button
                 type="button"
                 variant="ghost"
@@ -888,7 +888,7 @@ function ScenarioRow({
   return (
     <li
       className={cn(
-        'flex items-start gap-3 p-4 transition-colors hover:bg-accent/20',
+        'flex items-start gap-3 rounded-md border border-border/60 bg-card p-4 shadow-sm transition-shadow hover:shadow-md',
         scenario.reviewedAt && !isCandidate && 'bg-fin-gain/[0.03]',
         isCandidate &&
           'border-l-4 border-dashed border-blue-500/60 bg-blue-500/[0.04] opacity-70 hover:opacity-100',
