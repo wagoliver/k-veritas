@@ -231,6 +231,7 @@
         "create": "Criar projeto"
       },
       "success": "Projeto criado. Iniciando exploração...",
+      "next_step_hint": "Começamos a explorar sua aplicação. Os cenários de teste você adiciona depois, vendo o mapa do site.",
       "errors": {
         "generic": "Não foi possível criar o projeto.",
         "network": "Falha de conexão.",
@@ -263,6 +264,23 @@
         "empty_title": "Nenhuma página encontrada",
         "empty_description": "Verifique a URL informada e tente recrawlear.",
         "elements": "elementos"
+      },
+      "log": {
+        "status": {
+          "pending": "Na fila",
+          "running": "Explorando",
+          "completed": "Concluído",
+          "failed": "Falhou"
+        },
+        "pages_counter": "{count} página(s)",
+        "cursor": "executando...",
+        "events": {
+          "queued": "Crawl agendado, aguardando worker disponível",
+          "worker_ready": "Worker acordou, iniciando navegador",
+          "captured": "{url} capturada — {elements} elementos",
+          "completed": "Concluído: {count} páginas mapeadas",
+          "failed": "Falhou: {reason}"
+        }
       },
       "scenarios": {
         "placeholder": "Adicionar cenário",

@@ -1,10 +1,11 @@
 'use client'
 
-import { FileSearch, Globe, Loader2 } from 'lucide-react'
+import { FileSearch, Globe } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useTranslations } from 'next-intl'
 
 import { Skeleton } from '@/components/ui/skeleton'
+import { CrawlLogStream } from './crawl-log-stream'
 
 interface Page {
   id: string
@@ -46,12 +47,16 @@ export function SiteMapList({ projectId, status }: SiteMapListProps) {
 
   if (status === 'crawling') {
     return (
-      <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-border p-10 text-center">
-        <Loader2 className="size-6 animate-spin text-primary" />
-        <p className="text-sm font-medium">{t('crawling_title')}</p>
-        <p className="text-xs text-muted-foreground">
-          {t('crawling_description')}
-        </p>
+      <div className="space-y-4">
+        <div className="space-y-1">
+          <p className="font-display text-base font-semibold">
+            {t('crawling_title')}
+          </p>
+          <p className="text-xs text-muted-foreground">
+            {t('crawling_description')}
+          </p>
+        </div>
+        <CrawlLogStream projectId={projectId} onComplete={load} />
       </div>
     )
   }

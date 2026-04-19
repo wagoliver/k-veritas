@@ -15,7 +15,7 @@ export const createProjectSchema = z
     description: z.string().trim().max(4000).optional(),
     authKind: authKindSchema.default('none'),
     authForm: authFormSchema.optional(),
-    scenarios: z.array(z.string().trim().min(4).max(500)).min(1).max(50),
+    scenarios: z.array(z.string().trim().min(4).max(500)).max(50).default([]),
   })
   .superRefine((v, ctx) => {
     if (v.authKind === 'form' && !v.authForm) {

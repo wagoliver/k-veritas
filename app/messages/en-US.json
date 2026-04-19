@@ -231,6 +231,7 @@
         "create": "Create project"
       },
       "success": "Project created. Starting crawl...",
+      "next_step_hint": "We're crawling your app now. You'll add test scenarios next, after seeing the site map.",
       "errors": {
         "generic": "Couldn't create project.",
         "network": "Connection failed.",
@@ -263,6 +264,23 @@
         "empty_title": "No pages found",
         "empty_description": "Check the URL you provided and try re-crawling.",
         "elements": "elements"
+      },
+      "log": {
+        "status": {
+          "pending": "Queued",
+          "running": "Crawling",
+          "completed": "Completed",
+          "failed": "Failed"
+        },
+        "pages_counter": "{count} page(s)",
+        "cursor": "working...",
+        "events": {
+          "queued": "Crawl queued, waiting for worker",
+          "worker_ready": "Worker picked up, starting browser",
+          "captured": "{url} captured — {elements} elements",
+          "completed": "Completed: {count} pages mapped",
+          "failed": "Failed: {reason}"
+        }
       },
       "scenarios": {
         "placeholder": "Add scenario",

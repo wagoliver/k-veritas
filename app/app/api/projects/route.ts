@@ -115,13 +115,26 @@ export async function POST(req: NextRequest) {
       .returning()
     if (!project) throw new Error('insert_project_failed')
 
-    await tx.insert(projectScenarios).values(
-      parsed.data.scenarios.map((description, index) => ({
-        projectId: project.id,
-        description,
-        priority: index,
-      })),
-    )
+    if (parsed.data.scenarios.length > 0) {
+      await tx.insert(projectScenarios).values(
+        parsed.data.scenarios.map((description, index) => ({
+          projectId: project.id,
+          description,
+          priority: index,
+        })),
+      )
+    }
+
+    // Dispara o primeiro crawl imediatamente
+    await tx.insert(crawlJobs).values({
+      projectId: project.id,
+      requestedBy: session.user.id,
+      status: 'pending',
+    })
+    await tx
+      .update(projects)
+      .set({ status: 'crawling', updatedAt: new Date() })
+      .where(eq(projects.id, project.id))
 
     return project
   })
