@@ -1,7 +1,14 @@
 'use client'
 
 import { zodResolver } from '@hookform/resolvers/zod'
-import { AlertCircle, CheckCircle2, Loader2, PlugZap } from 'lucide-react'
+import {
+  AlertCircle,
+  CheckCircle2,
+  Cpu,
+  Loader2,
+  PlugZap,
+  Sparkles,
+} from 'lucide-react'
 import { useState, useTransition } from 'react'
 import { useForm } from 'react-hook-form'
 import { useTranslations } from 'next-intl'
@@ -65,6 +72,14 @@ interface AiConfigFormProps {
   canEdit: boolean
 }
 
+type AiTab = 'anthropic' | 'providers'
+
+interface TestResult {
+  ok: boolean
+  message: string
+  models: string[]
+}
+
 const PROVIDER_DEFAULTS: Record<AIProvider, Partial<InitialAiConfig>> = {
   ollama: {
     baseUrl: 'http://ollama:11434',
@@ -80,15 +95,20 @@ const PROVIDER_DEFAULTS: Record<AIProvider, Partial<InitialAiConfig>> = {
   },
 }
 
+const ANTHROPIC_BASE_URL = 'https://api.anthropic.com'
+
 export function AiConfigForm({ initial, canEdit }: AiConfigFormProps) {
   const t = useTranslations('settings.ai')
+  const [tab, setTab] = useState<AiTab>('anthropic')
   const [saving, startSaving] = useTransition()
-  const [testing, setTesting] = useState(false)
-  const [testResult, setTestResult] = useState<{
-    ok: boolean
-    message: string
-    models: string[]
-  } | null>(null)
+
+  const [testingAnthropic, setTestingAnthropic] = useState(false)
+  const [testingProvider, setTestingProvider] = useState(false)
+  const [anthropicResult, setAnthropicResult] = useState<TestResult | null>(
+    null,
+  )
+  const [providerResult, setProviderResult] = useState<TestResult | null>(null)
+
   const [hasSavedKey, setHasSavedKey] = useState(initial?.hasApiKey ?? false)
   const [hasSavedAnthropicKey, setHasSavedAnthropicKey] = useState(
     initial?.hasAnthropicKey ?? false,
@@ -118,6 +138,7 @@ export function AiConfigForm({ initial, canEdit }: AiConfigFormProps) {
   const clearApiKey = form.watch('clearApiKey')
   const clearAnthropicApiKey = form.watch('clearAnthropicApiKey')
   const providerIsAnthropic = provider === 'anthropic'
+  const anthropicFieldValue = form.watch('anthropicApiKey')
 
   const onProviderChange = (next: AIProvider) => {
     form.setValue('provider', next)
@@ -126,13 +147,84 @@ export function AiConfigForm({ initial, canEdit }: AiConfigFormProps) {
       if (defs.baseUrl) form.setValue('baseUrl', defs.baseUrl)
       if (defs.model !== undefined) form.setValue('model', defs.model)
     }
-    setTestResult(null)
+    setProviderResult(null)
   }
 
-  const testConnection = async () => {
+  // Testa a credencial Anthropic (dedicada ou fallback) contra
+  // api.anthropic.com — independente do provider principal escolhido.
+  const testAnthropic = async () => {
     const values = form.getValues()
-    setTesting(true)
-    setTestResult(null)
+    setTestingAnthropic(true)
+    setAnthropicResult(null)
+    try {
+      const res = await fetch('/api/orgs/current/ai-config/test', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Requested-With': 'fetch',
+        },
+        body: JSON.stringify({
+          provider: 'anthropic',
+          baseUrl: ANTHROPIC_BASE_URL,
+          apiKey: values.anthropicApiKey
+            ? values.anthropicApiKey
+            : undefined,
+          useSavedApiKey: Boolean(
+            !values.anthropicApiKey &&
+              !values.clearAnthropicApiKey &&
+              (hasSavedAnthropicKey ||
+                (providerIsAnthropic && hasSavedKey)),
+          ),
+        }),
+      })
+      if (!res.ok) {
+        setAnthropicResult({
+          ok: false,
+          message: `HTTP ${res.status}`,
+          models: [],
+        })
+        return
+      }
+      const data = (await res.json()) as {
+        ok: boolean
+        error?: string
+        latencyMs?: number
+        models?: string[]
+      }
+      if (!data.ok) {
+        setAnthropicResult({
+          ok: false,
+          message: t('test_fail', { error: data.error ?? 'unknown' }),
+          models: [],
+        })
+        return
+      }
+      setAnthropicResult({
+        ok: true,
+        message: t('test_ok', {
+          latency: data.latencyMs ?? 0,
+          count: data.models?.length ?? 0,
+        }),
+        models: data.models ?? [],
+      })
+    } catch (err) {
+      setAnthropicResult({
+        ok: false,
+        message: t('test_fail', {
+          error: err instanceof Error ? err.message : 'unknown',
+        }),
+        models: [],
+      })
+    } finally {
+      setTestingAnthropic(false)
+    }
+  }
+
+  // Testa o provider principal (Ollama/OpenAI-compat/Anthropic).
+  const testProvider = async () => {
+    const values = form.getValues()
+    setTestingProvider(true)
+    setProviderResult(null)
     try {
       const res = await fetch('/api/orgs/current/ai-config/test', {
         method: 'POST',
@@ -150,7 +242,7 @@ export function AiConfigForm({ initial, canEdit }: AiConfigFormProps) {
         }),
       })
       if (!res.ok) {
-        setTestResult({
+        setProviderResult({
           ok: false,
           message: `HTTP ${res.status}`,
           models: [],
@@ -164,14 +256,14 @@ export function AiConfigForm({ initial, canEdit }: AiConfigFormProps) {
         models?: string[]
       }
       if (!data.ok) {
-        setTestResult({
+        setProviderResult({
           ok: false,
           message: t('test_fail', { error: data.error ?? 'unknown' }),
           models: [],
         })
         return
       }
-      setTestResult({
+      setProviderResult({
         ok: true,
         message: t('test_ok', {
           latency: data.latencyMs ?? 0,
@@ -180,7 +272,7 @@ export function AiConfigForm({ initial, canEdit }: AiConfigFormProps) {
         models: data.models ?? [],
       })
     } catch (err) {
-      setTestResult({
+      setProviderResult({
         ok: false,
         message: t('test_fail', {
           error: err instanceof Error ? err.message : 'unknown',
@@ -188,7 +280,7 @@ export function AiConfigForm({ initial, canEdit }: AiConfigFormProps) {
         models: [],
       })
     } finally {
-      setTesting(false)
+      setTestingProvider(false)
     }
   }
 
@@ -248,222 +340,60 @@ export function AiConfigForm({ initial, canEdit }: AiConfigFormProps) {
     })
   }
 
+  const anthropicConfigured =
+    hasSavedAnthropicKey ||
+    (providerIsAnthropic && hasSavedKey) ||
+    Boolean(anthropicFieldValue)
+
   return (
     <Form {...form}>
       <form
         onSubmit={form.handleSubmit(onSubmit)}
-        className="space-y-8"
+        className="space-y-6"
         noValidate
       >
-        <FormField
-          control={form.control}
-          name="provider"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>{t('provider_label')}</FormLabel>
-              <Select
-                value={field.value}
-                onValueChange={(v) => onProviderChange(v as AIProvider)}
-                disabled={!canEdit}
-              >
-                <FormControl>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                </FormControl>
-                <SelectContent>
-                  <SelectItem value="ollama">
-                    {t('providers.ollama')}
-                  </SelectItem>
-                  <SelectItem value="anthropic">
-                    {t('providers.anthropic')}
-                  </SelectItem>
-                  <SelectItem value="openai-compatible">
-                    {t('providers.openai-compatible')}
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-              <FormDescription>{t('provider_hint')}</FormDescription>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-
-        <div className="grid gap-6 md:grid-cols-2">
-          <FormField
-            control={form.control}
-            name="baseUrl"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>{t('base_url_label')}</FormLabel>
-                <FormControl>
-                  <Input {...field} disabled={!canEdit} spellCheck={false} />
-                </FormControl>
-                <FormDescription>{t('base_url_hint')}</FormDescription>
-                <FormMessage />
-              </FormItem>
-            )}
+        <div className="flex items-center gap-1 rounded-lg border border-border bg-muted/40 p-1">
+          <TabBtn
+            active={tab === 'anthropic'}
+            onClick={() => setTab('anthropic')}
+            icon={<Sparkles className="size-4" />}
+            label={t('tabs.anthropic')}
+            badge={
+              anthropicConfigured
+                ? { tone: 'ok', text: t('tabs.anthropic_ok') }
+                : { tone: 'warn', text: t('tabs.anthropic_required') }
+            }
           />
-
-          <FormField
-            control={form.control}
-            name="model"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>{t('model_label')}</FormLabel>
-                <FormControl>
-                  <Input {...field} disabled={!canEdit} spellCheck={false} />
-                </FormControl>
-                <FormDescription>{t('model_hint')}</FormDescription>
-                <FormMessage />
-              </FormItem>
-            )}
+          <TabBtn
+            active={tab === 'providers'}
+            onClick={() => setTab('providers')}
+            icon={<Cpu className="size-4" />}
+            label={t('tabs.providers')}
+            badge={{ tone: 'neutral', text: t('tabs.providers_optional') }}
           />
         </div>
 
-        <div className="space-y-3">
-          <FormField
-            control={form.control}
-            name="apiKey"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>{t('api_key_label')}</FormLabel>
-                <FormControl>
-                  <PasswordInput
-                    {...field}
-                    autoComplete="off"
-                    disabled={!canEdit || Boolean(clearApiKey)}
-                    placeholder={hasSavedKey ? '••••••••' : ''}
-                  />
-                </FormControl>
-                <FormDescription>
-                  {hasSavedKey ? t('api_key_saved') : t('api_key_hint')}
-                </FormDescription>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-
-          {hasSavedKey ? (
-            <FormField
-              control={form.control}
-              name="clearApiKey"
-              render={({ field }) => (
-                <FormItem className="flex items-center gap-2">
-                  <FormControl>
-                    <Checkbox
-                      checked={field.value ?? false}
-                      onCheckedChange={(c) => field.onChange(Boolean(c))}
-                      disabled={!canEdit}
-                    />
-                  </FormControl>
-                  <FormLabel className="!mt-0 text-sm font-normal">
-                    {t('api_key_clear')}
-                  </FormLabel>
-                </FormItem>
-              )}
-            />
-          ) : null}
-        </div>
-
-        <div className="grid gap-6 md:grid-cols-3">
-          <FormField
-            control={form.control}
-            name="temperature"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>{t('temperature_label')}</FormLabel>
-                <FormControl>
-                  <Input
-                    type="number"
-                    step="0.05"
-                    min={0}
-                    max={2}
-                    disabled={!canEdit}
-                    {...field}
-                  />
-                </FormControl>
-                <FormDescription>{t('temperature_hint')}</FormDescription>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-
-          <FormField
-            control={form.control}
-            name="numCtx"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>{t('num_ctx_label')}</FormLabel>
-                <FormControl>
-                  <Input
-                    type="number"
-                    step="1024"
-                    min={512}
-                    max={131072}
-                    disabled={!canEdit || provider !== 'ollama'}
-                    {...field}
-                  />
-                </FormControl>
-                <FormDescription>{t('num_ctx_hint')}</FormDescription>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-
-          <FormField
-            control={form.control}
-            name="timeoutMs"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>{t('timeout_label')}</FormLabel>
-                <FormControl>
-                  <Input
-                    type="number"
-                    step="5000"
-                    min={5000}
-                    max={1800000}
-                    disabled={!canEdit}
-                    {...field}
-                  />
-                </FormControl>
-                <FormDescription>{t('timeout_hint')}</FormDescription>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-        </div>
-
-        <div className="flex flex-wrap items-center gap-3">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={testConnection}
-            disabled={testing}
-          >
-            {testing ? (
-              <Loader2 className="size-4 animate-spin" />
-            ) : (
-              <PlugZap className="size-4" />
-            )}
-            {testing ? t('testing') : t('test_button')}
-          </Button>
-
-          <Button type="submit" disabled={saving || !canEdit}>
-            {saving ? <Spinner /> : null}
-            {saving ? t('saving') : t('save')}
-          </Button>
-        </div>
-
-        <div className="mt-8 space-y-5 rounded-lg border border-border bg-muted/20 p-5">
+        {/* ──────────────────────────────────────────────────────────── */}
+        {/* Aba Anthropic (principal, obrigatória)                        */}
+        {/* ──────────────────────────────────────────────────────────── */}
+        <section className={cn('space-y-5', tab === 'anthropic' ? 'block' : 'hidden')}>
           <header className="space-y-1">
-            <h3 className="text-sm font-semibold">
+            <h3 className="font-display text-base font-semibold">
               {t('anthropic_section.title')}
             </h3>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-sm text-muted-foreground">
               {t('anthropic_section.subtitle')}
             </p>
           </header>
+
+          {!hasSavedAnthropicKey &&
+          !providerIsAnthropic &&
+          !anthropicFieldValue ? (
+            <div className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-700 dark:text-amber-300">
+              <AlertCircle className="size-4 shrink-0 translate-y-0.5" />
+              <p>{t('anthropic_section.required_warning')}</p>
+            </div>
+          ) : null}
 
           {providerIsAnthropic ? (
             <div className="rounded-md border border-primary/30 bg-primary/5 p-3 text-xs text-foreground">
@@ -476,9 +406,7 @@ export function AiConfigForm({ initial, canEdit }: AiConfigFormProps) {
             name="anthropicApiKey"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>
-                  {t('anthropic_section.api_key_label')}
-                </FormLabel>
+                <FormLabel>{t('anthropic_section.api_key_label')}</FormLabel>
                 <FormControl>
                   <PasswordInput
                     {...field}
@@ -529,9 +457,7 @@ export function AiConfigForm({ initial, canEdit }: AiConfigFormProps) {
             name="anthropicModel"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>
-                  {t('anthropic_section.model_label')}
-                </FormLabel>
+                <FormLabel>{t('anthropic_section.model_label')}</FormLabel>
                 <FormControl>
                   <Input
                     {...field}
@@ -547,55 +473,361 @@ export function AiConfigForm({ initial, canEdit }: AiConfigFormProps) {
               </FormItem>
             )}
           />
-        </div>
 
-        {testResult ? (
-          <div
-            role="status"
-            className={cn(
-              'flex items-start gap-2 rounded-md border p-3 text-sm',
-              testResult.ok
-                ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
-                : 'border-destructive/30 bg-destructive/10 text-destructive',
-            )}
-          >
-            {testResult.ok ? (
-              <CheckCircle2 className="size-4 shrink-0 translate-y-0.5" />
-            ) : (
-              <AlertCircle className="size-4 shrink-0 translate-y-0.5" />
-            )}
-            <div className="flex-1 space-y-2">
-              <p>{testResult.message}</p>
-              {testResult.ok && testResult.models.length > 0 ? (
-                <div>
-                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                    {t('available_models')}
-                  </p>
-                  <ul className="mt-2 flex flex-wrap gap-2">
-                    {testResult.models.map((m) => (
-                      <li key={m}>
-                        <button
-                          type="button"
-                          disabled={!canEdit}
-                          onClick={() => {
-                            form.setValue('model', m, { shouldDirty: true })
-                            toast.success(
-                              `${t('pick_model')}: ${m}`,
-                            )
-                          }}
-                          className="rounded-md border border-border bg-background px-2 py-1 font-mono text-xs text-foreground transition-colors hover:bg-accent disabled:opacity-50"
-                        >
-                          {m}
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ) : null}
-            </div>
+          <div>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={testAnthropic}
+              disabled={testingAnthropic}
+            >
+              {testingAnthropic ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <PlugZap className="size-4" />
+              )}
+              {testingAnthropic ? t('testing') : t('test_button')}
+            </Button>
           </div>
-        ) : null}
+
+          <TestResultPanel
+            result={anthropicResult}
+            t={t}
+            onPickModel={(m) =>
+              form.setValue('anthropicModel', m, { shouldDirty: true })
+            }
+            canEdit={canEdit}
+          />
+        </section>
+
+        {/* ──────────────────────────────────────────────────────────── */}
+        {/* Aba Providers (secundária, opcional)                          */}
+        {/* ──────────────────────────────────────────────────────────── */}
+        <section className={cn('space-y-5', tab === 'providers' ? 'block' : 'hidden')}>
+          <header className="space-y-1">
+            <h3 className="font-display text-base font-semibold">
+              {t('providers_section.title')}
+            </h3>
+            <p className="text-sm text-muted-foreground">
+              {t('providers_section.subtitle')}
+            </p>
+          </header>
+
+          <FormField
+            control={form.control}
+            name="provider"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>{t('provider_label')}</FormLabel>
+                <Select
+                  value={field.value}
+                  onValueChange={(v) => onProviderChange(v as AIProvider)}
+                  disabled={!canEdit}
+                >
+                  <FormControl>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    <SelectItem value="ollama">
+                      {t('providers.ollama')}
+                    </SelectItem>
+                    <SelectItem value="anthropic">
+                      {t('providers.anthropic')}
+                    </SelectItem>
+                    <SelectItem value="openai-compatible">
+                      {t('providers.openai-compatible')}
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+                <FormDescription>{t('provider_hint')}</FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <div className="grid gap-6 md:grid-cols-2">
+            <FormField
+              control={form.control}
+              name="baseUrl"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{t('base_url_label')}</FormLabel>
+                  <FormControl>
+                    <Input {...field} disabled={!canEdit} spellCheck={false} />
+                  </FormControl>
+                  <FormDescription>{t('base_url_hint')}</FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="model"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{t('model_label')}</FormLabel>
+                  <FormControl>
+                    <Input {...field} disabled={!canEdit} spellCheck={false} />
+                  </FormControl>
+                  <FormDescription>{t('model_hint')}</FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
+
+          <div className="space-y-3">
+            <FormField
+              control={form.control}
+              name="apiKey"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{t('api_key_label')}</FormLabel>
+                  <FormControl>
+                    <PasswordInput
+                      {...field}
+                      autoComplete="off"
+                      disabled={!canEdit || Boolean(clearApiKey)}
+                      placeholder={hasSavedKey ? '••••••••' : ''}
+                    />
+                  </FormControl>
+                  <FormDescription>
+                    {hasSavedKey ? t('api_key_saved') : t('api_key_hint')}
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            {hasSavedKey ? (
+              <FormField
+                control={form.control}
+                name="clearApiKey"
+                render={({ field }) => (
+                  <FormItem className="flex items-center gap-2">
+                    <FormControl>
+                      <Checkbox
+                        checked={field.value ?? false}
+                        onCheckedChange={(c) => field.onChange(Boolean(c))}
+                        disabled={!canEdit}
+                      />
+                    </FormControl>
+                    <FormLabel className="!mt-0 text-sm font-normal">
+                      {t('api_key_clear')}
+                    </FormLabel>
+                  </FormItem>
+                )}
+              />
+            ) : null}
+          </div>
+
+          <div className="grid gap-6 md:grid-cols-3">
+            <FormField
+              control={form.control}
+              name="temperature"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{t('temperature_label')}</FormLabel>
+                  <FormControl>
+                    <Input
+                      type="number"
+                      step="0.05"
+                      min={0}
+                      max={2}
+                      disabled={!canEdit}
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormDescription>{t('temperature_hint')}</FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="numCtx"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{t('num_ctx_label')}</FormLabel>
+                  <FormControl>
+                    <Input
+                      type="number"
+                      step="1024"
+                      min={512}
+                      max={131072}
+                      disabled={!canEdit || provider !== 'ollama'}
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormDescription>{t('num_ctx_hint')}</FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="timeoutMs"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{t('timeout_label')}</FormLabel>
+                  <FormControl>
+                    <Input
+                      type="number"
+                      step="5000"
+                      min={5000}
+                      max={1800000}
+                      disabled={!canEdit}
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormDescription>{t('timeout_hint')}</FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
+
+          <div>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={testProvider}
+              disabled={testingProvider}
+            >
+              {testingProvider ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <PlugZap className="size-4" />
+              )}
+              {testingProvider ? t('testing') : t('test_button')}
+            </Button>
+          </div>
+
+          <TestResultPanel
+            result={providerResult}
+            t={t}
+            onPickModel={(m) =>
+              form.setValue('model', m, { shouldDirty: true })
+            }
+            canEdit={canEdit}
+          />
+        </section>
+
+        {/* Ação global — salva as duas abas de uma vez */}
+        <div className="flex items-center gap-3 border-t border-border pt-5">
+          <Button type="submit" disabled={saving || !canEdit}>
+            {saving ? <Spinner /> : null}
+            {saving ? t('saving') : t('save')}
+          </Button>
+        </div>
       </form>
     </Form>
+  )
+}
+
+function TabBtn({
+  active,
+  onClick,
+  icon,
+  label,
+  badge,
+}: {
+  active: boolean
+  onClick: () => void
+  icon: React.ReactNode
+  label: string
+  badge?: { tone: 'ok' | 'warn' | 'neutral'; text: string }
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-selected={active}
+      role="tab"
+      className={cn(
+        'flex flex-1 items-center justify-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
+        active
+          ? 'bg-background text-foreground shadow-sm'
+          : 'text-muted-foreground hover:text-foreground',
+      )}
+    >
+      {icon}
+      <span>{label}</span>
+      {badge ? (
+        <span
+          className={cn(
+            'rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider',
+            badge.tone === 'ok' && 'bg-emerald-500/15 text-emerald-600',
+            badge.tone === 'warn' && 'bg-amber-500/15 text-amber-600',
+            badge.tone === 'neutral' && 'bg-muted text-muted-foreground',
+          )}
+        >
+          {badge.text}
+        </span>
+      ) : null}
+    </button>
+  )
+}
+
+function TestResultPanel({
+  result,
+  t,
+  onPickModel,
+  canEdit,
+}: {
+  result: TestResult | null
+  t: (key: string, values?: Record<string, string | number>) => string
+  onPickModel: (model: string) => void
+  canEdit: boolean
+}) {
+  if (!result) return null
+  return (
+    <div
+      role="status"
+      className={cn(
+        'flex items-start gap-2 rounded-md border p-3 text-sm',
+        result.ok
+          ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
+          : 'border-destructive/30 bg-destructive/10 text-destructive',
+      )}
+    >
+      {result.ok ? (
+        <CheckCircle2 className="size-4 shrink-0 translate-y-0.5" />
+      ) : (
+        <AlertCircle className="size-4 shrink-0 translate-y-0.5" />
+      )}
+      <div className="flex-1 space-y-2">
+        <p>{result.message}</p>
+        {result.ok && result.models.length > 0 ? (
+          <div>
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              {t('available_models')}
+            </p>
+            <ul className="mt-2 flex flex-wrap gap-2">
+              {result.models.map((m) => (
+                <li key={m}>
+                  <button
+                    type="button"
+                    disabled={!canEdit}
+                    onClick={() => {
+                      onPickModel(m)
+                      toast.success(`${t('pick_model')}: ${m}`)
+                    }}
+                    className="rounded-md border border-border bg-background px-2 py-1 font-mono text-xs text-foreground transition-colors hover:bg-accent disabled:opacity-50"
+                  >
+                    {m}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+      </div>
+    </div>
   )
 }

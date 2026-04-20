@@ -37,7 +37,18 @@ export async function POST(req: NextRequest) {
   let apiKey: string | undefined
   if (parsed.data.useSavedApiKey) {
     const row = await getOrgAiConfigRow(org.id)
-    if (row?.apiKeyEncrypted) apiKey = decryptApiKey(row.apiKeyEncrypted)
+    // Para testar Anthropic reutilizando a key salva, priorizamos a
+    // chave dedicada (anthropicApiKeyEncrypted) e caímos pra
+    // apiKeyEncrypted — a mesma regra do codex e do pre-check.
+    if (parsed.data.provider === 'anthropic') {
+      if (row?.anthropicApiKeyEncrypted) {
+        apiKey = decryptApiKey(row.anthropicApiKeyEncrypted)
+      } else if (row?.apiKeyEncrypted) {
+        apiKey = decryptApiKey(row.apiKeyEncrypted)
+      }
+    } else if (row?.apiKeyEncrypted) {
+      apiKey = decryptApiKey(row.apiKeyEncrypted)
+    }
   } else if (parsed.data.apiKey) {
     apiKey = parsed.data.apiKey
   }
