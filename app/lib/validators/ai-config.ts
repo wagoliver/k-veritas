@@ -31,6 +31,7 @@ export const aiConfigInputSchema = z.object({
   anthropicApiKey: z.string().trim().min(1).max(500).optional().or(z.literal('')),
   clearAnthropicApiKey: z.boolean().optional(),
   anthropicModel: z.string().trim().min(1).max(200).optional().or(z.literal('')),
+  anthropicAuthMode: z.enum(['api_key', 'oauth']).optional(),
 })
 
 export type AiConfigInput = z.infer<typeof aiConfigInputSchema>

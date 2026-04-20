@@ -96,10 +96,10 @@ async function processJob(
         'credencial Anthropic não configurada para a org (configure em /settings/ai, bloco Análise de código)',
       )
     }
-    const apiKey = decryptSecret(resolved.apiKeyEncrypted)
+    const credential = decryptSecret(resolved.credentialEncrypted)
     const model = resolved.model
     console.log(
-      `[codex] job=${jobId} credential source=${resolved.source} model=${model}`,
+      `[codex] job=${jobId} credential source=${resolved.source} authMode=${resolved.authMode} model=${model}`,
     )
 
     await updateProgress(jobId, { label: 'invocando Claude Code' })
@@ -113,7 +113,8 @@ async function processJob(
       },
       repoRoot: workspace.repoRoot,
       outputDir: workspace.outputDir,
-      apiKey,
+      credential,
+      authMode: resolved.authMode,
       model,
       maxBudgetUsd: MAX_BUDGET_USD,
       onEvent: async (evt) => {

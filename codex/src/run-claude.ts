@@ -7,7 +7,8 @@ export interface RunClaudeOptions {
   input: PromptInput
   repoRoot: string
   outputDir: string
-  apiKey: string
+  credential: string
+  authMode: 'api_key' | 'oauth'
   model: string
   maxBudgetUsd: number
   onEvent?: (evt: ClaudeStreamEvent) => void | Promise<void>
@@ -43,17 +44,23 @@ export interface RunClaudeResult {
 }
 
 /**
- * Invoca `claude -p` em modo headless com:
+ * Invoca `claude -p` em modo headless.
  *
- *   --bare                         → força ANTHROPIC_API_KEY, skip keychain/hooks
+ * Flags sempre presentes:
  *   --append-system-prompt <str>   → injeta k-veritas master + CLAUDE.md do repo
- *   --add-dir <outputDir>          → permite Claude escrever specs fora do cwd
- *   --permission-mode bypass...    → não prompta permissões (container trusted)
- *   --max-budget-usd <n>           → teto real de gasto por rodada
- *   --output-format stream-json    → stream parseável com events de tool-use
+ *   --add-dir <outputDir>          → permite escrever specs fora do cwd
+ *   --permission-mode bypass...    → não prompta permissões
+ *   --max-budget-usd <n>           → teto de gasto (só relevante em API key)
+ *   --output-format stream-json    → stream parseável de tool-use
  *
- * A auto-descoberta de CLAUDE.md é desativada pelo --bare; por isso a
- * leitura é explícita em buildSystemPrompt() e injetada via append.
+ * Dependente do authMode:
+ *   api_key → adiciona --bare (força ANTHROPIC_API_KEY, skip keychain)
+ *             env ANTHROPIC_API_KEY = token
+ *
+ *   oauth   → SEM --bare (permite OAuth via env var)
+ *             env CLAUDE_CODE_OAUTH_TOKEN = token (gerado por `claude setup-token`)
+ *             auto-discovery de CLAUDE.md volta a funcionar, então manter
+ *             o --append-system-prompt é redundante mas inofensivo.
  */
 export async function runClaude(
   opts: RunClaudeOptions,
@@ -61,10 +68,9 @@ export async function runClaude(
   const systemPrompt = await buildSystemPrompt(opts.repoRoot)
   const userPrompt = buildUserPrompt(opts.input)
 
-  const args = [
+  const args: string[] = [
     '-p',
     userPrompt,
-    '--bare',
     '--append-system-prompt',
     systemPrompt,
     '--add-dir',
@@ -80,13 +86,26 @@ export async function runClaude(
     opts.model,
   ]
 
+  if (opts.authMode === 'api_key') {
+    // --bare força o CLI a ler estritamente ANTHROPIC_API_KEY, sem
+    // tentar keychain/OAuth/hooks. Modo isolado puro.
+    args.push('--bare')
+  }
+
+  const envExtra: NodeJS.ProcessEnv = { DISABLE_TELEMETRY: '1' }
+  if (opts.authMode === 'oauth') {
+    envExtra.CLAUDE_CODE_OAUTH_TOKEN = opts.credential
+    // HOME é necessário pro CLI achar config dir em modo OAuth. Se não
+    // estiver setado no container, usa /tmp. Dentro do codex (user
+    // "node"), /home/node já existe.
+    envExtra.HOME = process.env.HOME || '/home/node'
+  } else {
+    envExtra.ANTHROPIC_API_KEY = opts.credential
+  }
+
   const proc = spawn('claude', args, {
     cwd: opts.repoRoot,
-    env: {
-      ...process.env,
-      ANTHROPIC_API_KEY: opts.apiKey,
-      DISABLE_TELEMETRY: '1',
-    },
+    env: { ...process.env, ...envExtra },
     stdio: ['ignore', 'pipe', 'pipe'],
   })
 

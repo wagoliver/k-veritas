@@ -374,6 +374,10 @@ export const orgAiConfig = pgTable('org_ai_config', {
   // api_key_encrypted se provider = 'anthropic'; senão desabilita.
   anthropicApiKeyEncrypted: bytea('anthropic_api_key_encrypted'),
   anthropicModel: text('anthropic_model'),
+  // 'api_key' (sk-ant-...) ou 'oauth' (token do `claude setup-token`).
+  // O storage é o mesmo (bytea cifrado); o codex decide env var +
+  // remoção de --bare com base neste campo.
+  anthropicAuthMode: text('anthropic_auth_mode').notNull().default('api_key'),
   temperature: real('temperature').notNull().default(0.3),
   numCtx: integer('num_ctx').notNull().default(16384),
   timeoutMs: integer('timeout_ms').notNull().default(300_000),

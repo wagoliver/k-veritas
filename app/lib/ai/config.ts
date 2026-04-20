@@ -25,6 +25,7 @@ export interface SavedOrgAiConfig {
   // Anthropic dedicado (code-analysis via Claude Code CLI).
   hasAnthropicKey: boolean
   anthropicModel: string | null
+  anthropicAuthMode: 'api_key' | 'oauth'
   updatedAt: Date
   updatedBy: string
 }
@@ -59,6 +60,8 @@ export async function getOrgAiConfigView(
     anthropicModel:
       row.anthropicModel ??
       (row.provider === 'anthropic' ? row.model : null),
+    anthropicAuthMode:
+      (row.anthropicAuthMode as 'api_key' | 'oauth') ?? 'api_key',
     updatedAt: row.updatedAt,
     updatedBy: row.updatedBy,
   }
@@ -115,6 +118,7 @@ export interface UpsertAiConfigInput {
   anthropicApiKey?: string | null
   clearAnthropicApiKey?: boolean
   anthropicModel?: string | null
+  anthropicAuthMode?: 'api_key' | 'oauth'
 }
 
 export async function upsertOrgAiConfig(
@@ -159,6 +163,7 @@ export async function upsertOrgAiConfig(
       apiKeyEncrypted: apiKeyEncrypted ?? null,
       anthropicApiKeyEncrypted: anthropicApiKeyEncrypted ?? null,
       anthropicModel: anthropicModel ?? null,
+      anthropicAuthMode: input.anthropicAuthMode ?? 'api_key',
       temperature: input.temperature,
       numCtx: input.numCtx,
       timeoutMs: input.timeoutMs,
@@ -180,6 +185,9 @@ export async function upsertOrgAiConfig(
         ? { anthropicApiKeyEncrypted }
         : {}),
       ...(anthropicModel !== undefined ? { anthropicModel } : {}),
+      ...(input.anthropicAuthMode !== undefined
+        ? { anthropicAuthMode: input.anthropicAuthMode }
+        : {}),
       temperature: input.temperature,
       numCtx: input.numCtx,
       timeoutMs: input.timeoutMs,

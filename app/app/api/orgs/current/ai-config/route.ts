@@ -70,6 +70,7 @@ export async function PUT(req: NextRequest) {
       parsed.data.anthropicModel === ''
         ? null
         : parsed.data.anthropicModel,
+    anthropicAuthMode: parsed.data.anthropicAuthMode,
   })
 
   await audit({

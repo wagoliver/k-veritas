@@ -51,6 +51,7 @@ const schema = z.object({
   anthropicApiKey: z.string().max(500).optional().or(z.literal('')),
   clearAnthropicApiKey: z.boolean().optional(),
   anthropicModel: z.string().trim().max(200).optional().or(z.literal('')),
+  anthropicAuthMode: z.enum(['api_key', 'oauth']),
 })
 
 type FormValues = z.infer<typeof schema>
@@ -65,6 +66,7 @@ export interface InitialAiConfig {
   timeoutMs: number
   hasAnthropicKey: boolean
   anthropicModel: string | null
+  anthropicAuthMode: 'api_key' | 'oauth'
 }
 
 interface AiConfigFormProps {
@@ -127,6 +129,7 @@ export function AiConfigForm({ initial, canEdit }: AiConfigFormProps) {
     clearAnthropicApiKey: false,
     anthropicModel:
       initial?.anthropicModel ?? 'claude-sonnet-4-5-20250929',
+    anthropicAuthMode: initial?.anthropicAuthMode ?? 'api_key',
   }
 
   const form = useForm<FormValues>({
@@ -139,6 +142,7 @@ export function AiConfigForm({ initial, canEdit }: AiConfigFormProps) {
   const clearAnthropicApiKey = form.watch('clearAnthropicApiKey')
   const providerIsAnthropic = provider === 'anthropic'
   const anthropicFieldValue = form.watch('anthropicApiKey')
+  const anthropicAuthMode = form.watch('anthropicAuthMode')
 
   const onProviderChange = (next: AIProvider) => {
     form.setValue('provider', next)
@@ -307,6 +311,7 @@ export function AiConfigForm({ initial, canEdit }: AiConfigFormProps) {
               : undefined,
             clearAnthropicApiKey: values.clearAnthropicApiKey ?? false,
             anthropicModel: values.anthropicModel,
+            anthropicAuthMode: values.anthropicAuthMode,
           }),
         })
         if (res.status === 403) {
@@ -395,9 +400,54 @@ export function AiConfigForm({ initial, canEdit }: AiConfigFormProps) {
             </div>
           ) : null}
 
-          {providerIsAnthropic ? (
+          {providerIsAnthropic && anthropicAuthMode === 'api_key' ? (
             <div className="rounded-md border border-primary/30 bg-primary/5 p-3 text-xs text-foreground">
               {t('anthropic_section.reuse_hint')}
+            </div>
+          ) : null}
+
+          <FormField
+            control={form.control}
+            name="anthropicAuthMode"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>
+                  {t('anthropic_section.auth_mode_label')}
+                </FormLabel>
+                <div className="grid grid-cols-2 gap-3">
+                  <AuthModeCard
+                    active={field.value === 'api_key'}
+                    onClick={() => field.onChange('api_key')}
+                    disabled={!canEdit}
+                    title={t('anthropic_section.auth_mode_api_key_title')}
+                    description={t(
+                      'anthropic_section.auth_mode_api_key_desc',
+                    )}
+                  />
+                  <AuthModeCard
+                    active={field.value === 'oauth'}
+                    onClick={() => field.onChange('oauth')}
+                    disabled={!canEdit}
+                    title={t('anthropic_section.auth_mode_oauth_title')}
+                    description={t('anthropic_section.auth_mode_oauth_desc')}
+                  />
+                </div>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          {anthropicAuthMode === 'oauth' ? (
+            <div className="rounded-md border border-amber-500/30 bg-amber-500/5 p-3 text-xs">
+              <p className="font-medium">
+                {t('anthropic_section.oauth_setup_title')}
+              </p>
+              <pre className="mt-2 overflow-x-auto rounded bg-background/60 p-2 font-mono text-[11px]">
+                claude setup-token
+              </pre>
+              <p className="mt-2 text-muted-foreground">
+                {t('anthropic_section.oauth_setup_desc')}
+              </p>
             </div>
           ) : null}
 
@@ -406,25 +456,34 @@ export function AiConfigForm({ initial, canEdit }: AiConfigFormProps) {
             name="anthropicApiKey"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>{t('anthropic_section.api_key_label')}</FormLabel>
+                <FormLabel>
+                  {anthropicAuthMode === 'oauth'
+                    ? t('anthropic_section.oauth_token_label')
+                    : t('anthropic_section.api_key_label')}
+                </FormLabel>
                 <FormControl>
                   <PasswordInput
                     {...field}
                     autoComplete="off"
                     disabled={!canEdit || Boolean(clearAnthropicApiKey)}
                     placeholder={
-                      hasSavedAnthropicKey || providerIsAnthropic
+                      hasSavedAnthropicKey ||
+                      (providerIsAnthropic && anthropicAuthMode === 'api_key')
                         ? '••••••••'
-                        : 'sk-ant-...'
+                        : anthropicAuthMode === 'oauth'
+                          ? 'sk-ant-oat01-...'
+                          : 'sk-ant-api03-...'
                     }
                   />
                 </FormControl>
                 <FormDescription>
                   {hasSavedAnthropicKey
                     ? t('anthropic_section.api_key_saved')
-                    : providerIsAnthropic
+                    : providerIsAnthropic && anthropicAuthMode === 'api_key'
                       ? t('anthropic_section.api_key_reused')
-                      : t('anthropic_section.api_key_hint')}
+                      : anthropicAuthMode === 'oauth'
+                        ? t('anthropic_section.oauth_token_hint')
+                        : t('anthropic_section.api_key_hint')}
                 </FormDescription>
                 <FormMessage />
               </FormItem>
@@ -770,6 +829,38 @@ function TabBtn({
           {badge.text}
         </span>
       ) : null}
+    </button>
+  )
+}
+
+function AuthModeCard({
+  active,
+  onClick,
+  disabled,
+  title,
+  description,
+}: {
+  active: boolean
+  onClick: () => void
+  disabled: boolean
+  title: string
+  description: string
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className={cn(
+        'flex flex-col items-start gap-1 rounded-lg border p-3 text-left transition-colors',
+        active
+          ? 'border-primary bg-primary/5'
+          : 'border-border hover:border-primary/40 hover:bg-accent/30',
+        disabled && 'cursor-not-allowed opacity-60',
+      )}
+    >
+      <span className="text-sm font-medium">{title}</span>
+      <span className="text-xs text-muted-foreground">{description}</span>
     </button>
   )
 }

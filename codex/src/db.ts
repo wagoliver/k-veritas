@@ -37,6 +37,7 @@ export interface OrgAiCredential {
   api_key_encrypted: Buffer | null
   anthropic_api_key_encrypted: Buffer | null
   anthropic_model: string | null
+  anthropic_auth_mode: 'api_key' | 'oauth'
 }
 
 export async function claimNextJob(
@@ -202,7 +203,8 @@ export async function getOrgCredentialRaw(
 ): Promise<OrgAiCredential | null> {
   const rows = await sql<OrgAiCredential[]>`
     SELECT provider, model, api_key_encrypted,
-           anthropic_api_key_encrypted, anthropic_model
+           anthropic_api_key_encrypted, anthropic_model,
+           anthropic_auth_mode
     FROM org_ai_config
     WHERE org_id = ${orgId}
     LIMIT 1
@@ -211,16 +213,20 @@ export async function getOrgCredentialRaw(
 }
 
 export interface ResolvedAnthropic {
-  apiKeyEncrypted: Buffer
+  credentialEncrypted: Buffer
   model: string
   source: 'dedicated' | 'main-provider-anthropic'
+  // 'api_key' → env ANTHROPIC_API_KEY + --bare
+  // 'oauth'   → env CLAUDE_CODE_OAUTH_TOKEN + sem --bare
+  authMode: 'api_key' | 'oauth'
 }
 
 // Regra de resolução da credencial Anthropic que o codex usa:
-//   1. se há chave dedicada (anthropic_api_key_encrypted) → usa ela
-//      + anthropic_model (ou default do worker se vazio)
+//   1. se há credencial dedicada (anthropic_api_key_encrypted) → usa ela
+//      + anthropic_auth_mode + anthropic_model
 //   2. senão, se provider principal == 'anthropic' → usa api_key_encrypted
-//      + model principal
+//      + model principal + modo api_key (provider principal é sempre
+//      API key na tela de Providers)
 //   3. senão → null (feature desabilitada)
 export function resolveAnthropic(
   cfg: OrgAiCredential | null,
@@ -229,16 +235,18 @@ export function resolveAnthropic(
   if (!cfg) return null
   if (cfg.anthropic_api_key_encrypted) {
     return {
-      apiKeyEncrypted: cfg.anthropic_api_key_encrypted,
+      credentialEncrypted: cfg.anthropic_api_key_encrypted,
       model: cfg.anthropic_model || defaultModel,
       source: 'dedicated',
+      authMode: cfg.anthropic_auth_mode ?? 'api_key',
     }
   }
   if (cfg.provider === 'anthropic' && cfg.api_key_encrypted) {
     return {
-      apiKeyEncrypted: cfg.api_key_encrypted,
+      credentialEncrypted: cfg.api_key_encrypted,
       model: cfg.model || defaultModel,
       source: 'main-provider-anthropic',
+      authMode: 'api_key',
     }
   }
   return null
