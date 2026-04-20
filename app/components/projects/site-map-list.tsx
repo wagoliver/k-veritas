@@ -51,9 +51,14 @@ type ViewMode = 'list' | 'tree'
 interface SiteMapListProps {
   projectId: string
   status: string
+  sourceType?: 'url' | 'repo'
 }
 
-export function SiteMapList({ projectId, status }: SiteMapListProps) {
+export function SiteMapList({
+  projectId,
+  status,
+  sourceType = 'url',
+}: SiteMapListProps) {
   const t = useTranslations('projects.overview.map')
   const [pages, setPages] = useState<Page[] | null>(null)
   const [loading, setLoading] = useState(true)
@@ -61,6 +66,12 @@ export function SiteMapList({ projectId, status }: SiteMapListProps) {
   const [activePageId, setActivePageId] = useState<string | null>(null)
 
   const load = async () => {
+    // Projetos code-first não têm pages do crawler — pula o fetch.
+    if (sourceType === 'repo') {
+      setPages([])
+      setLoading(false)
+      return
+    }
     setLoading(true)
     try {
       const res = await fetch(`/api/projects/${projectId}/pages`, {
@@ -77,7 +88,22 @@ export function SiteMapList({ projectId, status }: SiteMapListProps) {
   useEffect(() => {
     load()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [projectId, status])
+  }, [projectId, status, sourceType])
+
+  // Projeto code-first: crawler não se aplica. Mostra orientação clara.
+  if (sourceType === 'repo') {
+    return (
+      <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-border p-10 text-center">
+        <Network className="size-8 text-muted-foreground" />
+        <div className="max-w-md space-y-1">
+          <p className="text-sm font-medium">{t('crawler_not_applicable_title')}</p>
+          <p className="text-xs text-muted-foreground">
+            {t('crawler_not_applicable_description')}
+          </p>
+        </div>
+      </div>
+    )
+  }
 
   useEffect(() => {
     const saved = localStorage.getItem('kv:sitemap-view')

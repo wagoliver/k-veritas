@@ -593,6 +593,8 @@
         },
         "crawling_title": "Explorando sua aplicação",
         "crawling_description": "Pode levar alguns minutos. A página atualiza automaticamente.",
+        "crawler_not_applicable_title": "Crawler não se aplica",
+        "crawler_not_applicable_description": "Este projeto usa análise por código-fonte (GitHub). O crawler Playwright fica disponível só para projetos criados a partir de URL. Abra a aba \"Code\" para ver o estado da análise.",
         "empty_title": "Nenhuma página encontrada",
         "empty_description": "Verifique a URL informada e tente recrawlear.",
         "elements": "elementos",

@@ -41,7 +41,7 @@ export async function GET(
     .limit(1)
 
   if (!job) {
-    return NextResponse.json({ crawl: null })
+    return NextResponse.json({ crawl: null, pages: [] })
   }
 
   const pages = await db

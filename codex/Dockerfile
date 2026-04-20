@@ -4,10 +4,12 @@
 # o código-fonte de um projeto do usuário (clonado de GitHub ou
 # extraído de ZIP), importando o resultado no Postgres.
 #
-# Base `node:20-slim` — imagem slim da família Debian. Alpine (musl)
+# Base `node:22-slim` — imagem slim da família Debian. Alpine (musl)
 # dá problema com módulos nativos do Claude Code, por isso não usamos.
+# Node 22 é necessário para o flag --experimental-strip-types que roda
+# os .ts direto (mesmo padrão do crawler/runner). Node 20 não tem.
 
-FROM node:20-slim
+FROM node:22-slim
 
 ENV NODE_ENV=production \
     DEBIAN_FRONTEND=noninteractive

@@ -593,6 +593,8 @@
         },
         "crawling_title": "Crawling your app",
         "crawling_description": "This may take a few minutes. The page updates automatically.",
+        "crawler_not_applicable_title": "Crawler does not apply",
+        "crawler_not_applicable_description": "This project uses source-code analysis (GitHub). The Playwright crawler is only available for projects created from a URL. Open the \"Code\" tab to see the analysis state.",
         "empty_title": "No pages found",
         "empty_description": "Check the URL you provided and try re-crawling.",
         "elements": "elements",

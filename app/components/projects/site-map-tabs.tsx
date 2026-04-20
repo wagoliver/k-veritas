@@ -13,12 +13,18 @@ type SubTab = 'crawler' | 'code'
 export function SiteMapTabs({
   projectId,
   status,
+  sourceType,
 }: {
   projectId: string
   status: string
+  sourceType: 'url' | 'repo'
 }) {
   const t = useTranslations('projects.overview.map.subtabs')
-  const [tab, setTab] = useState<SubTab>('crawler')
+  // Projetos 'repo' abrem na aba Code por padrão — o crawler não se
+  // aplica. Projetos 'url' continuam com Crawler como default.
+  const [tab, setTab] = useState<SubTab>(
+    sourceType === 'repo' ? 'code' : 'crawler',
+  )
 
   return (
     <div className="space-y-4">
@@ -38,7 +44,11 @@ export function SiteMapTabs({
       </div>
 
       <section className={cn(tab === 'crawler' ? 'block' : 'hidden')}>
-        <SiteMapList projectId={projectId} status={status} />
+        <SiteMapList
+          projectId={projectId}
+          status={status}
+          sourceType={sourceType}
+        />
       </section>
 
       <section className={cn(tab === 'code' ? 'block' : 'hidden')}>

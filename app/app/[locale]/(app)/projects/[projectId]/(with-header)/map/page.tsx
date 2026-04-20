@@ -18,5 +18,11 @@ export default async function ProjectMapPage({
   const project = await authorizeProject(session.user.id, projectId)
   if (!project) notFound()
 
-  return <SiteMapTabs projectId={project.id} status={project.status} />
+  return (
+    <SiteMapTabs
+      projectId={project.id}
+      status={project.status}
+      sourceType={project.sourceType as 'url' | 'repo'}
+    />
+  )
 }

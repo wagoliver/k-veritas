@@ -87,7 +87,7 @@ export function CrawlLogStream({ projectId, onComplete }: CrawlLogStreamProps) {
     const el = scrollerRef.current
     if (!el) return
     el.scrollTop = el.scrollHeight
-  }, [snapshot?.pages.length, snapshot?.crawl?.status])
+  }, [snapshot?.pages?.length, snapshot?.crawl?.status])
 
   if (!snapshot?.crawl) {
     return (
