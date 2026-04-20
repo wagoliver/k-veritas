@@ -148,7 +148,10 @@ interface PagePayload {
 
 interface BuildInputParams {
   name: string
-  targetUrl: string
+  // Pode ser null em projetos code-first criados sem URL runtime — a
+  // fase 2.2 (análise sobre crawler) não usa esses inputs, mas o tipo
+  // bate com o schema atual de projects.
+  targetUrl: string | null
   description: string | null
   targetLocale: string | null
   scenarios: string[]

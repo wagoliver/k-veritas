@@ -128,7 +128,10 @@ Responda APENAS com o JSON estruturado final.`
 export interface TestGenPayload {
   project: {
     name: string
-    targetUrl: string
+    // Pode ser null em projetos code-first sem URL configurada. O
+    // generate-tests só é chamado quando o projeto tem análise pronta,
+    // mas mantemos nullable pra refletir o schema.
+    targetUrl: string | null
     description: string | null
     authKind: 'none' | 'form'
     targetLocale: string
