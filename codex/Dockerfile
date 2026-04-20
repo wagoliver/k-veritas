@@ -30,6 +30,12 @@ RUN apt-get update \
 
 WORKDIR /app
 
+# Claude Code CLI global — garante o binário `claude` no PATH.
+# Instalar como dep local (no package.json) funcionaria, mas deixa o
+# binário em /app/node_modules/.bin/claude, que o worker chamaria via
+# spawn com path absoluto. Globalmente é mais limpo.
+RUN npm install -g --no-audit --no-fund @anthropic-ai/claude-code@^2.1.114
+
 COPY package.json ./
 RUN npm install --omit=dev --no-audit --no-fund
 
