@@ -224,43 +224,74 @@ export class OpenAICompatibleClient implements AIClient {
 
   async listModels(): Promise<Array<{ name: string; size?: number }>> {
     const primary = await this.fetchModels('/v1/models')
-    if (primary.length > 0) return primary
+    if (primary.models.length > 0) return primary.models
     // Fallback específico do LM Studio: lista modelos baixados mesmo
     // que não estejam carregados em memória. Em providers que não são
     // LM Studio, esse endpoint responde 404 e o retorno fica vazio.
-    return this.fetchModels('/api/v0/models')
+    const fallback = await this.fetchModels('/api/v0/models')
+    if (fallback.models.length > 0) return fallback.models
+
+    // Nenhum endpoint devolveu modelos. Anexa um diagnóstico na mensagem
+    // do erro que o test/route.ts pode propagar pra UI.
+    const reason = primary.diagnostic ?? fallback.diagnostic ?? 'empty response'
+    throw new AIProviderError(
+      `listModels falhou em /v1/models (${reason}). Veja logs do container app pra mais detalhes.`,
+    )
   }
 
+  // Retorna tanto a lista de modelos quanto um diagnóstico (quando
+  // aplicável) pra propagar informação útil pra UI. Nunca throwa.
   private async fetchModels(
     path: string,
-  ): Promise<Array<{ name: string; size?: number }>> {
+  ): Promise<{
+    models: Array<{ name: string; size?: number }>
+    diagnostic?: string
+  }> {
+    const url = `${this.base()}${path}`
     try {
-      const res = await fetch(`${this.base()}${path}`, {
+      const res = await fetch(url, {
         headers: this.headers(),
         signal: AbortSignal.timeout(15_000),
       })
       if (!res.ok) {
-        console.warn(
-          `[openai-compat] listModels ${path} HTTP ${res.status} ${res.statusText}`,
-        )
-        return []
+        const body = await res.text().catch(() => '')
+        const diag = `HTTP ${res.status} ${res.statusText} body=${body.slice(0, 200)}`
+        console.warn(`[openai-compat] listModels ${url} ${diag}`)
+        return { models: [], diagnostic: diag }
       }
-      const data = (await res.json()) as ModelListResponse
-      const items = data.data ?? []
+      const raw = await res.text()
+      let parsed: unknown
+      try {
+        parsed = JSON.parse(raw)
+      } catch (err) {
+        const diag = `json parse error: ${(err as Error).message} preview=${raw.slice(0, 200)}`
+        console.warn(`[openai-compat] listModels ${url} ${diag}`)
+        return { models: [], diagnostic: diag }
+      }
+
+      const data = parsed as ModelListResponse
+      const items = Array.isArray(data?.data) ? data.data : []
       if (items.length === 0) {
-        console.warn(
-          `[openai-compat] listModels ${path} returned empty data array`,
-        )
+        const keys =
+          parsed && typeof parsed === 'object'
+            ? Object.keys(parsed as Record<string, unknown>).join(',')
+            : typeof parsed
+        const diag = `resposta sem 'data' array (keys=${keys}, preview=${raw.slice(0, 200)})`
+        console.warn(`[openai-compat] listModels ${url} ${diag}`)
+        return { models: [], diagnostic: diag }
       }
-      return items
+      const models = items
         .map((m) => ({ name: m.id }))
         .filter((m) => typeof m.name === 'string' && m.name.length > 0)
-    } catch (err) {
-      console.warn(
-        `[openai-compat] listModels ${path} threw:`,
-        err instanceof Error ? err.message : err,
+      console.info(
+        `[openai-compat] listModels ${url} retornou ${models.length} modelo(s)`,
       )
-      return []
+      return { models }
+    } catch (err) {
+      const diag =
+        err instanceof Error ? `${err.name}: ${err.message}` : String(err)
+      console.warn(`[openai-compat] listModels ${url} threw ${diag}`)
+      return { models: [], diagnostic: `fetch threw: ${diag}` }
     }
   }
 

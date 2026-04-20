@@ -60,13 +60,29 @@ export async function POST(req: NextRequest) {
     )
   }
 
-  const models = await client.listModels()
-  return NextResponse.json(
-    {
-      ok: true,
-      latencyMs: ping.latencyMs,
-      models: models.map((m) => m.name).sort(),
-    },
-    { headers: { 'Cache-Control': 'no-store' } },
-  )
+  // Ping passou mas listModels pode falhar por parse/conteúdo inesperado.
+  // Propagamos a mensagem do AIProviderError pra UI em vez de engolir e
+  // mostrar "0 modelos disponíveis" sem pista do motivo.
+  try {
+    const models = await client.listModels()
+    return NextResponse.json(
+      {
+        ok: true,
+        latencyMs: ping.latencyMs,
+        models: models.map((m) => m.name).sort(),
+      },
+      { headers: { 'Cache-Control': 'no-store' } },
+    )
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'unknown'
+    return NextResponse.json(
+      {
+        ok: false,
+        error: `Conexão OK mas listModels falhou: ${msg}`,
+        latencyMs: ping.latencyMs,
+        models: [],
+      },
+      { headers: { 'Cache-Control': 'no-store' } },
+    )
+  }
 }
