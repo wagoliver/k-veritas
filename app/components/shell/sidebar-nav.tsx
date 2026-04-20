@@ -10,7 +10,6 @@ import {
   Play,
   ScrollText,
   Settings as SettingsIcon,
-  Sparkles,
   Users,
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
@@ -246,13 +245,15 @@ export function SidebarNav({ org, hasMultipleOrgs }: SidebarNavProps) {
 }
 
 const PROJECT_SECTIONS: Array<{
-  key: 'map' | 'scenarios' | 'analysis' | 'test_scenarios' | 'execution'
+  key: 'map' | 'analysis' | 'test_scenarios' | 'execution'
   slug: string
   icon: typeof Map
 }> = [
   { key: 'map', slug: 'map', icon: Map },
-  { key: 'scenarios', slug: 'scenarios', icon: ScrollText },
-  { key: 'analysis', slug: 'analysis', icon: Sparkles },
+  // "analysis" é a página que lista cenários gerados pela IA —
+  // substitui a antiga "scenarios" (manual, nunca preenchida).
+  // O slug de URL continua 'analysis' por retrocompatibilidade.
+  { key: 'analysis', slug: 'analysis', icon: ScrollText },
   { key: 'test_scenarios', slug: 'test-scenarios', icon: FileCode2 },
   { key: 'execution', slug: 'execution', icon: Play },
 ]

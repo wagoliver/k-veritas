@@ -9,7 +9,7 @@ import {
   PlugZap,
   Sparkles,
 } from 'lucide-react'
-import { useState, useTransition } from 'react'
+import { useEffect, useState, useTransition } from 'react'
 import { useForm } from 'react-hook-form'
 import { useTranslations } from 'next-intl'
 import { toast } from 'sonner'
@@ -116,6 +116,46 @@ export function AiConfigForm({ initial, canEdit }: AiConfigFormProps) {
     initial?.hasAnthropicKey ?? false,
   )
 
+  // Lista dinâmica de modelos Claude disponíveis pra org. Preenchida
+  // no mount via GET /ai-config/anthropic-models (que consulta a
+  // Anthropic com a credencial atual) e atualizada quando um teste
+  // bem-sucedido volta com models[].
+  const [anthropicAvailableModels, setAnthropicAvailableModels] = useState<
+    string[]
+  >([])
+  const [anthropicModelsReason, setAnthropicModelsReason] = useState<
+    string | null
+  >(null)
+
+  useEffect(() => {
+    let cancelled = false
+    const load = async () => {
+      try {
+        const res = await fetch(
+          '/api/orgs/current/ai-config/anthropic-models',
+          {
+            headers: { 'X-Requested-With': 'fetch' },
+            cache: 'no-store',
+          },
+        )
+        if (!res.ok) return
+        const data = (await res.json()) as {
+          models: string[]
+          reason?: string
+        }
+        if (cancelled) return
+        setAnthropicAvailableModels(data.models ?? [])
+        setAnthropicModelsReason(data.reason ?? null)
+      } catch {
+        // silencioso — o campo volta a ser input livre
+      }
+    }
+    load()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
   const defaults: FormValues = {
     provider: initial?.provider ?? 'ollama',
     baseUrl: initial?.baseUrl ?? PROVIDER_DEFAULTS.ollama.baseUrl!,
@@ -154,12 +194,58 @@ export function AiConfigForm({ initial, canEdit }: AiConfigFormProps) {
     setProviderResult(null)
   }
 
-  // Testa a credencial Anthropic (dedicada ou fallback) contra
-  // api.anthropic.com — independente do provider principal escolhido.
+  // Testa a credencial Anthropic. Em modo API key, faz GET em
+  // /v1/models (pay-as-you-go suporta). Em modo OAuth, a Anthropic
+  // rejeita /v1/models com 400/401 por design — tokens Pro/Max só
+  // funcionam via Claude Code CLI. Então a "validação" OAuth aqui é
+  // só de formato (prefixo + tamanho) e deixa claro que a prova real
+  // é a primeira análise.
   const testAnthropic = async () => {
     const values = form.getValues()
     setTestingAnthropic(true)
     setAnthropicResult(null)
+
+    if (values.anthropicAuthMode === 'oauth') {
+      const token = values.anthropicApiKey ?? ''
+      const useSaved =
+        !token && !values.clearAnthropicApiKey && hasSavedAnthropicKey
+      if (useSaved) {
+        setAnthropicResult({
+          ok: true,
+          message: t('anthropic_section.oauth_test_saved'),
+          models: [],
+        })
+        setTestingAnthropic(false)
+        return
+      }
+      if (!token) {
+        setAnthropicResult({
+          ok: false,
+          message: t('anthropic_section.oauth_test_missing'),
+          models: [],
+        })
+        setTestingAnthropic(false)
+        return
+      }
+      const looksLikeOauth =
+        token.startsWith('sk-ant-oat') && token.length >= 50
+      setAnthropicResult(
+        looksLikeOauth
+          ? {
+              ok: true,
+              message: t('anthropic_section.oauth_test_format_ok'),
+              models: [],
+            }
+          : {
+              ok: false,
+              message: t('anthropic_section.oauth_test_format_bad'),
+              models: [],
+            },
+      )
+      setTestingAnthropic(false)
+      return
+    }
+
     try {
       const res = await fetch('/api/orgs/current/ai-config/test', {
         method: 'POST',
@@ -514,23 +600,49 @@ export function AiConfigForm({ initial, canEdit }: AiConfigFormProps) {
           <FormField
             control={form.control}
             name="anthropicModel"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>{t('anthropic_section.model_label')}</FormLabel>
-                <FormControl>
-                  <Input
-                    {...field}
-                    disabled={!canEdit}
-                    spellCheck={false}
-                    placeholder="claude-sonnet-4-5-20250929"
-                  />
-                </FormControl>
-                <FormDescription>
-                  {t('anthropic_section.model_hint')}
-                </FormDescription>
-                <FormMessage />
-              </FormItem>
-            )}
+            render={({ field }) => {
+              const suggested = Array.from(
+                new Set([
+                  ...(anthropicResult?.models ?? []),
+                  ...anthropicAvailableModels,
+                ]),
+              )
+              const hasSuggestions = suggested.length > 0
+              return (
+                <FormItem>
+                  <FormLabel>{t('anthropic_section.model_label')}</FormLabel>
+                  <FormControl>
+                    <Input
+                      {...field}
+                      list="anthropic-models-list"
+                      disabled={!canEdit}
+                      spellCheck={false}
+                      placeholder="claude-sonnet-4-5-20250929"
+                    />
+                  </FormControl>
+                  {hasSuggestions ? (
+                    <datalist id="anthropic-models-list">
+                      {suggested.map((m) => (
+                        <option key={m} value={m} />
+                      ))}
+                    </datalist>
+                  ) : null}
+                  <FormDescription>
+                    {hasSuggestions
+                      ? t('anthropic_section.model_hint_dynamic', {
+                          count: suggested.length,
+                        })
+                      : anthropicModelsReason === 'oauth_cannot_list'
+                        ? t('anthropic_section.model_hint_oauth')
+                        : anthropicModelsReason === 'no_credential' ||
+                            anthropicModelsReason === 'no_config'
+                          ? t('anthropic_section.model_hint_no_credential')
+                          : t('anthropic_section.model_hint')}
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )
+            }}
           />
 
           <div>

@@ -121,8 +121,7 @@
       "project": {
         "section": "Projeto",
         "map": "Mapa do site",
-        "scenarios": "Cenários",
-        "analysis": "Análise IA",
+        "analysis": "Cenários",
         "test_scenarios": "Cenários de Teste",
         "execution": "Execução"
       }
@@ -283,8 +282,7 @@
       "recrawl_started": "Nova exploração iniciada.",
       "tabs": {
         "map": "Mapa do site",
-        "scenarios": "Cenários",
-        "analysis": "Análise IA",
+        "analysis": "Cenários",
         "tests": "Testes",
         "test_scenarios": "Cenários de Teste",
         "execution": "Execução"
@@ -809,13 +807,20 @@
         "oauth_setup_desc": "Na sua máquina, com o Claude Code CLI instalado e logado via conta Pro/Max, rode o comando acima. O CLI devolve um token começando com sk-ant-oat01-... (válido por 90 dias). Cole o token no campo abaixo.",
         "oauth_token_label": "CLAUDE_CODE_OAUTH_TOKEN",
         "oauth_token_hint": "Cole o token retornado por `claude setup-token` (começa com sk-ant-oat01-...). Fica cifrado em AES-256-GCM e expira em ~90 dias — regere quando necessário.",
+        "oauth_test_saved": "Formato OK (token salvo). Tokens OAuth só podem ser validados de verdade na primeira análise — a Anthropic não expõe endpoint REST pra testar OAuth. Se a análise falhar com 401, regere o token.",
+        "oauth_test_format_ok": "Formato OK (prefixo sk-ant-oat reconhecido). A validação real acontece no primeiro job do codex — tokens OAuth não podem ser testados via REST direto.",
+        "oauth_test_format_bad": "Formato inesperado. Tokens OAuth começam com 'sk-ant-oat' e têm ~90 caracteres. Se você colou um ANTHROPIC_API_KEY por engano, troque o modo para \"ANTHROPIC_API_KEY\".",
+        "oauth_test_missing": "Cole o token no campo acima antes de testar.",
         "api_key_label": "ANTHROPIC_API_KEY",
         "api_key_hint": "Cole a chave da sua conta Anthropic (começa com sk-ant-api...). Fica cifrada em AES-256-GCM.",
         "api_key_saved": "Uma credencial Anthropic está salva. Deixe em branco para mantê-la. Marque \"remover\" para apagá-la.",
         "api_key_reused": "Sem credencial dedicada — o codex usa a chave do provider principal (modo API key).",
         "api_key_clear": "Remover credencial Anthropic dedicada",
         "model_label": "Modelo Claude",
-        "model_hint": "Identificador completo do modelo (ex.: claude-sonnet-4-5-20250929 ou claude-haiku-4-5). Deixe em branco para usar o default do container."
+        "model_hint": "Identificador completo do modelo (ex.: claude-sonnet-4-5-20250929 ou claude-haiku-4-5). Deixe em branco para usar o default do container.",
+        "model_hint_dynamic": "{count} modelo(s) disponível(is) na sua conta. Clique no campo para ver sugestões ou digite livre.",
+        "model_hint_oauth": "Tokens OAuth (Pro/Max) não listam modelos via REST — digite o identificador manualmente. Ex.: claude-sonnet-4-5-20250929.",
+        "model_hint_no_credential": "Salve uma credencial Anthropic acima para listar os modelos disponíveis automaticamente."
       },
       "providers_section": {
         "title": "Provider adicional (opcional)",
