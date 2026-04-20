@@ -3,6 +3,7 @@ import { and, desc, eq, sql } from 'drizzle-orm'
 
 import { db } from '@/lib/db/pg'
 import {
+  codeAnalysisJobs,
   crawlJobs,
   orgMembers,
   projectScenarios,
@@ -17,7 +18,7 @@ import { slugify } from '@/lib/auth/project-access'
 import { BUCKETS, consumeToken } from '@/lib/auth/rate-limit'
 import { encryptSecret } from '@/lib/auth/totp'
 import { createProjectSchema } from '@/lib/validators/project'
-import { validateTargetUrl } from '@/lib/validators/url'
+import { validateRepoUrl, validateTargetUrl } from '@/lib/validators/url'
 
 export const runtime = 'nodejs'
 
@@ -77,9 +78,28 @@ export async function POST(req: NextRequest) {
   const parsed = createProjectSchema.safeParse(body)
   if (!parsed.success) return Problems.invalidBody()
 
-  const urlCheck = validateTargetUrl(parsed.data.targetUrl)
-  if (!urlCheck.ok) {
-    return Problems.invalidBody({ targetUrl: urlCheck.reason ?? 'invalid_url' })
+  const sourceType = parsed.data.sourceType
+
+  // Valida a fonte conforme o tipo escolhido.
+  let normalizedTargetUrl: string | null = null
+  let normalizedRepoUrl: string | null = null
+
+  if (sourceType === 'url') {
+    const urlCheck = validateTargetUrl(parsed.data.targetUrl!)
+    if (!urlCheck.ok) {
+      return Problems.invalidBody({
+        targetUrl: urlCheck.reason ?? 'invalid_url',
+      })
+    }
+    normalizedTargetUrl = parsed.data.targetUrl!
+  } else {
+    const repoCheck = validateRepoUrl(parsed.data.repoUrl!)
+    if (!repoCheck.ok) {
+      return Problems.invalidBody({
+        repoUrl: repoCheck.reason ?? 'invalid_repo_url',
+      })
+    }
+    normalizedRepoUrl = repoCheck.normalized!
   }
 
   if (parsed.data.authKind === 'form' && parsed.data.authForm) {
@@ -105,11 +125,18 @@ export async function POST(req: NextRequest) {
         orgId: org.id,
         name: parsed.data.name,
         slug,
-        targetUrl: parsed.data.targetUrl,
+        // targetUrl mantém a URL do app em produção quando sourceType='url'.
+        // Para 'repo', usamos um placeholder (não pode ser NULL pelo schema
+        // existente) — a análise e o crawler passam a olhar source_type.
+        targetUrl: normalizedTargetUrl ?? normalizedRepoUrl!,
         description: parsed.data.description,
         authKind: parsed.data.authKind,
         authCredentials,
         targetLocale: parsed.data.targetLocale ?? session.user.locale,
+        sourceType,
+        repoUrl: normalizedRepoUrl,
+        repoBranch: parsed.data.repoBranch ?? 'main',
+        businessContext: parsed.data.businessContext ?? null,
         createdBy: session.user.id,
         status: 'draft',
       })
@@ -126,12 +153,25 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    // Dispara o primeiro crawl imediatamente
-    await tx.insert(crawlJobs).values({
-      projectId: project.id,
-      requestedBy: session.user.id,
-      status: 'pending',
-    })
+    if (sourceType === 'url') {
+      // Fluxo original: dispara crawler Playwright.
+      await tx.insert(crawlJobs).values({
+        projectId: project.id,
+        requestedBy: session.user.id,
+        status: 'pending',
+      })
+    } else {
+      // Code-first: dispara análise via container codex.
+      await tx.insert(codeAnalysisJobs).values({
+        projectId: project.id,
+        requestedBy: session.user.id,
+        sourceType: 'repo',
+        repoUrl: normalizedRepoUrl,
+        repoBranch: parsed.data.repoBranch ?? 'main',
+        status: 'pending',
+      })
+    }
+
     await tx
       .update(projects)
       .set({ status: 'crawling', updatedAt: new Date() })

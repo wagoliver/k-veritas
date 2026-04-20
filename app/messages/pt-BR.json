@@ -215,6 +215,19 @@
       "step1": {
         "name_label": "Nome do projeto",
         "name_placeholder": "checkout-flow",
+        "source_type_label": "Qual a fonte do projeto?",
+        "source_type_options": {
+          "repo_title": "Repositório",
+          "repo_desc": "A IA lê o código-fonte e gera cenários a partir dele.",
+          "url_title": "URL da aplicação",
+          "url_desc": "O crawler Playwright explora a aplicação em runtime."
+        },
+        "repo_url_label": "URL do repositório GitHub",
+        "repo_url_hint": "Aceita https://github.com/owner/repo, git@github.com:owner/repo e o formato curto owner/repo.",
+        "repo_branch_label": "Branch",
+        "business_context_label": "Contexto de negócio (opcional)",
+        "business_context_placeholder": "Descreva em texto livre o caso de uso e as regras de negócio que a QA quer cobrir. Você pode editar depois nas configurações do projeto.",
+        "business_context_hint": "Este texto é enviado junto com o código para a IA, ajudando ela a escrever cenários mais aderentes ao seu negócio.",
         "url_label": "URL da aplicação",
         "url_hint": "Use staging, homologação ou preview. Evite apontar para produção ao testar fluxos destrutivos.",
         "auth_label": "A aplicação exige login?",
@@ -255,6 +268,8 @@
         "rate_limited": "Limite de criação atingido. Tente novamente mais tarde.",
         "private_host": "URLs locais/privadas não são permitidas.",
         "invalid_url": "URL inválida.",
+        "invalid_repo_url": "URL de repositório inválida.",
+        "only_github": "Somente repositórios do GitHub são suportados por enquanto.",
         "min_2": "Mínimo 2 caracteres",
         "max_80": "Máximo 80 caracteres",
         "required": "Obrigatório",
@@ -549,8 +564,32 @@
           "code": "Code"
         },
         "code": {
-          "title": "Análise de código em breve",
-          "description": "Aqui você conectará o repositório do seu projeto para extrair rotas, componentes e elementos direto do código-fonte — complementando (ou substituindo) o crawler de runtime."
+          "empty_title": "Análise de código",
+          "empty_description": "A IA lê o código-fonte do seu projeto e sugere features e cenários de teste. Você revisa e aprova, depois a gente gera os testes Playwright.",
+          "source_not_configured_hint": "Este projeto não tem um repositório configurado. Configure em Settings para disparar a análise.",
+          "analyze_button": "Analisar agora",
+          "reanalyze_button": "Analisar novamente",
+          "triggered": "Análise iniciada.",
+          "completed_hint": "Análise concluída. Veja o resultado na aba de Features/Cenários.",
+          "status": {
+            "pending": "Enfileirado",
+            "running": "Analisando",
+            "completed": "Concluído",
+            "failed": "Falhou",
+            "cancelled": "Cancelado"
+          },
+          "metrics": {
+            "steps": "Passos",
+            "tokens": "Tokens in/out",
+            "turns": "Turnos"
+          },
+          "errors": {
+            "generic": "Não foi possível disparar a análise.",
+            "network": "Falha de conexão.",
+            "rate_limited": "Muitas análises em pouco tempo. Aguarde um pouco.",
+            "anthropic_key_missing": "Configure uma chave Anthropic em /settings/ai para usar a análise de código.",
+            "source_not_configured": "Este projeto não tem um repositório configurado."
+          }
         },
         "crawling_title": "Explorando sua aplicação",
         "crawling_description": "Pode levar alguns minutos. A página atualiza automaticamente.",
@@ -685,6 +724,16 @@
           "fr-FR": "Francês (França)",
           "de-DE": "Alemão"
         }
+      },
+      "repo": {
+        "section_title": "Repositório e contexto de negócio",
+        "section_subtitle": "Fonte do código que a IA vai analisar e regras de negócio que a QA quer cobrir.",
+        "repo_url_label": "URL do repositório GitHub",
+        "repo_url_hint": "Aceita https, SSH (git@github.com:...) ou o formato curto owner/repo.",
+        "repo_branch_label": "Branch",
+        "business_context_label": "Contexto de negócio (opcional)",
+        "business_context_placeholder": "Descreva os casos de uso e as regras de negócio que a QA quer cobrir. Ex.: 'Quando o usuário tenta se cadastrar com CPF já existente, a API responde 409 e a UI mostra toast genérico'.",
+        "business_context_hint": "Este texto é enviado junto com o código para o Claude Code em cada análise."
       },
       "danger": {
         "title": "Zona de perigo",

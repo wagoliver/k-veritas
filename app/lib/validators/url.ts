@@ -50,3 +50,73 @@ export function isPrivateHost(hostname: string): boolean {
 
   return false
 }
+
+/**
+ * Normaliza uma URL de repo GitHub vinda do usuário. Aceita os três
+ * formatos que a UI oferece e retorna uma URL https canônica:
+ *
+ *   https://github.com/wagoliver/k-veritas.git    → https://github.com/wagoliver/k-veritas.git
+ *   https://github.com/wagoliver/k-veritas        → https://github.com/wagoliver/k-veritas.git
+ *   git@github.com:wagoliver/k-veritas.git        → https://github.com/wagoliver/k-veritas.git
+ *   gh repo clone wagoliver/k-veritas             → https://github.com/wagoliver/k-veritas.git
+ *   wagoliver/k-veritas                           → https://github.com/wagoliver/k-veritas.git
+ *
+ * No MVP só aceitamos repos do GitHub (host == github.com) porque
+ * é o único provedor integrado. Bitbucket/GitLab podem vir em fase
+ * posterior.
+ */
+export function validateRepoUrl(input: string): {
+  ok: boolean
+  normalized?: string
+  reason?: string
+} {
+  const raw = input.trim()
+  if (!raw) return { ok: false, reason: 'invalid_repo_url' }
+
+  // gh CLI short form: "gh repo clone owner/repo"
+  const ghMatch = raw.match(/^gh\s+repo\s+clone\s+([\w.-]+\/[\w.-]+)/i)
+  if (ghMatch) {
+    return {
+      ok: true,
+      normalized: `https://github.com/${ghMatch[1].replace(/\.git$/, '')}.git`,
+    }
+  }
+
+  // git@github.com:owner/repo(.git)
+  const sshMatch = raw.match(/^git@github\.com:([\w.-]+\/[\w.-]+?)(\.git)?$/i)
+  if (sshMatch) {
+    return {
+      ok: true,
+      normalized: `https://github.com/${sshMatch[1]}.git`,
+    }
+  }
+
+  // owner/repo shorthand
+  if (/^[\w.-]+\/[\w.-]+$/.test(raw) && !raw.startsWith('http')) {
+    return {
+      ok: true,
+      normalized: `https://github.com/${raw.replace(/\.git$/, '')}.git`,
+    }
+  }
+
+  // https://github.com/owner/repo(.git)
+  try {
+    const url = new URL(raw)
+    if (url.protocol !== 'https:') {
+      return { ok: false, reason: 'invalid_repo_url' }
+    }
+    if (url.hostname.toLowerCase() !== 'github.com') {
+      return { ok: false, reason: 'only_github_supported' }
+    }
+    const pathParts = url.pathname.replace(/^\/+|\/+$/g, '').split('/')
+    if (pathParts.length < 2) {
+      return { ok: false, reason: 'invalid_repo_url' }
+    }
+    const [owner, repoRaw] = pathParts
+    const repo = repoRaw.replace(/\.git$/, '')
+    if (!owner || !repo) return { ok: false, reason: 'invalid_repo_url' }
+    return { ok: true, normalized: `https://github.com/${owner}/${repo}.git` }
+  } catch {
+    return { ok: false, reason: 'invalid_repo_url' }
+  }
+}

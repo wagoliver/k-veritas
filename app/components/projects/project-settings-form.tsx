@@ -35,6 +35,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Separator } from '@/components/ui/separator'
+import { Textarea } from '@/components/ui/textarea'
 import { useRouter } from '@/lib/i18n/navigation'
 
 const TARGET_LOCALES = ['pt-BR', 'en-US', 'es-ES', 'fr-FR', 'de-DE'] as const
@@ -46,6 +47,14 @@ const schema = z.object({
   description: z.string().trim().max(4000).optional().or(z.literal('')),
   crawlMaxDepth: z.coerce.number().int().min(1).max(10),
   targetLocale: z.enum(TARGET_LOCALES),
+  repoUrl: z.string().trim().optional().or(z.literal('')),
+  repoBranch: z.string().trim().optional().or(z.literal('')),
+  businessContext: z
+    .string()
+    .trim()
+    .max(20_000)
+    .optional()
+    .or(z.literal('')),
 })
 
 type Values = z.infer<typeof schema>
@@ -59,6 +68,10 @@ interface ProjectSettingsFormProps {
     authKind: 'none' | 'form'
     crawlMaxDepth: number
     targetLocale: string
+    sourceType: 'url' | 'repo'
+    repoUrl: string | null
+    repoBranch: string
+    businessContext: string | null
   }
 }
 
@@ -84,25 +97,36 @@ export function ProjectSettingsForm({ project }: ProjectSettingsFormProps) {
       description: project.description ?? '',
       crawlMaxDepth: project.crawlMaxDepth ?? 3,
       targetLocale: initialLocale,
+      repoUrl: project.repoUrl ?? '',
+      repoBranch: project.repoBranch ?? 'main',
+      businessContext: project.businessContext ?? '',
     },
   })
+
+  const isRepoProject = project.sourceType === 'repo'
 
   const onSubmit = async (values: Values) => {
     setSubmitting(true)
     try {
+      const payload: Record<string, unknown> = {
+        name: values.name,
+        targetUrl: values.targetUrl,
+        description: values.description || undefined,
+        crawlMaxDepth: values.crawlMaxDepth,
+        targetLocale: values.targetLocale,
+      }
+      if (isRepoProject) {
+        payload.repoUrl = values.repoUrl || undefined
+        payload.repoBranch = values.repoBranch || 'main'
+        payload.businessContext = values.businessContext ?? ''
+      }
       const res = await fetch(`/api/projects/${project.id}`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
           'X-Requested-With': 'fetch',
         },
-        body: JSON.stringify({
-          name: values.name,
-          targetUrl: values.targetUrl,
-          description: values.description || undefined,
-          crawlMaxDepth: values.crawlMaxDepth,
-          targetLocale: values.targetLocale,
-        }),
+        body: JSON.stringify(payload),
       })
       if (!res.ok) {
         toast.error(t('errors.update'))
@@ -286,6 +310,81 @@ export function ProjectSettingsForm({ project }: ProjectSettingsFormProps) {
               )}
             />
           </section>
+
+          {isRepoProject ? (
+            <>
+              <Separator />
+              <section className="space-y-4">
+                <div>
+                  <h2 className="font-display text-base font-semibold">
+                    {t('repo.section_title')}
+                  </h2>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {t('repo.section_subtitle')}
+                  </p>
+                </div>
+
+                <FormField
+                  control={form.control}
+                  name="repoUrl"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{t('repo.repo_url_label')}</FormLabel>
+                      <FormControl>
+                        <Input
+                          {...field}
+                          placeholder="https://github.com/owner/repo"
+                        />
+                      </FormControl>
+                      <FormDescription>
+                        {t('repo.repo_url_hint')}
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="repoBranch"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{t('repo.repo_branch_label')}</FormLabel>
+                      <FormControl>
+                        <Input {...field} placeholder="main" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="businessContext"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>
+                        {t('repo.business_context_label')}
+                      </FormLabel>
+                      <FormControl>
+                        <Textarea
+                          {...field}
+                          rows={8}
+                          placeholder={t(
+                            'repo.business_context_placeholder',
+                          )}
+                        />
+                      </FormControl>
+                      <FormDescription>
+                        {t('repo.business_context_hint')}
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </section>
+            </>
+          ) : null}
 
           <div className="flex items-center gap-3 border-t border-border pt-5">
             <Button type="submit" disabled={submitting || !form.formState.isDirty}>

@@ -1,0 +1,14 @@
+{
+  "name": "@k-veritas/codex",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node --experimental-strip-types src/index.ts"
+  },
+  "dependencies": {
+    "@anthropic-ai/claude-code": "^0.4.0",
+    "adm-zip": "^0.5.16",
+    "postgres": "^3.4.5"
+  }
+}

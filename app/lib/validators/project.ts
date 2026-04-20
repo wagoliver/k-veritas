@@ -1,6 +1,7 @@
 import { z } from 'zod'
 
 export const authKindSchema = z.enum(['none', 'form'])
+export const sourceTypeSchema = z.enum(['url', 'repo'])
 
 export const authFormSchema = z.object({
   loginUrl: z.string().url(),
@@ -14,11 +15,23 @@ const targetLocaleSchema = z
   .regex(/^[a-z]{2}(-[A-Z]{2})?$/, 'invalid_locale')
   .max(10)
 
+// Aceita https://, git@ e URL estilo gh CLI (github.com/owner/repo).
+// Validação estrita (host == github.com, path com >= 2 segmentos) fica
+// no validateRepoUrl do url.ts — aqui só garante o shape mínimo.
+const repoUrlSchema = z.string().trim().min(6).max(2048)
+const repoBranchSchema = z.string().trim().min(1).max(100).default('main')
+const businessContextSchema = z.string().trim().max(20_000).optional()
+
 export const createProjectSchema = z
   .object({
     name: z.string().trim().min(2).max(80),
-    targetUrl: z.string().trim().url().max(2048),
+    sourceType: sourceTypeSchema.default('url'),
+    // targetUrl é obrigatório para sourceType='url'; opcional para 'repo'.
+    targetUrl: z.string().trim().url().max(2048).optional(),
+    repoUrl: repoUrlSchema.optional(),
+    repoBranch: repoBranchSchema.optional(),
     description: z.string().trim().max(4000).optional(),
+    businessContext: businessContextSchema,
     authKind: authKindSchema.default('none'),
     authForm: authFormSchema.optional(),
     targetLocale: targetLocaleSchema.optional(),
@@ -32,6 +45,20 @@ export const createProjectSchema = z
         path: ['authForm'],
       })
     }
+    if (v.sourceType === 'url' && !v.targetUrl) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'target_url_required',
+        path: ['targetUrl'],
+      })
+    }
+    if (v.sourceType === 'repo' && !v.repoUrl) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'repo_url_required',
+        path: ['repoUrl'],
+      })
+    }
   })
 
 export const updateProjectSchema = z.object({
@@ -42,6 +69,9 @@ export const updateProjectSchema = z.object({
   authForm: authFormSchema.optional(),
   crawlMaxDepth: z.number().int().min(1).max(10).optional(),
   targetLocale: targetLocaleSchema.optional(),
+  repoUrl: repoUrlSchema.optional(),
+  repoBranch: repoBranchSchema.optional(),
+  businessContext: businessContextSchema,
 })
 
 export const createScenarioSchema = z.object({

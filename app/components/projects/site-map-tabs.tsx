@@ -5,6 +5,7 @@ import { useState } from 'react'
 import { useTranslations } from 'next-intl'
 
 import { cn } from '@/lib/utils'
+import { CodeAnalysisPanel } from './code-analysis-panel'
 import { SiteMapList } from './site-map-list'
 
 type SubTab = 'crawler' | 'code'
@@ -41,7 +42,7 @@ export function SiteMapTabs({
       </section>
 
       <section className={cn(tab === 'code' ? 'block' : 'hidden')}>
-        <CodePlaceholder />
+        <CodeAnalysisPanel projectId={projectId} />
       </section>
     </div>
   )
@@ -77,15 +78,3 @@ function SubTabBtn({
   )
 }
 
-function CodePlaceholder() {
-  const t = useTranslations('projects.overview.map.code')
-  return (
-    <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-border p-12 text-center">
-      <Code2 className="size-8 text-muted-foreground" />
-      <div className="max-w-md space-y-1">
-        <p className="text-sm font-medium">{t('title')}</p>
-        <p className="text-xs text-muted-foreground">{t('description')}</p>
-      </div>
-    </div>
-  )
-}

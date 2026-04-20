@@ -58,6 +58,10 @@ export default async function ProjectSettingsPage({
             authKind: project.authKind as 'none' | 'form',
             crawlMaxDepth: project.crawlMaxDepth,
             targetLocale: project.targetLocale,
+            sourceType: project.sourceType as 'url' | 'repo',
+            repoUrl: project.repoUrl,
+            repoBranch: project.repoBranch,
+            businessContext: project.businessContext,
           }}
         />
       </div>

@@ -210,6 +210,11 @@ export const projects = pgTable(
     crawlMaxDepth: integer('crawl_max_depth').notNull().default(3),
     targetLocale: text('target_locale').notNull().default('pt-BR'),
     status: text('status').notNull().default('draft'),
+    sourceType: text('source_type').notNull().default('url'),
+    repoUrl: text('repo_url'),
+    repoBranch: text('repo_branch').notNull().default('main'),
+    repoZipPath: text('repo_zip_path'),
+    businessContext: text('business_context'),
     createdBy: uuid('created_by')
       .notNull()
       .references(() => users.id),
@@ -313,6 +318,41 @@ export const crawlElements = pgTable(
   }),
 )
 
+export const codeAnalysisJobs = pgTable(
+  'code_analysis_jobs',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    projectId: uuid('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    status: text('status').notNull().default('pending'),
+    sourceType: text('source_type').notNull(),
+    repoUrl: text('repo_url'),
+    repoBranch: text('repo_branch'),
+    repoZipPath: text('repo_zip_path'),
+    requestedBy: uuid('requested_by')
+      .notNull()
+      .references(() => users.id),
+    lockedBy: text('locked_by'),
+    lockedAt: timestamp('locked_at', { withTimezone: true }),
+    startedAt: timestamp('started_at', { withTimezone: true }),
+    finishedAt: timestamp('finished_at', { withTimezone: true }),
+    error: text('error'),
+    tokensIn: integer('tokens_in').notNull().default(0),
+    tokensOut: integer('tokens_out').notNull().default(0),
+    turnsUsed: integer('turns_used').notNull().default(0),
+    currentStepLabel: text('current_step_label'),
+    stepsCompleted: integer('steps_completed').notNull().default(0),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    projectIdx: index('code_analysis_jobs_project_idx').on(t.projectId),
+    statusIdx: index('code_analysis_jobs_status_idx').on(t.status),
+  }),
+)
+
 export type User = typeof users.$inferSelect
 export type NewUser = typeof users.$inferInsert
 export type Session = typeof sessions.$inferSelect
@@ -353,6 +393,12 @@ export const projectAnalyses = pgTable(
     crawlId: uuid('crawl_id').references(() => crawlJobs.id, {
       onDelete: 'set null',
     }),
+    analysisType: text('analysis_type').notNull().default('crawl'),
+    codeAnalysisJobId: uuid('code_analysis_job_id').references(
+      () => codeAnalysisJobs.id,
+      { onDelete: 'set null' },
+    ),
+    manifestPath: text('manifest_path'),
     status: text('status').notNull().default('pending'),
     model: text('model').notNull(),
     provider: text('provider').notNull(),
@@ -685,3 +731,13 @@ export type ProjectStatus = 'draft' | 'crawling' | 'ready' | 'failed'
 export type AuthKind = 'none' | 'form'
 export type AnalysisStatus = 'pending' | 'running' | 'completed' | 'failed'
 export type AIProvider = 'ollama' | 'openai-compatible' | 'anthropic'
+export type ProjectSourceType = 'url' | 'repo'
+export type AnalysisType = 'crawl' | 'code'
+export type CodeAnalysisJob = typeof codeAnalysisJobs.$inferSelect
+export type NewCodeAnalysisJob = typeof codeAnalysisJobs.$inferInsert
+export type CodeAnalysisJobStatus =
+  | 'pending'
+  | 'running'
+  | 'completed'
+  | 'failed'
+  | 'cancelled'

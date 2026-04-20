@@ -144,6 +144,35 @@ services:
     networks:
       - kv-net
 
+  codex:
+    build:
+      context: ./codex
+      dockerfile: Dockerfile
+    container_name: kveritas-codex
+    restart: unless-stopped
+    env_file:
+      - ./app/.env.local
+    environment:
+      DATABASE_URL: postgres://kveritas:kveritas@postgres:5432/kveritas
+      DATA_DIR: /data
+      WORK_DIR: /work
+      # Modelo default quando a org_ai_config.model não aponta um
+      # valor. BYOK: a ANTHROPIC_API_KEY vem criptografada do Postgres
+      # por org — nunca do env do container.
+      CODEX_MODEL: claude-sonnet-4-5-20250929
+      CODEX_MAX_TURNS: "40"
+      CODEX_POLL_MS: "2000"
+      CODEX_STALE_SECONDS: "900"
+      NODE_ENV: production
+    volumes:
+      - artifacts:/data
+      - codex_work:/work
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    networks:
+      - kv-net
+
   ollama:
     image: ollama/ollama:latest
     container_name: kveritas-ollama
@@ -176,4 +205,5 @@ volumes:
   clickhouse_data:
   clickhouse_logs:
   artifacts:
+  codex_work:
   ollama_models:

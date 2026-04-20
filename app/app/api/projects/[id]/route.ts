@@ -11,7 +11,7 @@ import { audit } from '@/lib/auth/audit'
 import { authorizeProject } from '@/lib/auth/project-access'
 import { encryptSecret } from '@/lib/auth/totp'
 import { updateProjectSchema } from '@/lib/validators/project'
-import { validateTargetUrl } from '@/lib/validators/url'
+import { validateRepoUrl, validateTargetUrl } from '@/lib/validators/url'
 
 export const runtime = 'nodejs'
 
@@ -38,6 +38,10 @@ export async function GET(
     crawlMaxDepth: project.crawlMaxDepth,
     targetLocale: project.targetLocale,
     status: project.status,
+    sourceType: project.sourceType,
+    repoUrl: project.repoUrl,
+    repoBranch: project.repoBranch,
+    businessContext: project.businessContext,
     createdAt: project.createdAt,
     updatedAt: project.updatedAt,
   })
@@ -96,6 +100,22 @@ export async function PATCH(
         JSON.stringify(parsed.data.authForm),
       )
     }
+  }
+
+  if (parsed.data.repoUrl !== undefined) {
+    const check = validateRepoUrl(parsed.data.repoUrl)
+    if (!check.ok) {
+      return Problems.invalidBody({ repoUrl: check.reason ?? 'invalid_repo_url' })
+    }
+    updates.repoUrl = check.normalized
+  }
+
+  if (parsed.data.repoBranch !== undefined) {
+    updates.repoBranch = parsed.data.repoBranch
+  }
+
+  if (parsed.data.businessContext !== undefined) {
+    updates.businessContext = parsed.data.businessContext || null
   }
 
   await db.update(projects).set(updates).where(eq(projects.id, project.id))

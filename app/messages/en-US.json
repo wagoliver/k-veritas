@@ -215,6 +215,19 @@
       "step1": {
         "name_label": "Project name",
         "name_placeholder": "checkout-flow",
+        "source_type_label": "What's the project source?",
+        "source_type_options": {
+          "repo_title": "Repository",
+          "repo_desc": "AI reads the source code and drafts scenarios from it.",
+          "url_title": "App URL",
+          "url_desc": "Playwright crawler explores the running app."
+        },
+        "repo_url_label": "GitHub repository URL",
+        "repo_url_hint": "Accepts https://github.com/owner/repo, git@github.com:owner/repo and the shorthand owner/repo.",
+        "repo_branch_label": "Branch",
+        "business_context_label": "Business context (optional)",
+        "business_context_placeholder": "Describe in free text the use case and business rules QA wants to cover. You can edit this later in the project settings.",
+        "business_context_hint": "This text is sent together with the code to the AI, so it can draft scenarios more aligned with your business.",
         "url_label": "App URL",
         "url_hint": "Use staging or preview. Avoid production when testing destructive flows.",
         "auth_label": "Does the app require login?",
@@ -255,6 +268,8 @@
         "rate_limited": "Creation limit reached. Try again later.",
         "private_host": "Local/private URLs are not allowed.",
         "invalid_url": "Invalid URL.",
+        "invalid_repo_url": "Invalid repository URL.",
+        "only_github": "Only GitHub repositories are supported for now.",
         "min_2": "Minimum 2 characters",
         "max_80": "Maximum 80 characters",
         "required": "Required",
@@ -549,8 +564,32 @@
           "code": "Code"
         },
         "code": {
-          "title": "Code analysis coming soon",
-          "description": "Here you'll connect your project's repository to extract routes, components and elements directly from source — complementing (or replacing) the runtime crawler."
+          "empty_title": "Code analysis",
+          "empty_description": "AI reads your project's source code and drafts features and test scenarios. You review and approve, then we generate the Playwright tests.",
+          "source_not_configured_hint": "This project has no repository configured. Set one in Settings to run the analysis.",
+          "analyze_button": "Analyze now",
+          "reanalyze_button": "Analyze again",
+          "triggered": "Analysis started.",
+          "completed_hint": "Analysis complete. See the result in the Features/Scenarios tab.",
+          "status": {
+            "pending": "Queued",
+            "running": "Analyzing",
+            "completed": "Completed",
+            "failed": "Failed",
+            "cancelled": "Cancelled"
+          },
+          "metrics": {
+            "steps": "Steps",
+            "tokens": "Tokens in/out",
+            "turns": "Turns"
+          },
+          "errors": {
+            "generic": "Couldn't start the analysis.",
+            "network": "Connection failed.",
+            "rate_limited": "Too many analyses in a short time. Wait a bit.",
+            "anthropic_key_missing": "Set an Anthropic key in /settings/ai to run code analysis.",
+            "source_not_configured": "This project has no repository configured."
+          }
         },
         "crawling_title": "Crawling your app",
         "crawling_description": "This may take a few minutes. The page updates automatically.",
@@ -685,6 +724,16 @@
           "fr-FR": "French (France)",
           "de-DE": "German"
         }
+      },
+      "repo": {
+        "section_title": "Repository and business context",
+        "section_subtitle": "The source code AI will analyze and the business rules QA wants to cover.",
+        "repo_url_label": "GitHub repository URL",
+        "repo_url_hint": "Accepts https, SSH (git@github.com:...) or the owner/repo shorthand.",
+        "repo_branch_label": "Branch",
+        "business_context_label": "Business context (optional)",
+        "business_context_placeholder": "Describe use cases and business rules QA wants to cover. E.g.: 'When the user tries to register with an existing CPF, the API returns 409 and the UI shows a generic toast'.",
+        "business_context_hint": "This text is sent together with the code to Claude Code on each analysis."
       },
       "danger": {
         "title": "Danger zone",

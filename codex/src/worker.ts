@@ -1,0 +1,162 @@
+import { rm } from 'node:fs/promises'
+
+import {
+  claimNextJob,
+  getOrgCredentialRaw,
+  heartbeat,
+  markCompleted,
+  markFailed,
+  requeueStaleJobs,
+  sql,
+  updateProgress,
+  type PendingCodeJob,
+  type Project,
+} from './db.ts'
+import { prepareJobWorkspace } from './clone.ts'
+import { decryptSecret } from './crypto.ts'
+import { importManifest } from './import.ts'
+import { runClaude } from './run-claude.ts'
+import { env } from './env.ts'
+
+const WORKER_ID = `codex-${process.pid}-${Math.random().toString(36).slice(2, 8)}`
+const POLL_INTERVAL_MS = Number(env('CODEX_POLL_MS', '2000'))
+const STALE_TIMEOUT_SECONDS = Number(env('CODEX_STALE_SECONDS', '900'))
+const HEARTBEAT_MS = 15_000
+const MAX_TURNS = Number(env('CODEX_MAX_TURNS', '40'))
+const DEFAULT_MODEL = env('CODEX_MODEL', 'claude-sonnet-4-5-20250929')
+const KEEP_WORKDIR = env('CODEX_KEEP_WORKDIR', 'false') === 'true'
+
+let stopping = false
+process.on('SIGTERM', () => (stopping = true))
+process.on('SIGINT', () => (stopping = true))
+
+export async function runWorkerLoop(): Promise<void> {
+  console.log(`[codex] ${WORKER_ID} starting`)
+  let lastRequeueAt = 0
+
+  while (!stopping) {
+    try {
+      const now = Date.now()
+      if (now - lastRequeueAt > 60_000) {
+        const n = await requeueStaleJobs(STALE_TIMEOUT_SECONDS)
+        if (n > 0) console.log(`[codex] requeued ${n} stale job(s)`)
+        lastRequeueAt = now
+      }
+
+      const next = await claimNextJob(WORKER_ID)
+      if (!next) {
+        await sleep(POLL_INTERVAL_MS)
+        continue
+      }
+      await processJob(next.job, next.project)
+    } catch (err) {
+      console.error('[codex] loop error:', (err as Error).message)
+      await sleep(POLL_INTERVAL_MS)
+    }
+  }
+
+  console.log(`[codex] ${WORKER_ID} shutting down`)
+  await sql.end({ timeout: 5 })
+}
+
+async function processJob(
+  job: PendingCodeJob,
+  project: Project,
+): Promise<void> {
+  const jobId = job.id
+  console.log(`[codex] job=${jobId} project=${project.slug} starting`)
+
+  const hb = setInterval(() => {
+    heartbeat(jobId, WORKER_ID).catch((e) =>
+      console.error('[codex] heartbeat err:', (e as Error).message),
+    )
+  }, HEARTBEAT_MS)
+
+  const t0 = Date.now()
+  let tokensIn = 0
+  let tokensOut = 0
+  let turnsUsed = 0
+  let jobRoot: string | null = null
+
+  try {
+    await updateProgress(jobId, { label: 'preparando workspace' })
+    const workspace = await prepareJobWorkspace(jobId, project)
+    jobRoot = workspace.jobRoot
+
+    await updateProgress(jobId, { label: 'resolvendo credencial Anthropic' })
+    const cred = await getOrgCredentialRaw(project.org_id)
+    if (!cred || cred.provider !== 'anthropic' || !cred.api_key_encrypted) {
+      throw new Error(
+        'credencial Anthropic não configurada para a org (configure em /settings/ai)',
+      )
+    }
+    const apiKey = decryptSecret(cred.api_key_encrypted)
+    const model = cred.model || DEFAULT_MODEL
+
+    await updateProgress(jobId, { label: 'invocando Claude Code' })
+    const result = await runClaude({
+      input: {
+        projectName: project.name,
+        targetLocale: project.target_locale,
+        jobRoot: workspace.jobRoot,
+        outputDir: workspace.outputDir,
+      },
+      repoRoot: workspace.repoRoot,
+      apiKey,
+      model,
+      maxTurns: MAX_TURNS,
+      onEvent: async (evt) => {
+        // Atualiza label só em eventos "interessantes" (tool-use),
+        // evitando flood em text chunks.
+        if (evt.toolName) {
+          await updateProgress(jobId, {
+            label: `claude: ${evt.toolName}`,
+            incrementCompleted: true,
+          })
+        }
+      },
+    })
+
+    tokensIn = result.tokensIn
+    tokensOut = result.tokensOut
+    turnsUsed = result.turnsUsed
+
+    if (result.exitCode !== 0) {
+      throw new Error(
+        `claude saiu com code=${result.exitCode}. stderr: ${result.stderr.slice(-500)}`,
+      )
+    }
+
+    await updateProgress(jobId, { label: 'importando manifest' })
+    const { analysisId, manifestPath } = await importManifest({
+      jobId,
+      projectId: project.id,
+      requestedBy: job.requested_by,
+      model,
+      provider: 'anthropic',
+      outputDir: workspace.outputDir,
+      durationMs: Date.now() - t0,
+      tokensIn,
+      tokensOut,
+    })
+
+    console.log(
+      `[codex] job=${jobId} analysis=${analysisId} manifest=${manifestPath}`,
+    )
+
+    await markCompleted(jobId, { tokensIn, tokensOut, turnsUsed })
+  } catch (err) {
+    const msg = (err as Error).message
+    console.error(`[codex] job=${jobId} FAILED:`, msg)
+    await markFailed(jobId, msg, { tokensIn, tokensOut, turnsUsed })
+  } finally {
+    clearInterval(hb)
+    if (jobRoot && !KEEP_WORKDIR) {
+      await rm(jobRoot, { recursive: true, force: true }).catch(() => {})
+    }
+  }
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((r) => setTimeout(r, ms))
+}
