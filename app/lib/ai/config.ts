@@ -22,6 +22,9 @@ export interface SavedOrgAiConfig {
   temperature: number
   numCtx: number
   timeoutMs: number
+  // Anthropic dedicado (code-analysis via Claude Code CLI).
+  hasAnthropicKey: boolean
+  anthropicModel: string | null
   updatedAt: Date
   updatedBy: string
 }
@@ -50,6 +53,12 @@ export async function getOrgAiConfigView(
     temperature: row.temperature,
     numCtx: row.numCtx,
     timeoutMs: row.timeoutMs,
+    hasAnthropicKey:
+      Boolean(row.anthropicApiKeyEncrypted) ||
+      (row.provider === 'anthropic' && Boolean(row.apiKeyEncrypted)),
+    anthropicModel:
+      row.anthropicModel ??
+      (row.provider === 'anthropic' ? row.model : null),
     updatedAt: row.updatedAt,
     updatedBy: row.updatedBy,
   }
@@ -99,6 +108,13 @@ export interface UpsertAiConfigInput {
   temperature: number
   numCtx: number
   timeoutMs: number
+  // Anthropic dedicado. Semantic idêntica ao apiKey principal:
+  //   - anthropicApiKey string → cifra e grava
+  //   - clearAnthropicApiKey = true → apaga
+  //   - anthropicApiKey undefined + clear false → preserva o existente
+  anthropicApiKey?: string | null
+  clearAnthropicApiKey?: boolean
+  anthropicModel?: string | null
 }
 
 export async function upsertOrgAiConfig(
@@ -118,6 +134,22 @@ export async function upsertOrgAiConfig(
     apiKeyEncrypted = undefined
   }
 
+  let anthropicApiKeyEncrypted: Buffer | null | undefined
+  if (input.clearAnthropicApiKey) {
+    anthropicApiKeyEncrypted = null
+  } else if (input.anthropicApiKey) {
+    anthropicApiKeyEncrypted = encryptApiKey(input.anthropicApiKey)
+  } else {
+    anthropicApiKeyEncrypted = undefined
+  }
+
+  const anthropicModel =
+    input.anthropicModel === undefined
+      ? undefined
+      : input.anthropicModel && input.anthropicModel.length > 0
+        ? input.anthropicModel
+        : null
+
   if (!existing) {
     await db.insert(orgAiConfig).values({
       orgId,
@@ -125,6 +157,8 @@ export async function upsertOrgAiConfig(
       baseUrl: input.baseUrl,
       model: input.model,
       apiKeyEncrypted: apiKeyEncrypted ?? null,
+      anthropicApiKeyEncrypted: anthropicApiKeyEncrypted ?? null,
+      anthropicModel: anthropicModel ?? null,
       temperature: input.temperature,
       numCtx: input.numCtx,
       timeoutMs: input.timeoutMs,
@@ -142,6 +176,10 @@ export async function upsertOrgAiConfig(
       baseUrl: input.baseUrl,
       model: input.model,
       ...(apiKeyEncrypted !== undefined ? { apiKeyEncrypted } : {}),
+      ...(anthropicApiKeyEncrypted !== undefined
+        ? { anthropicApiKeyEncrypted }
+        : {}),
+      ...(anthropicModel !== undefined ? { anthropicModel } : {}),
       temperature: input.temperature,
       numCtx: input.numCtx,
       timeoutMs: input.timeoutMs,

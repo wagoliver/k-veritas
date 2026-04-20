@@ -41,6 +41,9 @@ const schema = z.object({
   temperature: z.coerce.number().min(0).max(2),
   numCtx: z.coerce.number().int().min(512).max(131072),
   timeoutMs: z.coerce.number().int().min(5_000).max(1_800_000),
+  anthropicApiKey: z.string().max(500).optional().or(z.literal('')),
+  clearAnthropicApiKey: z.boolean().optional(),
+  anthropicModel: z.string().trim().max(200).optional().or(z.literal('')),
 })
 
 type FormValues = z.infer<typeof schema>
@@ -53,6 +56,8 @@ export interface InitialAiConfig {
   temperature: number
   numCtx: number
   timeoutMs: number
+  hasAnthropicKey: boolean
+  anthropicModel: string | null
 }
 
 interface AiConfigFormProps {
@@ -85,6 +90,9 @@ export function AiConfigForm({ initial, canEdit }: AiConfigFormProps) {
     models: string[]
   } | null>(null)
   const [hasSavedKey, setHasSavedKey] = useState(initial?.hasApiKey ?? false)
+  const [hasSavedAnthropicKey, setHasSavedAnthropicKey] = useState(
+    initial?.hasAnthropicKey ?? false,
+  )
 
   const defaults: FormValues = {
     provider: initial?.provider ?? 'ollama',
@@ -95,6 +103,10 @@ export function AiConfigForm({ initial, canEdit }: AiConfigFormProps) {
     temperature: initial?.temperature ?? 0.3,
     numCtx: initial?.numCtx ?? 16384,
     timeoutMs: initial?.timeoutMs ?? 300_000,
+    anthropicApiKey: '',
+    clearAnthropicApiKey: false,
+    anthropicModel:
+      initial?.anthropicModel ?? 'claude-sonnet-4-5-20250929',
   }
 
   const form = useForm<FormValues>({
@@ -104,6 +116,8 @@ export function AiConfigForm({ initial, canEdit }: AiConfigFormProps) {
 
   const provider = form.watch('provider')
   const clearApiKey = form.watch('clearApiKey')
+  const clearAnthropicApiKey = form.watch('clearAnthropicApiKey')
+  const providerIsAnthropic = provider === 'anthropic'
 
   const onProviderChange = (next: AIProvider) => {
     form.setValue('provider', next)
@@ -196,6 +210,11 @@ export function AiConfigForm({ initial, canEdit }: AiConfigFormProps) {
             temperature: values.temperature,
             numCtx: values.numCtx,
             timeoutMs: values.timeoutMs,
+            anthropicApiKey: values.anthropicApiKey
+              ? values.anthropicApiKey
+              : undefined,
+            clearAnthropicApiKey: values.clearAnthropicApiKey ?? false,
+            anthropicModel: values.anthropicModel,
           }),
         })
         if (res.status === 403) {
@@ -213,10 +232,15 @@ export function AiConfigForm({ initial, canEdit }: AiConfigFormProps) {
         const data = (await res.json()) as { config: InitialAiConfig | null }
         toast.success(t('saved'))
         setHasSavedKey(data.config?.hasApiKey ?? false)
+        setHasSavedAnthropicKey(data.config?.hasAnthropicKey ?? false)
         form.reset({
           ...values,
           apiKey: '',
           clearApiKey: false,
+          anthropicApiKey: '',
+          clearAnthropicApiKey: false,
+          anthropicModel:
+            data.config?.anthropicModel ?? values.anthropicModel,
         })
       } catch {
         toast.error(t('errors.save'))
@@ -429,6 +453,100 @@ export function AiConfigForm({ initial, canEdit }: AiConfigFormProps) {
             {saving ? <Spinner /> : null}
             {saving ? t('saving') : t('save')}
           </Button>
+        </div>
+
+        <div className="mt-8 space-y-5 rounded-lg border border-border bg-muted/20 p-5">
+          <header className="space-y-1">
+            <h3 className="text-sm font-semibold">
+              {t('anthropic_section.title')}
+            </h3>
+            <p className="text-xs text-muted-foreground">
+              {t('anthropic_section.subtitle')}
+            </p>
+          </header>
+
+          {providerIsAnthropic ? (
+            <div className="rounded-md border border-primary/30 bg-primary/5 p-3 text-xs text-foreground">
+              {t('anthropic_section.reuse_hint')}
+            </div>
+          ) : null}
+
+          <FormField
+            control={form.control}
+            name="anthropicApiKey"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>
+                  {t('anthropic_section.api_key_label')}
+                </FormLabel>
+                <FormControl>
+                  <PasswordInput
+                    {...field}
+                    autoComplete="off"
+                    disabled={!canEdit || Boolean(clearAnthropicApiKey)}
+                    placeholder={
+                      hasSavedAnthropicKey || providerIsAnthropic
+                        ? '••••••••'
+                        : 'sk-ant-...'
+                    }
+                  />
+                </FormControl>
+                <FormDescription>
+                  {hasSavedAnthropicKey
+                    ? t('anthropic_section.api_key_saved')
+                    : providerIsAnthropic
+                      ? t('anthropic_section.api_key_reused')
+                      : t('anthropic_section.api_key_hint')}
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          {hasSavedAnthropicKey ? (
+            <FormField
+              control={form.control}
+              name="clearAnthropicApiKey"
+              render={({ field }) => (
+                <FormItem className="flex items-center gap-2">
+                  <FormControl>
+                    <Checkbox
+                      checked={field.value ?? false}
+                      onCheckedChange={(c) => field.onChange(Boolean(c))}
+                      disabled={!canEdit}
+                    />
+                  </FormControl>
+                  <FormLabel className="!mt-0 text-sm font-normal">
+                    {t('anthropic_section.api_key_clear')}
+                  </FormLabel>
+                </FormItem>
+              )}
+            />
+          ) : null}
+
+          <FormField
+            control={form.control}
+            name="anthropicModel"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>
+                  {t('anthropic_section.model_label')}
+                </FormLabel>
+                <FormControl>
+                  <Input
+                    {...field}
+                    disabled={!canEdit}
+                    spellCheck={false}
+                    placeholder="claude-sonnet-4-5-20250929"
+                  />
+                </FormControl>
+                <FormDescription>
+                  {t('anthropic_section.model_hint')}
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
         </div>
 
         {testResult ? (

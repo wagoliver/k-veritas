@@ -35,6 +35,8 @@ export interface OrgAiCredential {
   provider: string
   model: string
   api_key_encrypted: Buffer | null
+  anthropic_api_key_encrypted: Buffer | null
+  anthropic_model: string | null
 }
 
 export async function claimNextJob(
@@ -170,31 +172,51 @@ export async function requeueStaleJobs(
   return rows.length
 }
 
-// Resolve a credencial Anthropic da org (BYOK). Retorna null quando a
-// org não tem config ou quando o provider configurado não é anthropic.
-export async function getAnthropicKey(orgId: string): Promise<string | null> {
-  const rows = await sql<OrgAiCredential[]>`
-    SELECT provider, model, api_key_encrypted
-    FROM org_ai_config
-    WHERE org_id = ${orgId}
-    LIMIT 1
-  `
-  const cfg = rows[0]
-  if (!cfg || cfg.provider !== 'anthropic') return null
-  if (!cfg.api_key_encrypted) return null
-  return null // decryption fica no worker pra manter essa função síncrona de SQL
-}
-
 export async function getOrgCredentialRaw(
   orgId: string,
 ): Promise<OrgAiCredential | null> {
   const rows = await sql<OrgAiCredential[]>`
-    SELECT provider, model, api_key_encrypted
+    SELECT provider, model, api_key_encrypted,
+           anthropic_api_key_encrypted, anthropic_model
     FROM org_ai_config
     WHERE org_id = ${orgId}
     LIMIT 1
   `
   return rows[0] ?? null
+}
+
+export interface ResolvedAnthropic {
+  apiKeyEncrypted: Buffer
+  model: string
+  source: 'dedicated' | 'main-provider-anthropic'
+}
+
+// Regra de resolução da credencial Anthropic que o codex usa:
+//   1. se há chave dedicada (anthropic_api_key_encrypted) → usa ela
+//      + anthropic_model (ou default do worker se vazio)
+//   2. senão, se provider principal == 'anthropic' → usa api_key_encrypted
+//      + model principal
+//   3. senão → null (feature desabilitada)
+export function resolveAnthropic(
+  cfg: OrgAiCredential | null,
+  defaultModel: string,
+): ResolvedAnthropic | null {
+  if (!cfg) return null
+  if (cfg.anthropic_api_key_encrypted) {
+    return {
+      apiKeyEncrypted: cfg.anthropic_api_key_encrypted,
+      model: cfg.anthropic_model || defaultModel,
+      source: 'dedicated',
+    }
+  }
+  if (cfg.provider === 'anthropic' && cfg.api_key_encrypted) {
+    return {
+      apiKeyEncrypted: cfg.api_key_encrypted,
+      model: cfg.model || defaultModel,
+      source: 'main-provider-anthropic',
+    }
+  }
+  return null
 }
 
 // Import do manifest.json no Postgres. Deleta features/scenarios

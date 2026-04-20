@@ -25,6 +25,12 @@ export const aiConfigInputSchema = z.object({
   temperature: z.number().min(0).max(2),
   numCtx: z.number().int().min(512).max(131072),
   timeoutMs: z.number().int().min(5_000).max(1_800_000),
+  // Credencial Anthropic dedicada pra análise de código (Claude Code).
+  // Opcional — quando ausente, o codex cai na api_key principal se o
+  // provider principal for anthropic.
+  anthropicApiKey: z.string().trim().min(1).max(500).optional().or(z.literal('')),
+  clearAnthropicApiKey: z.boolean().optional(),
+  anthropicModel: z.string().trim().min(1).max(200).optional().or(z.literal('')),
 })
 
 export type AiConfigInput = z.infer<typeof aiConfigInputSchema>

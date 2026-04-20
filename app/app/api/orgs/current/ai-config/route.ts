@@ -49,6 +49,9 @@ export async function PUT(req: NextRequest) {
   if (!parsed.success) return Problems.invalidBody()
 
   const hasApiKey = Boolean(parsed.data.apiKey && parsed.data.apiKey.length > 0)
+  const hasAnthropicApiKey = Boolean(
+    parsed.data.anthropicApiKey && parsed.data.anthropicApiKey.length > 0,
+  )
 
   await upsertOrgAiConfig(org.id, session.user.id, {
     provider: parsed.data.provider,
@@ -59,6 +62,14 @@ export async function PUT(req: NextRequest) {
     temperature: parsed.data.temperature,
     numCtx: parsed.data.numCtx,
     timeoutMs: parsed.data.timeoutMs,
+    anthropicApiKey: hasAnthropicApiKey
+      ? parsed.data.anthropicApiKey
+      : undefined,
+    clearAnthropicApiKey: parsed.data.clearAnthropicApiKey,
+    anthropicModel:
+      parsed.data.anthropicModel === ''
+        ? null
+        : parsed.data.anthropicModel,
   })
 
   await audit({
@@ -71,6 +82,7 @@ export async function PUT(req: NextRequest) {
       provider: parsed.data.provider,
       model: parsed.data.model,
       hasApiKey,
+      hasAnthropicApiKey,
     },
     outcome: 'success',
   })

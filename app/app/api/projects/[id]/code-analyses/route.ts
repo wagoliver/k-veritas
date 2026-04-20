@@ -75,22 +75,26 @@ export async function POST(
   const rl = await consumeToken(BUCKETS.codeAnalyzeProject(project.id))
   if (!rl.allowed) return Problems.rateLimited(rl.retryAfterSeconds)
 
-  // Pre-check da credencial Anthropic. Sem isso, o container codex só vai
-  // descobrir que falta quando pegar o job — preferimos falhar fast aqui
-  // com mensagem acionável pra QA.
+  // Pre-check da credencial Anthropic. Falha fast aqui com mensagem
+  // acionável em vez de deixar o codex descobrir só quando pegar o job.
+  // Mesma regra do codex/src/db.ts#resolveAnthropic:
+  //   1. chave dedicada (anthropic_api_key_encrypted)
+  //   2. se não há, chave do provider principal quando provider=anthropic
+  //   3. senão, feature desabilitada
   const [aiCfg] = await db
     .select({
       provider: orgAiConfig.provider,
       apiKeyEncrypted: orgAiConfig.apiKeyEncrypted,
+      anthropicApiKeyEncrypted: orgAiConfig.anthropicApiKeyEncrypted,
     })
     .from(orgAiConfig)
     .where(eq(orgAiConfig.orgId, project.orgId))
     .limit(1)
-  if (
-    !aiCfg ||
-    aiCfg.provider !== 'anthropic' ||
-    !aiCfg.apiKeyEncrypted
-  ) {
+
+  const hasAnthropic =
+    Boolean(aiCfg?.anthropicApiKeyEncrypted) ||
+    (aiCfg?.provider === 'anthropic' && Boolean(aiCfg?.apiKeyEncrypted))
+  if (!hasAnthropic) {
     return Problems.invalidBody({ anthropicKey: 'anthropic_key_missing' })
   }
 

@@ -369,6 +369,11 @@ export const orgAiConfig = pgTable('org_ai_config', {
   baseUrl: text('base_url').notNull(),
   model: text('model').notNull(),
   apiKeyEncrypted: bytea('api_key_encrypted'),
+  // Credencial e modelo dedicados à análise de código-fonte (Claude
+  // Code CLI — Anthropic-only). Quando null, o codex cai pra
+  // api_key_encrypted se provider = 'anthropic'; senão desabilita.
+  anthropicApiKeyEncrypted: bytea('anthropic_api_key_encrypted'),
+  anthropicModel: text('anthropic_model'),
   temperature: real('temperature').notNull().default(0.3),
   numCtx: integer('num_ctx').notNull().default(16384),
   timeoutMs: integer('timeout_ms').notNull().default(300_000),

@@ -794,6 +794,18 @@
         "save": "Couldn't save configuration.",
         "forbidden": "Only owners and admins can change the AI configuration.",
         "rate_limited": "Too many changes in a short time. Try again later."
+      },
+      "anthropic_section": {
+        "title": "Code analysis (Claude Code)",
+        "subtitle": "Source-code analysis uses the Claude Code CLI, which is Anthropic-only. If the provider above is not Anthropic, paste a dedicated key here. Without it, the \"Code\" tab in repo-first projects stays disabled.",
+        "reuse_hint": "Your main provider is already Anthropic — the same key will be reused unless you provide a different one below.",
+        "api_key_label": "ANTHROPIC_API_KEY",
+        "api_key_hint": "Paste your Anthropic account key (starts with sk-ant-...). Stored encrypted (AES-256-GCM).",
+        "api_key_saved": "A dedicated Anthropic key is saved. Leave blank to keep it. Check \"remove\" to erase it.",
+        "api_key_reused": "No dedicated key — the codex uses the main provider's key.",
+        "api_key_clear": "Remove dedicated Anthropic key",
+        "model_label": "Claude model",
+        "model_hint": "Full model identifier (e.g. claude-sonnet-4-5-20250929 or claude-haiku-4-5). Leave empty to use the container default."
       }
     },
     "profile": {

@@ -7,6 +7,7 @@ import {
   markCompleted,
   markFailed,
   requeueStaleJobs,
+  resolveAnthropic,
   sql,
   updateProgress,
   type PendingCodeJob,
@@ -87,13 +88,17 @@ async function processJob(
 
     await updateProgress(jobId, { label: 'resolvendo credencial Anthropic' })
     const cred = await getOrgCredentialRaw(project.org_id)
-    if (!cred || cred.provider !== 'anthropic' || !cred.api_key_encrypted) {
+    const resolved = resolveAnthropic(cred, DEFAULT_MODEL)
+    if (!resolved) {
       throw new Error(
-        'credencial Anthropic não configurada para a org (configure em /settings/ai)',
+        'credencial Anthropic não configurada para a org (configure em /settings/ai, bloco Análise de código)',
       )
     }
-    const apiKey = decryptSecret(cred.api_key_encrypted)
-    const model = cred.model || DEFAULT_MODEL
+    const apiKey = decryptSecret(resolved.apiKeyEncrypted)
+    const model = resolved.model
+    console.log(
+      `[codex] job=${jobId} credential source=${resolved.source} model=${model}`,
+    )
 
     await updateProgress(jobId, { label: 'invocando Claude Code' })
     const result = await runClaude({
