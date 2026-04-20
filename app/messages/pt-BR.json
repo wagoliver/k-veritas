@@ -587,6 +587,36 @@
             "rate_limited": "Muitas análises em pouco tempo. Aguarde um pouco.",
             "anthropic_key_missing": "Configure uma chave Anthropic em /settings/ai para usar a análise de código.",
             "source_not_configured": "Este projeto não tem um repositório configurado."
+          },
+          "log": {
+            "status": {
+              "pending": "Enfileirado",
+              "running": "Analisando",
+              "completed": "Concluído",
+              "failed": "Falhou",
+              "cancelled": "Cancelado"
+            },
+            "tools_counter": "{count} tool calls",
+            "tokens_counter": "{inTok} → {outTok} tokens",
+            "turns_counter": "{count} turnos",
+            "waiting_first_event": "aguardando worker pegar o job…",
+            "cursor": "aguardando próximo passo…",
+            "label": {
+              "status": {
+                "job_started": "Worker pegou o job",
+                "clone_start": "Baixando código",
+                "clone_done": "Código pronto no workspace",
+                "claude_started": "Claude Code iniciando análise",
+                "import_done": "Manifest importado",
+                "completed": "Análise concluída",
+                "completed_with_warning": "Concluído com avisos",
+                "failed": "Falhou"
+              },
+              "error": {
+                "claude_failed": "Erro durante a análise",
+                "partial_success": "Limite atingido — manifest parcial aproveitado"
+              }
+            }
           }
         },
         "crawling_title": "Explorando sua aplicação",

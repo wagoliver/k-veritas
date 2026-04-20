@@ -3,6 +3,7 @@ import { join } from 'node:path'
 
 import {
   claimNextJob,
+  emitEvent,
   getOrgCredentialRaw,
   heartbeat,
   markCompleted,
@@ -84,9 +85,24 @@ async function processJob(
   let jobRoot: string | null = null
 
   try {
+    await emitEvent(
+      jobId,
+      'status',
+      'job_started',
+      `worker=${WORKER_ID} project=${project.slug}`,
+    )
     await updateProgress(jobId, { label: 'preparando workspace' })
+    await emitEvent(
+      jobId,
+      'status',
+      'clone_start',
+      project.source_type === 'repo' && project.repo_url
+        ? `${project.repo_url} (${project.repo_branch ?? 'main'})`
+        : project.repo_zip_path ?? '',
+    )
     const workspace = await prepareJobWorkspace(jobId, project)
     jobRoot = workspace.jobRoot
+    await emitEvent(jobId, 'status', 'clone_done', workspace.repoRoot)
 
     await updateProgress(jobId, { label: 'resolvendo credencial Anthropic' })
     const cred = await getOrgCredentialRaw(project.org_id)
@@ -100,6 +116,12 @@ async function processJob(
     const model = resolved.model
     console.log(
       `[codex] job=${jobId} credential source=${resolved.source} authMode=${resolved.authMode} model=${model}`,
+    )
+    await emitEvent(
+      jobId,
+      'status',
+      'claude_started',
+      `model=${model} authMode=${resolved.authMode}`,
     )
 
     await updateProgress(jobId, { label: 'invocando Claude Code' })
@@ -118,11 +140,16 @@ async function processJob(
       model,
       maxBudgetUsd: MAX_BUDGET_USD,
       onEvent: async (evt) => {
-        // Atualiza label só em eventos "interessantes" (tool-use),
-        // evitando flood em text chunks.
+        // Cada tool_use vira um evento visível no feed. Extrai um
+        // preview útil do input pra mostrar contexto (caminho do
+        // Read, pattern do Grep, etc.).
         if (evt.toolName) {
+          const detail = extractToolDetail(evt.raw)
+          await emitEvent(jobId, 'tool', evt.toolName, detail)
           await updateProgress(jobId, {
-            label: `claude: ${evt.toolName}`,
+            label: detail
+              ? `${evt.toolName}: ${detail.slice(0, 80)}`
+              : `claude: ${evt.toolName}`,
             incrementCompleted: true,
           })
         }
@@ -144,7 +171,7 @@ async function processJob(
     const errorSummary = buildErrorSummary(result, outputInventory)
 
     if (claudeErrored && !hasManifest) {
-      // Sem manifest = sem trabalho aproveitável. Falha de verdade.
+      await emitEvent(jobId, 'error', 'claude_failed', errorSummary.slice(0, 600))
       throw new Error(errorSummary)
     }
 
@@ -154,6 +181,12 @@ async function processJob(
       // mesmo; o job fica "completed" com warning no final.
       console.warn(
         `[codex] job=${jobId} PARTIAL_SUCCESS (claude exit=${result.exitCode} is_error=${result.isError}) — importando manifest existente`,
+      )
+      await emitEvent(
+        jobId,
+        'error',
+        'partial_success',
+        `${result.errorMessage?.slice(0, 400) ?? 'erro intermediário'} — manifest parcial será importado`,
       )
     }
 
@@ -173,6 +206,12 @@ async function processJob(
     console.log(
       `[codex] job=${jobId} analysis=${analysisId} manifest=${manifestPath}`,
     )
+    await emitEvent(
+      jobId,
+      'status',
+      'import_done',
+      `analysis=${analysisId} tokens=${tokensIn}/${tokensOut} turns=${turnsUsed}`,
+    )
 
     // Completa o job. Se o Claude errou mas a gente importou mesmo
     // assim, anota o warning no campo error pra QA saber (status
@@ -183,12 +222,15 @@ async function processJob(
         tokensOut,
         turnsUsed,
       })
+      await emitEvent(jobId, 'status', 'completed_with_warning')
     } else {
       await markCompleted(jobId, { tokensIn, tokensOut, turnsUsed })
+      await emitEvent(jobId, 'status', 'completed')
     }
   } catch (err) {
     const msg = (err as Error).message
     console.error(`[codex] job=${jobId} FAILED:`, msg)
+    await emitEvent(jobId, 'status', 'failed', msg.slice(0, 600))
     await markFailed(jobId, msg, { tokensIn, tokensOut, turnsUsed })
   } finally {
     clearInterval(hb)
@@ -200,6 +242,38 @@ async function processJob(
 
 function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms))
+}
+
+// Extrai um preview curto do input de uma tool_use do stream-json.
+// Diferentes tools têm campos diferentes no input — pegamos o que
+// fizer sentido por tipo. Retorna null quando nada é extraível.
+function extractToolDetail(raw: unknown): string | undefined {
+  if (!raw || typeof raw !== 'object') return undefined
+  const parsed = raw as Record<string, unknown>
+  const message = parsed.message as
+    | { content?: Array<Record<string, unknown>> }
+    | undefined
+  const blocks = message?.content ?? []
+  for (const block of blocks) {
+    if (block.type !== 'tool_use') continue
+    const input = block.input as Record<string, unknown> | undefined
+    if (!input) continue
+    // Campos comuns que valem mostrar como contexto.
+    for (const key of [
+      'file_path',
+      'path',
+      'pattern',
+      'query',
+      'command',
+      'glob',
+    ]) {
+      const value = input[key]
+      if (typeof value === 'string' && value.length > 0) {
+        return value
+      }
+    }
+  }
+  return undefined
 }
 
 // Monta a string de diagnóstico quando o Claude saiu com erro.

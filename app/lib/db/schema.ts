@@ -318,6 +318,23 @@ export const crawlElements = pgTable(
   }),
 )
 
+export const codeAnalysisEvents = pgTable(
+  'code_analysis_events',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    jobId: uuid('job_id').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    kind: text('kind').notNull(),
+    label: text('label').notNull(),
+    detail: text('detail'),
+  },
+  (t) => ({
+    jobIdx: index('code_analysis_events_job_idx').on(t.jobId, t.createdAt),
+  }),
+)
+
 export const codeAnalysisJobs = pgTable(
   'code_analysis_jobs',
   {

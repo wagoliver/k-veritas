@@ -14,6 +14,7 @@ import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import { CodeAnalysisLogStream } from './code-analysis-log-stream'
 
 interface CodeJobSnapshot {
   id: string
@@ -195,6 +196,10 @@ export function CodeAnalysisPanel({ projectId }: { projectId: string }) {
           label={t('metrics.turns')}
           value={String(job.turnsUsed)}
         />
+      </div>
+
+      <div className="border-t border-border p-4">
+        <CodeAnalysisLogStream projectId={projectId} jobId={job.id} />
       </div>
 
       {job.status === 'failed' && job.error ? (

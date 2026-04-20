@@ -587,6 +587,36 @@
             "rate_limited": "Too many analyses in a short time. Wait a bit.",
             "anthropic_key_missing": "Set an Anthropic key in /settings/ai to run code analysis.",
             "source_not_configured": "This project has no repository configured."
+          },
+          "log": {
+            "status": {
+              "pending": "Queued",
+              "running": "Analyzing",
+              "completed": "Completed",
+              "failed": "Failed",
+              "cancelled": "Cancelled"
+            },
+            "tools_counter": "{count} tool calls",
+            "tokens_counter": "{inTok} → {outTok} tokens",
+            "turns_counter": "{count} turns",
+            "waiting_first_event": "waiting for the worker to pick up the job…",
+            "cursor": "waiting for the next step…",
+            "label": {
+              "status": {
+                "job_started": "Worker picked up the job",
+                "clone_start": "Fetching code",
+                "clone_done": "Code ready in workspace",
+                "claude_started": "Claude Code starting analysis",
+                "import_done": "Manifest imported",
+                "completed": "Analysis completed",
+                "completed_with_warning": "Completed with warnings",
+                "failed": "Failed"
+              },
+              "error": {
+                "claude_failed": "Error during analysis",
+                "partial_success": "Limit reached — partial manifest imported"
+              }
+            }
           }
         },
         "crawling_title": "Crawling your app",

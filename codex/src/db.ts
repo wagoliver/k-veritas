@@ -80,6 +80,33 @@ export async function claimNextJob(
   return { job, project }
 }
 
+export type EventKind = 'status' | 'tool' | 'text' | 'error'
+
+// Insere um evento no feed visual do job. Fire-and-forget (logs se
+// der erro, mas não propaga — persistência de evento nunca deve
+// derrubar o job).
+export async function emitEvent(
+  jobId: string,
+  kind: EventKind,
+  label: string,
+  detail?: string,
+): Promise<void> {
+  try {
+    await sql`
+      INSERT INTO code_analysis_events (job_id, kind, label, detail)
+      VALUES (
+        ${jobId}, ${kind}, ${label.slice(0, 120)},
+        ${detail ? detail.slice(0, 800) : null}
+      )
+    `
+  } catch (err) {
+    console.warn(
+      `[codex] emitEvent job=${jobId} falhou:`,
+      err instanceof Error ? err.message : err,
+    )
+  }
+}
+
 export async function heartbeat(
   jobId: string,
   workerId: string,
