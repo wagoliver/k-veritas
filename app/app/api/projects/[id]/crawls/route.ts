@@ -55,6 +55,14 @@ export async function POST(
   const project = await authorizeProject(session.user.id, id)
   if (!project) return Problems.forbidden()
 
+  // Crawler exige target_url. Em projetos code-first (sourceType='repo')
+  // a coluna pode ser null até a QA preencher em Settings — aí não dá
+  // pra crawlear. A aba Crawler nem aparece nesse caso (SiteMapTabs
+  // já esconde), mas o endpoint protege em camada extra.
+  if (!project.targetUrl) {
+    return Problems.invalidBody({ targetUrl: 'target_url_required' })
+  }
+
   const rl = await consumeToken(BUCKETS.crawlProject(project.id))
   if (!rl.allowed) return Problems.rateLimited(rl.retryAfterSeconds)
 
