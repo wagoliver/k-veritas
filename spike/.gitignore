@@ -1,6 +1,0 @@
-results/*
-!results/.gitkeep
-fixtures/*.zip
-fixtures/unpacked/
-node_modules/
-dist/
