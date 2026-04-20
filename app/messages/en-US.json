@@ -797,7 +797,8 @@
       },
       "anthropic_section": {
         "title": "Code analysis (Claude Code)",
-        "subtitle": "Source-code analysis uses the Claude Code CLI, which is Anthropic-only. If the provider above is not Anthropic, paste a dedicated key here. Without it, the \"Code\" tab in repo-first projects stays disabled.",
+        "subtitle": "Source-code analysis uses the Claude Code CLI, which is Anthropic-only. Paste your Anthropic account key here. Without it, the \"Code\" tab in repo-first projects stays disabled.",
+        "required_warning": "Without an Anthropic key (here or in the main provider), the Code tab in code-first projects stays disabled.",
         "reuse_hint": "Your main provider is already Anthropic — the same key will be reused unless you provide a different one below.",
         "api_key_label": "ANTHROPIC_API_KEY",
         "api_key_hint": "Paste your Anthropic account key (starts with sk-ant-...). Stored encrypted (AES-256-GCM).",
@@ -806,6 +807,17 @@
         "api_key_clear": "Remove dedicated Anthropic key",
         "model_label": "Claude model",
         "model_hint": "Full model identifier (e.g. claude-sonnet-4-5-20250929 or claude-haiku-4-5). Leave empty to use the container default."
+      },
+      "providers_section": {
+        "title": "Additional provider (optional)",
+        "subtitle": "Configure an alternative provider here (Ollama, OpenAI-compatible, or Anthropic) used by crawler-based analysis and other legacy flows. You can leave it blank if you only use source-code analysis."
+      },
+      "tabs": {
+        "anthropic": "Anthropic",
+        "anthropic_required": "Required",
+        "anthropic_ok": "Configured",
+        "providers": "Providers",
+        "providers_optional": "Optional"
       }
     },
     "profile": {
