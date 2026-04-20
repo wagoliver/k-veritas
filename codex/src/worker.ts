@@ -1,4 +1,5 @@
-import { rm } from 'node:fs/promises'
+import { readdir, rm, stat } from 'node:fs/promises'
+import { join } from 'node:path'
 
 import {
   claimNextJob,
@@ -130,10 +131,39 @@ async function processJob(
     tokensOut = result.tokensOut
     turnsUsed = result.turnsUsed
 
-    if (result.exitCode !== 0) {
-      throw new Error(
-        `claude saiu com code=${result.exitCode}. stderr: ${result.stderr.slice(-500)}`,
+    const outputInventory = await listOutputTree(workspace.outputDir)
+
+    if (result.exitCode !== 0 || result.isError) {
+      const parts: string[] = []
+      parts.push(
+        `claude exit=${result.exitCode} is_error=${result.isError}` +
+          (result.errorSubtype ? ` subtype=${result.errorSubtype}` : ''),
       )
+      if (result.errorMessage) {
+        parts.push(`msg: ${result.errorMessage.slice(0, 600)}`)
+      }
+      if (result.systemNotices.length > 0) {
+        parts.push(
+          `notices: ${result.systemNotices.slice(-3).join(' | ').slice(0, 600)}`,
+        )
+      }
+      if (result.stderr && result.stderr.trim().length > 0) {
+        parts.push(`stderr: ${result.stderr.slice(-400)}`)
+      }
+      if (result.finalMessage) {
+        parts.push(`finalMsg: ${result.finalMessage.slice(0, 300)}`)
+      }
+      if (outputInventory.length === 0) {
+        parts.push('outputDir vazio — Claude não escreveu arquivos')
+      } else {
+        parts.push(`outputDir: ${outputInventory.join(', ')}`)
+      }
+      if (!result.errorMessage && !result.stderr) {
+        // Último recurso: tail do stdout bruto pra ver se o agente deu
+        // pista do que aconteceu.
+        parts.push(`stdoutTail: ${result.rawStdoutTail.slice(-400)}`)
+      }
+      throw new Error(parts.join(' | '))
     }
 
     await updateProgress(jobId, { label: 'importando manifest' })
@@ -168,4 +198,41 @@ async function processJob(
 
 function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms))
+}
+
+// Lista arquivos em output/ (profundidade 2) pra diagnóstico. Retorna
+// caminhos relativos. Silenciosa — vazia em erro de FS.
+async function listOutputTree(root: string): Promise<string[]> {
+  const out: string[] = []
+  try {
+    const level1 = await readdir(root, { withFileTypes: true })
+    for (const e1 of level1) {
+      if (e1.isDirectory()) {
+        try {
+          const level2 = await readdir(join(root, e1.name))
+          for (const name of level2) {
+            const abs = join(root, e1.name, name)
+            try {
+              const s = await stat(abs)
+              out.push(`${e1.name}/${name} (${s.size}b)`)
+            } catch {
+              out.push(`${e1.name}/${name}`)
+            }
+          }
+        } catch {
+          out.push(`${e1.name}/`)
+        }
+      } else {
+        try {
+          const s = await stat(join(root, e1.name))
+          out.push(`${e1.name} (${s.size}b)`)
+        } catch {
+          out.push(e1.name)
+        }
+      }
+    }
+  } catch {
+    // sem output — devolve vazio
+  }
+  return out
 }

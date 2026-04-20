@@ -28,6 +28,18 @@ export interface RunClaudeResult {
   turnsUsed: number
   finalMessage: string | null
   stderr: string
+  // Flags/detalhes capturados do evento "result" do stream-json.
+  // Claude Code 2.x reporta falhas como `is_error: true` + `subtype`
+  // (ex: "error_max_turns", "error_during_execution") + `result`
+  // com a mensagem humana. O exit code fica 1 mesmo quando a causa
+  // é semântica (não crash).
+  isError: boolean
+  errorSubtype: string | null
+  errorMessage: string | null
+  // Linhas coletadas de eventos type="system"/"error" do próprio CLI.
+  systemNotices: string[]
+  // Últimos 4KB do stdout bruto pra debug quando nada mais ajuda.
+  rawStdoutTail: string
 }
 
 /**
@@ -84,13 +96,20 @@ export async function runClaude(
   let finalMessage: string | null = null
   let stderr = ''
   let stdoutBuffer = ''
+  let rawStdoutAccum = ''
+  let isError = false
+  let errorSubtype: string | null = null
+  let errorMessage: string | null = null
+  const systemNotices: string[] = []
 
   proc.stderr.on('data', (chunk) => {
     stderr += chunk.toString('utf8')
   })
 
   proc.stdout.on('data', async (chunk) => {
-    stdoutBuffer += chunk.toString('utf8')
+    const text = chunk.toString('utf8')
+    rawStdoutAccum += text
+    stdoutBuffer += text
     const lines = stdoutBuffer.split('\n')
     stdoutBuffer = lines.pop() ?? ''
     for (const raw of lines) {
@@ -139,6 +158,34 @@ export async function runClaude(
         if (typeof parsed.result === 'string') {
           finalMessage = parsed.result
         }
+        if (parsed.is_error === true) {
+          isError = true
+          if (typeof parsed.subtype === 'string') {
+            errorSubtype = parsed.subtype
+          }
+          if (typeof parsed.result === 'string') {
+            errorMessage = parsed.result
+          } else if (typeof parsed.error === 'string') {
+            errorMessage = parsed.error
+          }
+        }
+      }
+
+      // Eventos de sistema/erro do próprio CLI (stream-json emite alguns
+      // como type="system" ou "error") — guardamos os textos pra repasse.
+      if (type === 'system' || type === 'error') {
+        const text =
+          typeof parsed.text === 'string'
+            ? parsed.text
+            : typeof parsed.message === 'string'
+              ? (parsed.message as string)
+              : typeof parsed.error === 'string'
+                ? (parsed.error as string)
+                : JSON.stringify(parsed).slice(0, 300)
+        systemNotices.push(`[${type}] ${text}`)
+        if (type === 'error' && !errorMessage) {
+          errorMessage = text
+        }
       }
 
       const usageInline = parsed.usage as
@@ -169,5 +216,10 @@ export async function runClaude(
     turnsUsed,
     finalMessage,
     stderr: stderr.slice(-4000),
+    isError,
+    errorSubtype,
+    errorMessage,
+    systemNotices,
+    rawStdoutTail: rawStdoutAccum.slice(-4000),
   }
 }
