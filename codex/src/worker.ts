@@ -6,6 +6,7 @@ import {
   getOrgCredentialRaw,
   heartbeat,
   markCompleted,
+  markCompletedWithWarning,
   markFailed,
   requeueStaleJobs,
   resolveAnthropic,
@@ -132,38 +133,27 @@ async function processJob(
     turnsUsed = result.turnsUsed
 
     const outputInventory = await listOutputTree(workspace.outputDir)
+    const hasManifest = outputInventory.some((p) =>
+      p.startsWith('manifest.json'),
+    )
 
-    if (result.exitCode !== 0 || result.isError) {
-      const parts: string[] = []
-      parts.push(
-        `claude exit=${result.exitCode} is_error=${result.isError}` +
-          (result.errorSubtype ? ` subtype=${result.errorSubtype}` : ''),
+    // Resumo textual do erro do Claude (se houver) — reusado pra
+    // fail puro OU pra warning em modo best-effort.
+    const claudeErrored = result.exitCode !== 0 || result.isError
+    const errorSummary = buildErrorSummary(result, outputInventory)
+
+    if (claudeErrored && !hasManifest) {
+      // Sem manifest = sem trabalho aproveitável. Falha de verdade.
+      throw new Error(errorSummary)
+    }
+
+    if (claudeErrored && hasManifest) {
+      // Best-effort: o Claude bateu em algum limite (rate limit, budget,
+      // erro de rede) MAS chegou a escrever o manifest. Importa assim
+      // mesmo; o job fica "completed" com warning no final.
+      console.warn(
+        `[codex] job=${jobId} PARTIAL_SUCCESS (claude exit=${result.exitCode} is_error=${result.isError}) — importando manifest existente`,
       )
-      if (result.errorMessage) {
-        parts.push(`msg: ${result.errorMessage.slice(0, 600)}`)
-      }
-      if (result.systemNotices.length > 0) {
-        parts.push(
-          `notices: ${result.systemNotices.slice(-3).join(' | ').slice(0, 600)}`,
-        )
-      }
-      if (result.stderr && result.stderr.trim().length > 0) {
-        parts.push(`stderr: ${result.stderr.slice(-400)}`)
-      }
-      if (result.finalMessage) {
-        parts.push(`finalMsg: ${result.finalMessage.slice(0, 300)}`)
-      }
-      if (outputInventory.length === 0) {
-        parts.push('outputDir vazio — Claude não escreveu arquivos')
-      } else {
-        parts.push(`outputDir: ${outputInventory.join(', ')}`)
-      }
-      if (!result.errorMessage && !result.stderr) {
-        // Último recurso: tail do stdout bruto pra ver se o agente deu
-        // pista do que aconteceu.
-        parts.push(`stdoutTail: ${result.rawStdoutTail.slice(-400)}`)
-      }
-      throw new Error(parts.join(' | '))
     }
 
     await updateProgress(jobId, { label: 'importando manifest' })
@@ -183,7 +173,18 @@ async function processJob(
       `[codex] job=${jobId} analysis=${analysisId} manifest=${manifestPath}`,
     )
 
-    await markCompleted(jobId, { tokensIn, tokensOut, turnsUsed })
+    // Completa o job. Se o Claude errou mas a gente importou mesmo
+    // assim, anota o warning no campo error pra QA saber (status
+    // continua 'completed' — os dados estão no banco e usáveis).
+    if (claudeErrored) {
+      await markCompletedWithWarning(jobId, errorSummary, {
+        tokensIn,
+        tokensOut,
+        turnsUsed,
+      })
+    } else {
+      await markCompleted(jobId, { tokensIn, tokensOut, turnsUsed })
+    }
   } catch (err) {
     const msg = (err as Error).message
     console.error(`[codex] job=${jobId} FAILED:`, msg)
@@ -198,6 +199,42 @@ async function processJob(
 
 function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms))
+}
+
+// Monta a string de diagnóstico quando o Claude saiu com erro.
+// Usada tanto em fail puro (sem manifest) quanto em warning (best-effort).
+function buildErrorSummary(
+  result: Awaited<ReturnType<typeof runClaude>>,
+  outputInventory: string[],
+): string {
+  const parts: string[] = []
+  parts.push(
+    `claude exit=${result.exitCode} is_error=${result.isError}` +
+      (result.errorSubtype ? ` subtype=${result.errorSubtype}` : ''),
+  )
+  if (result.errorMessage) {
+    parts.push(`msg: ${result.errorMessage.slice(0, 600)}`)
+  }
+  if (result.systemNotices.length > 0) {
+    parts.push(
+      `notices: ${result.systemNotices.slice(-3).join(' | ').slice(0, 600)}`,
+    )
+  }
+  if (result.stderr && result.stderr.trim().length > 0) {
+    parts.push(`stderr: ${result.stderr.slice(-400)}`)
+  }
+  if (result.finalMessage) {
+    parts.push(`finalMsg: ${result.finalMessage.slice(0, 300)}`)
+  }
+  if (outputInventory.length === 0) {
+    parts.push('outputDir vazio — Claude não escreveu arquivos')
+  } else {
+    parts.push(`outputDir: ${outputInventory.join(', ')}`)
+  }
+  if (!result.errorMessage && !result.stderr) {
+    parts.push(`stdoutTail: ${result.rawStdoutTail.slice(-400)}`)
+  }
+  return parts.join(' | ')
 }
 
 // Lista arquivos em output/ (profundidade 2) pra diagnóstico. Retorna

@@ -130,6 +130,31 @@ export async function markCompleted(
   `
 }
 
+// Best-effort completion: o Claude saiu com erro mas havia manifest
+// aproveitável. Grava o warning no campo `error` (preserva diagnóstico)
+// mas mantém o status 'completed' porque os dados foram importados e
+// estão utilizáveis pela UI.
+export async function markCompletedWithWarning(
+  jobId: string,
+  warning: string,
+  metrics: {
+    tokensIn: number
+    tokensOut: number
+    turnsUsed: number
+  },
+): Promise<void> {
+  await sql`
+    UPDATE code_analysis_jobs SET
+      status = 'completed',
+      finished_at = now(),
+      error = ${`[warning] ${warning}`.slice(0, 4000)},
+      tokens_in = ${metrics.tokensIn},
+      tokens_out = ${metrics.tokensOut},
+      turns_used = ${metrics.turnsUsed}
+    WHERE id = ${jobId}
+  `
+}
+
 export async function markFailed(
   jobId: string,
   error: string,
