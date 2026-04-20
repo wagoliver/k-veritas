@@ -419,12 +419,15 @@ function RecheckButton({
 function Badge({
   children,
   tone = 'neutral',
+  title,
 }: {
   children: React.ReactNode
   tone?: 'neutral' | 'warning' | 'error'
+  title?: string
 }) {
   return (
     <span
+      title={title}
       className={cn(
         'inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium',
         tone === 'neutral' && 'bg-muted text-muted-foreground',
