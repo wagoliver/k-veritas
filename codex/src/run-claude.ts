@@ -8,7 +8,9 @@ export interface RunClaudeOptions {
   repoRoot: string
   apiKey: string
   model: string
-  maxTurns: number
+  // Teto de gasto em USD. O CLI aborta quando atinge. Passa direto
+  // pro --max-budget-usd do Claude Code 2.x.
+  maxBudgetUsd: number
   // Chamado em cada evento do stream (pra alimentar heartbeat + UI).
   onEvent?: (evt: ClaudeStreamEvent) => void | Promise<void>
 }
@@ -46,11 +48,12 @@ export async function runClaude(
     prompt,
     '--bare',
     '--permission-mode',
-    'dontAsk',
-    '--max-turns',
-    String(opts.maxTurns),
+    'bypassPermissions',
+    '--max-budget-usd',
+    String(opts.maxBudgetUsd),
     '--output-format',
     'stream-json',
+    '--verbose',
     '--model',
     opts.model,
   ]

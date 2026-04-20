@@ -160,7 +160,7 @@ services:
       # valor. BYOK: a ANTHROPIC_API_KEY vem criptografada do Postgres
       # por org — nunca do env do container.
       CODEX_MODEL: claude-sonnet-4-5-20250929
-      CODEX_MAX_TURNS: "40"
+      CODEX_MAX_BUDGET_USD: "5"
       CODEX_POLL_MS: "2000"
       CODEX_STALE_SECONDS: "900"
       NODE_ENV: production

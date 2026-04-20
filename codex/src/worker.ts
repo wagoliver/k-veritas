@@ -22,7 +22,9 @@ const WORKER_ID = `codex-${process.pid}-${Math.random().toString(36).slice(2, 8)
 const POLL_INTERVAL_MS = Number(env('CODEX_POLL_MS', '2000'))
 const STALE_TIMEOUT_SECONDS = Number(env('CODEX_STALE_SECONDS', '900'))
 const HEARTBEAT_MS = 15_000
-const MAX_TURNS = Number(env('CODEX_MAX_TURNS', '40'))
+// Teto de custo por rodada (USD). Claude Code aborta quando atinge.
+// Default conservador; ajuste via env do compose conforme necessário.
+const MAX_BUDGET_USD = Number(env('CODEX_MAX_BUDGET_USD', '5'))
 const DEFAULT_MODEL = env('CODEX_MODEL', 'claude-sonnet-4-5-20250929')
 const KEEP_WORKDIR = env('CODEX_KEEP_WORKDIR', 'false') === 'true'
 
@@ -104,7 +106,7 @@ async function processJob(
       repoRoot: workspace.repoRoot,
       apiKey,
       model,
-      maxTurns: MAX_TURNS,
+      maxBudgetUsd: MAX_BUDGET_USD,
       onEvent: async (evt) => {
         // Atualiza label só em eventos "interessantes" (tool-use),
         // evitando flood em text chunks.
