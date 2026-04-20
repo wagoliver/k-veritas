@@ -120,9 +120,9 @@
       "soon": "Coming soon",
       "project": {
         "section": "Project",
-        "map": "Site map",
+        "map": "Discovery",
         "analysis": "Scenarios",
-        "test_scenarios": "Test Scenarios",
+        "test_scenarios": "Scripts",
         "execution": "Execution"
       }
     },
@@ -281,14 +281,14 @@
       "crawling_progress": "Crawling...",
       "recrawl_started": "New crawl started.",
       "tabs": {
-        "map": "Site map",
+        "map": "Discovery",
         "analysis": "Scenarios",
         "tests": "Tests",
-        "test_scenarios": "Test Scenarios",
+        "test_scenarios": "Scripts",
         "execution": "Execution"
       },
       "execution": {
-        "empty": "No scenarios with a generated test yet. Go back to \"Test Scenarios\" and generate at least one test to run here.",
+        "empty": "No scenarios with a generated test yet. Go back to \"Scripts\" and generate at least one test to run here.",
         "summary": "{total} executable scenarios",
         "passed_count": "{count} scenarios passed",
         "failed_count": "{count} scenarios failed",
@@ -402,7 +402,7 @@
           "progress_legend_tested": "With test",
           "progress_legend_candidate": "Reviewed, no test",
           "progress_legend_pending": "In review",
-          "empty_pending": "All reviewed. Head to \"Test Scenarios\" to generate Playwright code.",
+          "empty_pending": "All reviewed. Head to \"Scripts\" to generate Playwright code.",
           "empty_reviewed": "No reviewed scenarios yet. Mark scenarios as reviewed in the AI Analysis tab to bring them here.",
           "with_test": "{count} with test",
           "generate": {

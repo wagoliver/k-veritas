@@ -120,9 +120,9 @@
       "soon": "Em breve",
       "project": {
         "section": "Projeto",
-        "map": "Mapa do site",
+        "map": "Descoberta",
         "analysis": "Cenários",
-        "test_scenarios": "Cenários de Teste",
+        "test_scenarios": "Scripts",
         "execution": "Execução"
       }
     },
@@ -281,14 +281,14 @@
       "crawling_progress": "Explorando...",
       "recrawl_started": "Nova exploração iniciada.",
       "tabs": {
-        "map": "Mapa do site",
+        "map": "Descoberta",
         "analysis": "Cenários",
         "tests": "Testes",
-        "test_scenarios": "Cenários de Teste",
+        "test_scenarios": "Scripts",
         "execution": "Execução"
       },
       "execution": {
-        "empty": "Nenhum cenário com teste gerado ainda. Volte em \"Cenários de Teste\" e gere pelo menos um teste pra poder executar.",
+        "empty": "Nenhum cenário com teste gerado ainda. Volte em \"Scripts\" e gere pelo menos um teste pra poder executar.",
         "summary": "{total} cenários executáveis",
         "passed_count": "{count} cenários passaram",
         "failed_count": "{count} cenários falharam",
@@ -402,7 +402,7 @@
           "progress_legend_tested": "Com teste",
           "progress_legend_candidate": "Revisado, sem teste",
           "progress_legend_pending": "Em revisão",
-          "empty_pending": "Tudo revisado. Vá em \"Cenários de Teste\" pra gerar o código Playwright.",
+          "empty_pending": "Tudo revisado. Vá em \"Scripts\" pra gerar o código Playwright.",
           "empty_reviewed": "Nenhum cenário revisado ainda. Marque cenários como revisados na aba Análise IA pra trazê-los pra cá.",
           "with_test": "{count} com teste",
           "generate": {
