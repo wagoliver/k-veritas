@@ -43,7 +43,14 @@ type TargetLocale = (typeof TARGET_LOCALES)[number]
 
 const schema = z.object({
   name: z.string().trim().min(2).max(80),
-  targetUrl: z.string().trim().url(),
+  // targetUrl é opcional aqui (projetos repo podem não ter URL ainda).
+  // Se o usuário preencher, validamos como URL válida.
+  targetUrl: z
+    .string()
+    .trim()
+    .url()
+    .optional()
+    .or(z.literal('')),
   description: z.string().trim().max(4000).optional().or(z.literal('')),
   crawlMaxDepth: z.coerce.number().int().min(1).max(10),
   targetLocale: z.enum(TARGET_LOCALES),
@@ -63,7 +70,8 @@ interface ProjectSettingsFormProps {
   project: {
     id: string
     name: string
-    targetUrl: string
+    // targetUrl pode ser null em projetos code-first criados sem URL.
+    targetUrl: string | null
     description: string | null
     authKind: 'none' | 'form'
     crawlMaxDepth: number
@@ -93,7 +101,7 @@ export function ProjectSettingsForm({ project }: ProjectSettingsFormProps) {
     resolver: zodResolver(schema),
     defaultValues: {
       name: project.name,
-      targetUrl: project.targetUrl,
+      targetUrl: project.targetUrl ?? '',
       description: project.description ?? '',
       crawlMaxDepth: project.crawlMaxDepth ?? 3,
       targetLocale: initialLocale,

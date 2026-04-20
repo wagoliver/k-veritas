@@ -14,7 +14,8 @@ interface ProjectHeaderProps {
     id: string
     name: string
     status: string
-    targetUrl: string
+    // Pode ser null em projetos code-first sem URL de execução ainda.
+    targetUrl: string | null
     description: string | null
   }
 }
@@ -79,15 +80,21 @@ export function ProjectHeader({ project }: ProjectHeaderProps) {
           </h1>
           <ProjectStatusBadge status={status} />
         </div>
-        <a
-          href={project.targetUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="mt-1 inline-flex items-center gap-1 font-mono text-xs text-muted-foreground hover:text-foreground"
-        >
-          {project.targetUrl}
-          <ExternalLink className="size-3" />
-        </a>
+        {project.targetUrl ? (
+          <a
+            href={project.targetUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-1 inline-flex items-center gap-1 font-mono text-xs text-muted-foreground hover:text-foreground"
+          >
+            {project.targetUrl}
+            <ExternalLink className="size-3" />
+          </a>
+        ) : (
+          <span className="mt-1 inline-block font-mono text-xs text-muted-foreground/70">
+            {t('no_target_url')}
+          </span>
+        )}
         {project.description ? (
           <p className="mt-2 text-sm text-muted-foreground">{project.description}</p>
         ) : null}

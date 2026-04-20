@@ -140,7 +140,9 @@ export default async function ProjectsPage({
                   </Link>
                 </td>
                 <td className="px-4 py-3 font-mono text-xs text-muted-foreground">
-                  {shortUrl(p.targetUrl)}
+                  {p.targetUrl ? shortUrl(p.targetUrl) : (
+                    <span className="opacity-60">—</span>
+                  )}
                 </td>
                 <td className="px-4 py-3">
                   <ProjectStatusBadge status={p.status} />
@@ -164,7 +166,8 @@ export default async function ProjectsPage({
   )
 }
 
-function shortUrl(raw: string): string {
+function shortUrl(raw: string | null): string {
+  if (!raw) return ''
   try {
     const u = new URL(raw)
     return `${u.hostname}${u.pathname !== '/' ? u.pathname : ''}`

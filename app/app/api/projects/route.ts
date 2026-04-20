@@ -100,6 +100,18 @@ export async function POST(req: NextRequest) {
       })
     }
     normalizedRepoUrl = repoCheck.normalized!
+
+    // targetUrl é opcional em modo repo, mas se vier preenchido
+    // precisa ser URL válida (os testes Playwright vão apontar pra ela).
+    if (parsed.data.targetUrl) {
+      const urlCheck = validateTargetUrl(parsed.data.targetUrl)
+      if (!urlCheck.ok) {
+        return Problems.invalidBody({
+          targetUrl: urlCheck.reason ?? 'invalid_url',
+        })
+      }
+      normalizedTargetUrl = parsed.data.targetUrl
+    }
   }
 
   if (parsed.data.authKind === 'form' && parsed.data.authForm) {
@@ -125,10 +137,10 @@ export async function POST(req: NextRequest) {
         orgId: org.id,
         name: parsed.data.name,
         slug,
-        // targetUrl mantém a URL do app em produção quando sourceType='url'.
-        // Para 'repo', usamos um placeholder (não pode ser NULL pelo schema
-        // existente) — a análise e o crawler passam a olhar source_type.
-        targetUrl: normalizedTargetUrl ?? normalizedRepoUrl!,
+        // targetUrl é a URL runtime onde os specs Playwright vão rodar.
+        // Pode ser null em projetos code-first criados sem URL ainda.
+        // A aba Execução valida e bloqueia se faltar antes de disparar.
+        targetUrl: normalizedTargetUrl,
         description: parsed.data.description,
         authKind: parsed.data.authKind,
         authCredentials,

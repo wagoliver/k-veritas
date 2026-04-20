@@ -202,7 +202,10 @@ export const projects = pgTable(
       .references(() => orgs.id, { onDelete: 'cascade' }),
     name: text('name').notNull(),
     slug: text('slug').notNull(),
-    targetUrl: text('target_url').notNull(),
+    // Nullable a partir da migração 0022: projetos code-first
+    // (sourceType='repo') podem ser criados sem URL de execução ainda.
+    // O validator garante que url-first continua exigindo.
+    targetUrl: text('target_url'),
     description: text('description'),
     authKind: text('auth_kind').notNull().default('none'),
     authCredentials: bytea('auth_credentials'),

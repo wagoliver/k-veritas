@@ -2,17 +2,19 @@
 
 import {
   AlertCircle,
+  ArrowRight,
   CheckCircle2,
   Code2,
   Loader2,
   Play,
   RefreshCw,
 } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslations } from 'next-intl'
 import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
+import { Link } from '@/lib/i18n/navigation'
 import { cn } from '@/lib/utils'
 import { CodeAnalysisLogStream } from './code-analysis-log-stream'
 
@@ -48,32 +50,52 @@ export function CodeAnalysisPanel({ projectId }: { projectId: string }) {
   const [data, setData] = useState<LatestResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [starting, setStarting] = useState(false)
+  // Guarda o último status que vimos pra tocar o toast "concluído"
+  // exatamente uma vez na transição de running→completed.
+  const lastStatusRef = useRef<string | null>(null)
+  const cancelledRef = useRef(false)
+
+  const loadLatest = useCallback(async () => {
+    try {
+      const res = await fetch(
+        `/api/projects/${projectId}/code-analyses/latest`,
+        {
+          headers: { 'X-Requested-With': 'fetch' },
+          cache: 'no-store',
+        },
+      )
+      if (!res.ok) return
+      const body = (await res.json()) as LatestResponse
+      if (cancelledRef.current) return
+      setData(body)
+
+      // Detecta transição pra estado final e toca toast.
+      const status = body.job?.status ?? null
+      if (status && status !== lastStatusRef.current) {
+        const prev = lastStatusRef.current
+        lastStatusRef.current = status
+        if (prev && (status === 'completed' || status === 'failed')) {
+          if (status === 'completed') {
+            toast.success(t('toast_completed'))
+          } else {
+            toast.error(t('toast_failed'))
+          }
+        }
+      }
+    } finally {
+      if (!cancelledRef.current) setLoading(false)
+    }
+  }, [projectId, t])
 
   useEffect(() => {
-    let cancelled = false
-    const load = async () => {
-      try {
-        const res = await fetch(
-          `/api/projects/${projectId}/code-analyses/latest`,
-          {
-            headers: { 'X-Requested-With': 'fetch' },
-            cache: 'no-store',
-          },
-        )
-        if (!res.ok) return
-        const body = (await res.json()) as LatestResponse
-        if (!cancelled) setData(body)
-      } finally {
-        if (!cancelled) setLoading(false)
-      }
-    }
-    load()
-    const interval = setInterval(load, 2_500)
+    cancelledRef.current = false
+    loadLatest()
+    const interval = setInterval(loadLatest, 2_500)
     return () => {
-      cancelled = true
+      cancelledRef.current = true
       clearInterval(interval)
     }
-  }, [projectId])
+  }, [loadLatest])
 
   const trigger = async () => {
     setStarting(true)
@@ -199,18 +221,76 @@ export function CodeAnalysisPanel({ projectId }: { projectId: string }) {
       </div>
 
       <div className="border-t border-border p-4">
-        <CodeAnalysisLogStream projectId={projectId} jobId={job.id} />
+        <CodeAnalysisLogStream
+          projectId={projectId}
+          jobId={job.id}
+          // Força reload imediato do /latest quando o stream detecta
+          // transição pra completed/failed — não espera o tick de 2.5s.
+          onComplete={loadLatest}
+        />
       </div>
 
       {job.status === 'failed' && job.error ? (
-        <div className="border-t border-border bg-destructive/5 px-4 py-3 text-xs text-destructive">
-          {job.error.slice(0, 400)}
+        <div className="border-t border-border bg-destructive/5 px-4 py-4">
+          <div className="flex items-start gap-3">
+            <AlertCircle className="size-5 shrink-0 translate-y-0.5 text-destructive" />
+            <div className="flex-1 space-y-1">
+              <p className="text-sm font-semibold text-destructive">
+                {t('completed_failed_title')}
+              </p>
+              <p className="text-xs text-destructive/90">
+                {job.error.slice(0, 400)}
+              </p>
+            </div>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={trigger}
+              disabled={starting || !sourceConfigured}
+            >
+              {starting ? (
+                <Loader2 className="size-3.5 animate-spin" />
+              ) : (
+                <RefreshCw className="size-3.5" />
+              )}
+              {t('reanalyze_button')}
+            </Button>
+          </div>
         </div>
       ) : null}
 
       {job.status === 'completed' ? (
-        <div className="border-t border-border bg-muted/30 px-4 py-3 text-xs text-muted-foreground">
-          {t('completed_hint')}
+        <div className="border-t border-fin-gain/30 bg-fin-gain/5 px-4 py-5">
+          <div className="flex items-start gap-3">
+            <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-fin-gain/15 text-fin-gain">
+              <CheckCircle2 className="size-5" />
+            </div>
+            <div className="flex-1 space-y-1">
+              <p className="text-sm font-semibold text-fin-gain">
+                {t('completed_banner_title')}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {t('completed_banner_subtitle', {
+                  tokens: formatK(job.tokensIn + job.tokensOut),
+                  turns: job.turnsUsed,
+                })}
+              </p>
+              {job.error ? (
+                <p className="pt-1 text-xs text-amber-600 dark:text-amber-400">
+                  {t('completed_with_warning_hint')}
+                </p>
+              ) : null}
+            </div>
+            <div className="flex items-center gap-2">
+              <Button type="button" size="sm" asChild>
+                <Link href={`/projects/${projectId}/analysis`}>
+                  {t('completed_cta_scenarios')}
+                  <ArrowRight className="size-3.5" />
+                </Link>
+              </Button>
+            </div>
+          </div>
         </div>
       ) : null}
     </div>

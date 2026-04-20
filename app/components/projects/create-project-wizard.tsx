@@ -81,8 +81,23 @@ const schema = z
         path: ['repoUrl'],
       })
     }
-    // Auth só se aplica quando sourceType=url (o crawler é que precisa logar).
-    if (v.sourceType === 'url' && v.requiresAuth) {
+    // Em modo repo, targetUrl é opcional — mas se o usuário digitar
+    // algo, precisa ser URL válida (os specs vão rodar contra ela).
+    if (
+      v.sourceType === 'repo' &&
+      v.targetUrl &&
+      !/^https?:\/\//.test(v.targetUrl)
+    ) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'errors.invalid_url',
+        path: ['targetUrl'],
+      })
+    }
+    // Auth é obrigatório quando marcado, independente da fonte. No
+    // crawler (url-first) o auth permite logar antes de explorar. No
+    // code-first, alimenta o login automático dos specs gerados.
+    if (v.requiresAuth) {
       if (!v.loginUrl) {
         ctx.addIssue({
           code: 'custom',
@@ -164,7 +179,21 @@ export function CreateProjectWizard() {
       } else {
         body.repoUrl = values.repoUrl
         body.repoBranch = values.repoBranch || 'main'
-        body.authKind = 'none'
+        // targetUrl + auth são opcionais em modo repo. Só mandamos se
+        // o usuário preencheu. O runtime dos specs Playwright usa
+        // isso; se vazio, a QA completa depois em Settings antes de
+        // disparar a aba Execução.
+        if (values.targetUrl) {
+          body.targetUrl = values.targetUrl
+        }
+        body.authKind = values.requiresAuth ? 'form' : 'none'
+        if (values.requiresAuth) {
+          body.authForm = {
+            loginUrl: values.loginUrl,
+            username: values.username,
+            password: values.password,
+          }
+        }
       }
 
       const res = await fetch('/api/projects', {
@@ -275,27 +304,7 @@ export function CreateProjectWizard() {
             )}
           />
 
-          {sourceType === 'url' ? (
-            <FormField
-              control={form.control}
-              name="targetUrl"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{t('step1.url_label')}</FormLabel>
-                  <FormControl>
-                    <Input
-                      {...field}
-                      type="url"
-                      inputMode="url"
-                      placeholder="https://staging.acme.com"
-                    />
-                  </FormControl>
-                  <FormDescription>{t('step1.url_hint')}</FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          ) : (
+          {sourceType === 'repo' ? (
             <>
               <FormField
                 control={form.control}
@@ -352,7 +361,37 @@ export function CreateProjectWizard() {
                 )}
               />
             </>
-          )}
+          ) : null}
+
+          {/* targetUrl aparece pros dois modos — url-first é obrigatório;
+              repo-first é opcional (pode completar depois em Settings). */}
+          <FormField
+            control={form.control}
+            name="targetUrl"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>
+                  {sourceType === 'repo'
+                    ? t('step1.target_url_repo_label')
+                    : t('step1.url_label')}
+                </FormLabel>
+                <FormControl>
+                  <Input
+                    {...field}
+                    type="url"
+                    inputMode="url"
+                    placeholder="https://staging.acme.com"
+                  />
+                </FormControl>
+                <FormDescription>
+                  {sourceType === 'repo'
+                    ? t('step1.target_url_repo_hint')
+                    : t('step1.url_hint')}
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
 
           <FormField
             control={form.control}
@@ -382,99 +421,100 @@ export function CreateProjectWizard() {
             )}
           />
 
-          {sourceType === 'url' ? (
-            <>
+          {/* Bloco de autenticação vale pros dois modos. No url-first
+              o crawler usa pra logar antes de explorar; no code-first
+              alimenta o login dos specs Playwright gerados. */}
+          <FormField
+            control={form.control}
+            name="requiresAuth"
+            render={({ field }) => (
+              <FormItem>
+                <label
+                  className={cn(
+                    'flex cursor-pointer items-start gap-3 rounded-lg border p-4 transition-colors',
+                    field.value
+                      ? 'border-primary bg-primary/5'
+                      : 'border-border hover:border-primary/40 hover:bg-accent/30',
+                  )}
+                >
+                  <FormControl>
+                    <Checkbox
+                      checked={field.value}
+                      onCheckedChange={field.onChange}
+                      className="mt-0.5"
+                    />
+                  </FormControl>
+                  <div className="space-y-0.5">
+                    <span className="block text-sm font-medium">
+                      {t('step1.auth_label')}
+                    </span>
+                    <p className="text-xs text-muted-foreground">
+                      {sourceType === 'repo'
+                        ? t('step1.auth_hint_repo')
+                        : t('step1.auth_hint')}
+                    </p>
+                  </div>
+                </label>
+              </FormItem>
+            )}
+          />
+
+          {form.watch('requiresAuth') ? (
+            <div className="animate-fade-up space-y-4 rounded-lg border border-primary/40 bg-primary/5 p-4">
               <FormField
                 control={form.control}
-                name="requiresAuth"
+                name="loginUrl"
                 render={({ field }) => (
                   <FormItem>
-                    <label
-                      className={cn(
-                        'flex cursor-pointer items-start gap-3 rounded-lg border p-4 transition-colors',
-                        field.value
-                          ? 'border-primary bg-primary/5'
-                          : 'border-border hover:border-primary/40 hover:bg-accent/30',
-                      )}
-                    >
-                      <FormControl>
-                        <Checkbox
-                          checked={field.value}
-                          onCheckedChange={field.onChange}
-                          className="mt-0.5"
-                        />
-                      </FormControl>
-                      <div className="space-y-0.5">
-                        <span className="block text-sm font-medium">
-                          {t('step1.auth_label')}
-                        </span>
-                        <p className="text-xs text-muted-foreground">
-                          {t('step1.auth_hint')}
-                        </p>
-                      </div>
-                    </label>
+                    <FormLabel>{t('step1.login_url_label')}</FormLabel>
+                    <FormControl>
+                      <Input
+                        {...field}
+                        type="url"
+                        placeholder="https://staging.acme.com/login"
+                      />
+                    </FormControl>
+                    <FormMessage />
                   </FormItem>
                 )}
               />
 
-              {form.watch('requiresAuth') ? (
-                <div className="animate-fade-up space-y-4 rounded-lg border border-primary/40 bg-primary/5 p-4">
-                  <FormField
-                    control={form.control}
-                    name="loginUrl"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>{t('step1.login_url_label')}</FormLabel>
-                        <FormControl>
-                          <Input
-                            {...field}
-                            type="url"
-                            placeholder="https://staging.acme.com/login"
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <FormField
-                      control={form.control}
-                      name="username"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>{t('step1.username_label')}</FormLabel>
-                          <FormControl>
-                            <Input
-                              {...field}
-                              autoComplete="off"
-                              placeholder="qa@acme.com"
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="password"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>{t('step1.password_label')}</FormLabel>
-                          <FormControl>
-                            <PasswordInput {...field} autoComplete="off" />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    {t('step1.credentials_note')}
-                  </p>
-                </div>
-              ) : null}
-            </>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <FormField
+                  control={form.control}
+                  name="username"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{t('step1.username_label')}</FormLabel>
+                      <FormControl>
+                        <Input
+                          {...field}
+                          autoComplete="off"
+                          placeholder="qa@acme.com"
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="password"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{t('step1.password_label')}</FormLabel>
+                      <FormControl>
+                        <PasswordInput {...field} autoComplete="off" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {t('step1.credentials_note')}
+              </p>
+            </div>
           ) : null}
 
           <div className="flex items-center justify-end gap-2 border-t border-border pt-5">
