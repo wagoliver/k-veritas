@@ -1,27 +1,21 @@
 import { spawn } from 'node:child_process'
 
 import type { PromptInput } from './prompt.ts'
-import { buildPrompt } from './prompt.ts'
+import { buildSystemPrompt, buildUserPrompt } from './prompt.ts'
 
 export interface RunClaudeOptions {
   input: PromptInput
   repoRoot: string
+  outputDir: string
   apiKey: string
   model: string
-  // Teto de gasto em USD. O CLI aborta quando atinge. Passa direto
-  // pro --max-budget-usd do Claude Code 2.x.
   maxBudgetUsd: number
-  // Chamado em cada evento do stream (pra alimentar heartbeat + UI).
   onEvent?: (evt: ClaudeStreamEvent) => void | Promise<void>
 }
 
 export interface ClaudeStreamEvent {
   type: string
-  // Estrutura dos eventos do stream-json do Claude Code evoluiu entre
-  // versões. Guardamos o JSON bruto e só inspecionamos campos
-  // conhecidos de forma defensiva.
   raw: unknown
-  // Extraídos quando presentes.
   turnNumber?: number
   toolName?: string
   textChunk?: string
@@ -36,17 +30,33 @@ export interface RunClaudeResult {
   stderr: string
 }
 
-// Invoca `claude -p <prompt>` em modo headless com saída stream-json.
-// Cada linha é um objeto JSON; parseamos e emitimos via onEvent.
+/**
+ * Invoca `claude -p` em modo headless com:
+ *
+ *   --bare                         → força ANTHROPIC_API_KEY, skip keychain/hooks
+ *   --append-system-prompt <str>   → injeta k-veritas master + CLAUDE.md do repo
+ *   --add-dir <outputDir>          → permite Claude escrever specs fora do cwd
+ *   --permission-mode bypass...    → não prompta permissões (container trusted)
+ *   --max-budget-usd <n>           → teto real de gasto por rodada
+ *   --output-format stream-json    → stream parseável com events de tool-use
+ *
+ * A auto-descoberta de CLAUDE.md é desativada pelo --bare; por isso a
+ * leitura é explícita em buildSystemPrompt() e injetada via append.
+ */
 export async function runClaude(
   opts: RunClaudeOptions,
 ): Promise<RunClaudeResult> {
-  const prompt = buildPrompt(opts.input)
+  const systemPrompt = await buildSystemPrompt(opts.repoRoot)
+  const userPrompt = buildUserPrompt(opts.input)
 
   const args = [
     '-p',
-    prompt,
+    userPrompt,
     '--bare',
+    '--append-system-prompt',
+    systemPrompt,
+    '--add-dir',
+    opts.outputDir,
     '--permission-mode',
     'bypassPermissions',
     '--max-budget-usd',
@@ -63,7 +73,6 @@ export async function runClaude(
     env: {
       ...process.env,
       ANTHROPIC_API_KEY: opts.apiKey,
-      // Desativa captura de telemetria do CLI dentro do container.
       DISABLE_TELEMETRY: '1',
     },
     stdio: ['ignore', 'pipe', 'pipe'],
@@ -97,9 +106,6 @@ export async function runClaude(
       const type = String(parsed.type ?? 'unknown')
       const evt: ClaudeStreamEvent = { type, raw: parsed }
 
-      // Extração defensiva de campos conhecidos. O schema do
-      // stream-json do Claude Code tem variantes (system, assistant,
-      // user, tool_use, result). Usamos o que estiver disponível.
       if (typeof parsed.turn === 'number') evt.turnNumber = parsed.turn
       if (typeof parsed.tool_name === 'string') evt.toolName = parsed.tool_name
 
@@ -111,7 +117,6 @@ export async function runClaude(
           if (block.type === 'text' && block.text) {
             evt.textChunk = block.text
             if (type === 'assistant') {
-              // Mantemos a última mensagem do assistant como "final".
               finalMessage = block.text
             }
           } else if (block.type === 'tool_use' && block.name) {
@@ -120,7 +125,6 @@ export async function runClaude(
         }
       }
 
-      // Resultado final tem contadores agregados.
       if (type === 'result') {
         const usage = parsed.usage as
           | { input_tokens?: number; output_tokens?: number }
@@ -137,7 +141,6 @@ export async function runClaude(
         }
       }
 
-      // Usage por mensagem (stream incremental).
       const usageInline = parsed.usage as
         | { input_tokens?: number; output_tokens?: number }
         | undefined
