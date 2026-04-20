@@ -138,6 +138,73 @@ Regras de código:
 - Não escreva em `/work/<jobId>/repo/`. Só em `/work/<jobId>/output/`.
 - Não crie `playwright.config.ts` — o runner do k-veritas tem o próprio.
 
+### 2.4 Credenciais e variáveis de ambiente — REGRA CRÍTICA
+
+**Proibido hardcoded.** Jamais escreva URLs de produção, URLs de login,
+usuários ou senhas como literais nos arquivos `.spec.ts`. Todos esses
+valores são injetados pelo runner k-veritas via `process.env` na hora da
+execução — os specs só **referenciam** os nomes.
+
+#### Convenção padrão do k-veritas
+
+| Env var | Propósito |
+|---|---|
+| `PLAYWRIGHT_BASE_URL` | URL runtime onde os testes rodam (ex.: `https://app.staging.empresa.com`) |
+| `E2E_LOGIN_URL` | URL específica da tela de login, quando diferente da base |
+| `E2E_USER` | Usuário/e-mail de teste |
+| `E2E_PASS` | Senha de teste |
+
+#### Como os specs devem consumir
+
+```ts
+import { expect, test } from '@playwright/test'
+
+const BASE_URL = process.env.PLAYWRIGHT_BASE_URL!
+const USER = process.env.E2E_USER!
+const PASS = process.env.E2E_PASS!
+
+test.beforeEach(async ({ page }) => {
+  await page.goto(process.env.E2E_LOGIN_URL ?? BASE_URL)
+  await page.getByLabel(/e-?mail|user/i).fill(USER)
+  await page.getByLabel(/senha|password/i).fill(PASS)
+  await page.getByRole('button', { name: /entrar|sign in/i }).click()
+  await expect(page).toHaveURL(/.+/)
+})
+```
+
+#### Detecção de padrão do repositório (prioridade)
+
+1. **Se o repo já tem convenção de env vars** (procure em
+   `playwright.config.ts`, `.env.example`, `README.md`, `CLAUDE.md`,
+   `tests/e2e/utils/*`): **imite**. Se o projeto usa
+   `APP_URL`/`TEST_USERNAME`/`TEST_PASSWORD`, use essas e não o padrão
+   k-veritas.
+2. **Se o repo tem um helper de auth reutilizável** (ex.:
+   `tests/e2e/utils/auth.ts` com função `signIn(page, creds)`),
+   **importe e use** em vez de reimplementar o fluxo de login em cada
+   spec. Isso mantém o estilo do projeto e facilita manutenção.
+3. **Se não houver padrão no repo**, use a convenção do k-veritas
+   listada acima.
+
+#### Registre o contrato no manifest
+
+Quando o spec precisar de env vars, adicione o nome no array `dataNeeded`
+do cenário correspondente do `manifest.json`. Ex.:
+
+```json
+{
+  "title": "Login com credenciais válidas",
+  "rationale": "...",
+  "priority": "critical",
+  "preconditions": [],
+  "dataNeeded": ["env:PLAYWRIGHT_BASE_URL", "env:E2E_USER", "env:E2E_PASS"]
+}
+```
+
+Isso deixa o runner do k-veritas saber quais envs preparar antes de
+disparar o teste — e a QA pode conferir se cada cenário tem a
+credencial certa configurada no projeto.
+
 ---
 
 ## 3. Estratégia de exploração
@@ -185,6 +252,9 @@ Regras de código:
   escreva no manifest uma única feature `"unknown"` explicando o que
   faltou (ex.: "repo sem rotas identificáveis", "falta contexto de
   negócio"). Não invente.
+- **Zero credenciais literais nos specs.** Mesmo que o `context.md`
+  da QA contenha usuário/senha de exemplo, **nunca** inclua no
+  `.spec.ts`. O fluxo correto é sempre `process.env.X`. Ver §2.4.
 
 ---
 
