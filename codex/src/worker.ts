@@ -126,9 +126,12 @@ async function processJob(
       )
     }
     const credential = decryptSecret(resolved.credentialEncrypted)
-    const model = resolved.model
+    // Override por job (QA escolheu um modelo no clique) tem precedência
+    // sobre o anthropic_model da org. Ambos podem vir null e aí usa o
+    // CODEX_MODEL do env.
+    const model = job.model_override ?? resolved.model
     console.log(
-      `[codex] job=${jobId} credential source=${resolved.source} authMode=${resolved.authMode} model=${model}`,
+      `[codex] job=${jobId} credential source=${resolved.source} authMode=${resolved.authMode} model=${model}${job.model_override ? ' (override)' : ''}`,
     )
     await emitEvent(
       jobId,

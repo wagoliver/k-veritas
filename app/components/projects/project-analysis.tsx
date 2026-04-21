@@ -3,7 +3,6 @@
 import {
   AlertTriangle,
   CheckCircle2,
-  ChevronRight,
   Loader2,
   Sparkles,
   X,
@@ -14,20 +13,11 @@ import { useTranslations } from 'next-intl'
 import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
 import { DateTime } from '@/components/ui/date-time'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 import { AnalysisEditor } from './analysis-editor'
-
-type Provider = 'ollama' | 'anthropic' | 'openai-compatible'
+import { ModelPicker, type AiProvider as Provider } from './model-picker'
 
 interface Scenario {
   title: string
@@ -325,7 +315,6 @@ export function ProjectAnalysis({ projectId }: { projectId: string }) {
             provider={orgProvider}
             baseUrl={orgBaseUrl}
             defaultModel={orgDefaultModel}
-            t={t}
           />
         </div>
       </div>
@@ -422,7 +411,6 @@ export function ProjectAnalysis({ projectId }: { projectId: string }) {
             provider={orgProvider}
             baseUrl={orgBaseUrl}
             defaultModel={orgDefaultModel}
-            t={t}
             compact
           />
         </div>
@@ -459,177 +447,4 @@ export function ProjectAnalysis({ projectId }: { projectId: string }) {
   )
 }
 
-type TFn = ReturnType<typeof useTranslations<'projects.overview.analysis'>>
-
-function ModelPicker({
-  value,
-  onChange,
-  provider,
-  baseUrl,
-  defaultModel,
-  t,
-  compact = false,
-}: {
-  value: string | null
-  onChange: (v: string | null) => void
-  provider: Provider
-  baseUrl: string | null
-  defaultModel: string | null
-  t: TFn
-  compact?: boolean
-}) {
-  const [models, setModels] = useState<string[] | null>(null)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [loaded, setLoaded] = useState(false)
-
-  const label = value ?? t('model_picker.default_label')
-
-  // Lazy-fetch: consulta a API do provider real (via nosso endpoint /test)
-  // só quando o dropdown é aberto pela primeira vez. Depois reusa cache.
-  const loadModels = async () => {
-    if (loaded || loading || !baseUrl) return
-    setLoading(true)
-    setError(null)
-    try {
-      const res = await fetch('/api/orgs/current/ai-config/test', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Requested-With': 'fetch',
-        },
-        body: JSON.stringify({
-          provider,
-          baseUrl,
-          useSavedApiKey: true,
-        }),
-      })
-      if (!res.ok) {
-        setError(`HTTP ${res.status}`)
-        setLoaded(true)
-        return
-      }
-      const data = (await res.json()) as {
-        ok: boolean
-        error?: string
-        models?: string[]
-      }
-      if (!data.ok) {
-        setError(data.error ?? 'unknown')
-        setLoaded(true)
-        return
-      }
-      setModels(data.models ?? [])
-      setLoaded(true)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'unknown')
-      setLoaded(true)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const promptCustom = () => {
-    const v = window.prompt(
-      t('model_picker.custom_prompt', { provider }),
-      value ?? '',
-    )
-    if (v === null) return
-    const trimmed = v.trim()
-    onChange(trimmed.length > 0 ? trimmed : null)
-  }
-
-  const listedModels = (models ?? []).filter((m) => m !== defaultModel)
-
-  return (
-    <DropdownMenu onOpenChange={(open) => open && loadModels()}>
-      <DropdownMenuTrigger asChild>
-        <Button
-          type="button"
-          variant="ghost"
-          size={compact ? 'sm' : 'default'}
-          className="gap-1.5 text-xs text-muted-foreground"
-        >
-          <Sparkles className="size-3.5" />
-          {label}
-          <ChevronRight className="size-3 rotate-90 opacity-60" />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="max-h-96 w-80 overflow-y-auto">
-        <DropdownMenuLabel className="flex flex-col gap-0.5">
-          <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-            {t('model_picker.heading')}
-          </span>
-          <span className="text-[10px] font-normal text-muted-foreground">
-            {t('model_picker.provider_label', { provider })}
-          </span>
-        </DropdownMenuLabel>
-        <DropdownMenuItem
-          onSelect={() => onChange(null)}
-          className={cn('flex-col items-start gap-0.5', !value && 'bg-accent')}
-        >
-          <span className="font-medium">
-            {t('model_picker.default_label')}
-            {defaultModel ? (
-              <span className="ml-1 font-mono text-[10px] font-normal text-muted-foreground">
-                ({defaultModel})
-              </span>
-            ) : null}
-          </span>
-          <span className="text-xs text-muted-foreground">
-            {t('model_picker.default_hint')}
-          </span>
-        </DropdownMenuItem>
-        <DropdownMenuSeparator />
-        {loading ? (
-          <div className="flex items-center gap-2 px-2 py-3 text-xs text-muted-foreground">
-            <Loader2 className="size-3.5 animate-spin" />
-            {t('model_picker.loading')}
-          </div>
-        ) : error ? (
-          <div className="px-2 py-3 text-xs text-destructive">
-            {t('model_picker.load_failed', { error: error })}
-          </div>
-        ) : listedModels.length === 0 && loaded ? (
-          <div className="px-2 py-3 text-xs text-muted-foreground">
-            {t('model_picker.empty')}
-          </div>
-        ) : (
-          listedModels.slice(0, 30).map((name) => (
-            <DropdownMenuItem
-              key={name}
-              onSelect={() => onChange(name)}
-              className={cn(
-                'font-mono text-xs',
-                value === name && 'bg-accent',
-              )}
-            >
-              {name}
-            </DropdownMenuItem>
-          ))
-        )}
-        {listedModels.length > 30 ? (
-          <div className="px-2 py-1 text-[10px] text-muted-foreground">
-            {t('model_picker.truncated', { count: listedModels.length - 30 })}
-          </div>
-        ) : null}
-        <DropdownMenuSeparator />
-        <DropdownMenuItem
-          onSelect={(e) => {
-            e.preventDefault()
-            promptCustom()
-          }}
-          className="flex-col items-start gap-0.5"
-        >
-          <span className="font-medium">
-            {t('model_picker.custom_label')}
-          </span>
-          <span className="text-xs text-muted-foreground">
-            {t('model_picker.custom_hint')}
-          </span>
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
-  )
-}
 

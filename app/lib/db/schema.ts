@@ -350,6 +350,8 @@ export const codeAnalysisJobs = pgTable(
     // 'tests':     etapa 2, gera testes de uma feature específica.
     phase: text('phase').notNull().default('structure'),
     targetFeatureId: uuid('target_feature_id'),
+    // Modelo escolhido pela QA no clique. NULL = default da org.
+    modelOverride: text('model_override'),
     sourceType: text('source_type').notNull(),
     repoUrl: text('repo_url'),
     repoBranch: text('repo_branch'),

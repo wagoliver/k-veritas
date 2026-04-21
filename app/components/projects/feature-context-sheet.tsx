@@ -26,6 +26,11 @@ import {
 } from '@/components/ui/sheet'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
+import {
+  ModelPicker,
+  useAnthropicConfig,
+  usePersistedModel,
+} from './model-picker'
 import { ScenariosEditor } from './scenarios-editor'
 import type { CoveragePriority, FeatureCard } from './feature-context-cards'
 
@@ -76,6 +81,10 @@ export function FeatureContextSheet({
   // "Avançado" só abre automático quando a feature já tem algum campo
   // não-essencial preenchido — sinaliza que a QA usou aquilo antes.
   const [advancedOpen, setAdvancedOpen] = useState(false)
+  const [modelOverride, setModelOverride] = usePersistedModel(
+    `model:${projectId}:generate-tests`,
+  )
+  const anthropicCfg = useAnthropicConfig()
 
   useEffect(() => {
     if (!feature) return
@@ -213,7 +222,9 @@ export function FeatureContextSheet({
             'Content-Type': 'application/json',
             'X-Requested-With': 'fetch',
           },
-          body: JSON.stringify({}),
+          body: JSON.stringify(
+            modelOverride ? { model: modelOverride } : {},
+          ),
         },
       )
       if (!res.ok) {
@@ -502,6 +513,16 @@ export function FeatureContextSheet({
           </Button>
 
           <div className="ml-auto flex items-center gap-2">
+            {anthropicCfg ? (
+              <ModelPicker
+                value={modelOverride}
+                onChange={setModelOverride}
+                provider={anthropicCfg.provider}
+                baseUrl={anthropicCfg.baseUrl}
+                defaultModel={anthropicCfg.defaultModel}
+                compact
+              />
+            ) : null}
             <Button
               variant="outline"
               size="sm"

@@ -20,6 +20,7 @@ export interface PendingCodeJob {
   repo_zip_path: string | null
   phase: CodeAnalysisPhase
   target_feature_id: string | null
+  model_override: string | null
 }
 
 export interface Project {
@@ -62,7 +63,7 @@ export async function claimNextJob(
     )
     RETURNING id, project_id, requested_by,
               source_type, repo_url, repo_branch, repo_zip_path,
-              phase, target_feature_id
+              phase, target_feature_id, model_override
   `
   const job = rows[0]
   if (!job) return null

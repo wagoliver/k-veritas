@@ -116,6 +116,20 @@ export async function POST(
     )
   }
 
+  // Model override opcional no body. String vazia ou ausente = default.
+  let modelOverride: string | null = null
+  if (req.headers.get('content-type')?.includes('application/json')) {
+    const body = (await req.json().catch(() => null)) as {
+      model?: unknown
+    } | null
+    if (body && typeof body.model === 'string') {
+      const trimmed = body.model.trim()
+      if (trimmed.length > 0 && trimmed.length <= 200) {
+        modelOverride = trimmed
+      }
+    }
+  }
+
   const [job] = await db
     .insert(codeAnalysisJobs)
     .values({
@@ -126,6 +140,7 @@ export async function POST(
       repoBranch: project.repoBranch,
       repoZipPath: project.repoZipPath,
       status: 'pending',
+      modelOverride,
     })
     .returning({ id: codeAnalysisJobs.id })
   if (!job) return Problems.server()

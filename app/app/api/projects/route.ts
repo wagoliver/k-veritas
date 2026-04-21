@@ -3,7 +3,6 @@ import { and, desc, eq, sql } from 'drizzle-orm'
 
 import { db } from '@/lib/db/pg'
 import {
-  codeAnalysisJobs,
   crawlJobs,
   orgMembers,
   projectScenarios,
@@ -166,28 +165,23 @@ export async function POST(req: NextRequest) {
     }
 
     if (sourceType === 'url') {
-      // Fluxo original: dispara crawler Playwright.
+      // Fluxo URL: dispara crawler Playwright automaticamente — a QA
+      // precisa do crawler rodando pra poder cadastrar cenários livres
+      // no fluxo posterior.
       await tx.insert(crawlJobs).values({
         projectId: project.id,
         requestedBy: session.user.id,
         status: 'pending',
       })
-    } else {
-      // Code-first: dispara análise via container codex.
-      await tx.insert(codeAnalysisJobs).values({
-        projectId: project.id,
-        requestedBy: session.user.id,
-        sourceType: 'repo',
-        repoUrl: normalizedRepoUrl,
-        repoBranch: parsed.data.repoBranch ?? 'main',
-        status: 'pending',
-      })
+      await tx
+        .update(projects)
+        .set({ status: 'crawling', updatedAt: new Date() })
+        .where(eq(projects.id, project.id))
     }
-
-    await tx
-      .update(projects)
-      .set({ status: 'crawling', updatedAt: new Date() })
-      .where(eq(projects.id, project.id))
+    // Code-first: NÃO dispara análise automaticamente. Projeto nasce
+    // como 'draft' e a QA clica "Analisar" na aba Estrutura quando
+    // quiser (inventário é barato, mas disparar 1 job por projeto
+    // novo polui o feed e cobra custo antes do humano curar).
 
     return project
   })

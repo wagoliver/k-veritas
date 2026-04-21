@@ -18,6 +18,11 @@ import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { CodeAnalysisLogStream } from './code-analysis-log-stream'
 import { FeatureContextCards } from './feature-context-cards'
+import {
+  ModelPicker,
+  useAnthropicConfig,
+  usePersistedModel,
+} from './model-picker'
 
 interface CodeJobSnapshot {
   id: string
@@ -53,6 +58,10 @@ export function CodeAnalysisPanel({ projectId }: { projectId: string }) {
   const [loading, setLoading] = useState(true)
   const [starting, setStarting] = useState(false)
   const [detailsOpen, setDetailsOpen] = useState(false)
+  const [modelOverride, setModelOverride] = usePersistedModel(
+    `model:${projectId}:code-analysis`,
+  )
+  const anthropicCfg = useAnthropicConfig()
   // Guarda o último status que vimos pra tocar o toast "concluído"
   // exatamente uma vez na transição de running→completed.
   const lastStatusRef = useRef<string | null>(null)
@@ -111,7 +120,9 @@ export function CodeAnalysisPanel({ projectId }: { projectId: string }) {
             'Content-Type': 'application/json',
             'X-Requested-With': 'fetch',
           },
-          body: JSON.stringify({}),
+          body: JSON.stringify(
+            modelOverride ? { model: modelOverride } : {},
+          ),
         },
       )
       if (res.status === 429) {
@@ -168,6 +179,9 @@ export function CodeAnalysisPanel({ projectId }: { projectId: string }) {
         sourceConfigured={sourceConfigured}
         project={project}
         t={t}
+        modelOverride={modelOverride}
+        setModelOverride={setModelOverride}
+        anthropicCfg={anthropicCfg}
       />
     )
   }
@@ -209,18 +223,6 @@ export function CodeAnalysisPanel({ projectId }: { projectId: string }) {
             ) : null}
           </div>
         </header>
-
-        <div className="grid gap-4 p-4 sm:grid-cols-3">
-          <Metric
-            label={t('metrics.steps')}
-            value={String(job.stepsCompleted)}
-          />
-          <Metric
-            label={t('metrics.tokens')}
-            value={`${formatK(job.tokensIn)} / ${formatK(job.tokensOut)}`}
-          />
-          <Metric label={t('metrics.turns')} value={String(job.turnsUsed)} />
-        </div>
 
         <div className="border-t border-border p-4">
           <CodeAnalysisLogStream
@@ -297,6 +299,16 @@ export function CodeAnalysisPanel({ projectId }: { projectId: string }) {
               )}
               {detailsOpen ? tDisc('hide_details') : tDisc('show_details')}
             </Button>
+            {anthropicCfg ? (
+              <ModelPicker
+                value={modelOverride}
+                onChange={setModelOverride}
+                provider={anthropicCfg.provider}
+                baseUrl={anthropicCfg.baseUrl}
+                defaultModel={anthropicCfg.defaultModel}
+                compact
+              />
+            ) : null}
             <Button
               type="button"
               size="sm"
@@ -315,21 +327,7 @@ export function CodeAnalysisPanel({ projectId }: { projectId: string }) {
         </header>
 
         {detailsOpen ? (
-          <div className="space-y-4 border-t border-border bg-muted/20 p-4">
-            <div className="grid gap-4 sm:grid-cols-3">
-              <Metric
-                label={t('metrics.steps')}
-                value={String(job.stepsCompleted)}
-              />
-              <Metric
-                label={t('metrics.tokens')}
-                value={`${formatK(job.tokensIn)} / ${formatK(job.tokensOut)}`}
-              />
-              <Metric
-                label={t('metrics.turns')}
-                value={String(job.turnsUsed)}
-              />
-            </div>
+          <div className="border-t border-border bg-muted/20 p-4">
             <CodeAnalysisLogStream
               projectId={projectId}
               jobId={job.id}
@@ -361,12 +359,18 @@ function EmptyState({
   sourceConfigured,
   project,
   t,
+  modelOverride,
+  setModelOverride,
+  anthropicCfg,
 }: {
   onAnalyze: () => void
   starting: boolean
   sourceConfigured: boolean
   project: LatestResponse['project']
   t: (key: string) => string
+  modelOverride: string | null
+  setModelOverride: (v: string | null) => void
+  anthropicCfg: ReturnType<typeof useAnthropicConfig>
 }) {
   return (
     <div className="flex flex-col items-center gap-4 rounded-lg border border-dashed border-border p-10 text-center">
@@ -387,18 +391,30 @@ function EmptyState({
           {t('source_not_configured_hint')}
         </p>
       )}
-      <Button
-        type="button"
-        onClick={onAnalyze}
-        disabled={starting || !sourceConfigured}
-      >
-        {starting ? (
-          <Loader2 className="size-4 animate-spin" />
-        ) : (
-          <Play className="size-4" />
-        )}
-        {t('analyze_button')}
-      </Button>
+      <div className="flex flex-wrap items-center justify-center gap-2">
+        <Button
+          type="button"
+          onClick={onAnalyze}
+          disabled={starting || !sourceConfigured}
+        >
+          {starting ? (
+            <Loader2 className="size-4 animate-spin" />
+          ) : (
+            <Play className="size-4" />
+          )}
+          {t('analyze_button')}
+        </Button>
+        {anthropicCfg ? (
+          <ModelPicker
+            value={modelOverride}
+            onChange={setModelOverride}
+            provider={anthropicCfg.provider}
+            baseUrl={anthropicCfg.baseUrl}
+            defaultModel={anthropicCfg.defaultModel}
+            compact
+          />
+        ) : null}
+      </div>
     </div>
   )
 }
@@ -420,19 +436,3 @@ function StatusIcon({
   return <Code2 className={cn('size-4 text-muted-foreground')} />
 }
 
-function Metric({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-md border border-border bg-background/40 px-3 py-2">
-      <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
-        {label}
-      </div>
-      <div className="font-mono text-sm tabular-nums">{value}</div>
-    </div>
-  )
-}
-
-function formatK(n: number): string {
-  if (n < 1000) return String(n)
-  if (n < 1_000_000) return `${(n / 1000).toFixed(1)}k`
-  return `${(n / 1_000_000).toFixed(1)}M`
-}
