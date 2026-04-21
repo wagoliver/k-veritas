@@ -762,6 +762,9 @@
         "show_details": "Details",
         "hide_details": "Hide details",
         "sheet_title": "Feature context",
+        "suggest_with_ai": "Suggest with AI",
+        "toast_suggested": "Suggestions filled into empty fields.",
+        "toast_suggested_empty": "AI had no relevant suggestions for empty fields.",
         "advanced_toggle": "Advanced",
         "advanced_hint": "restrictions, code areas, env vars, priorities",
         "field_name": "Feature name",
@@ -789,7 +792,8 @@
           "load": "Couldn't load features.",
           "save": "Couldn't save context.",
           "delete": "Couldn't delete feature.",
-          "generate": "Failed to generate tests for {name}."
+          "generate": "Failed to generate tests for {name}.",
+          "suggest": "Couldn't generate suggestions with AI."
         }
       }
     },

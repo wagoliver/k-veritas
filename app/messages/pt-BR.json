@@ -762,6 +762,9 @@
         "show_details": "Detalhes",
         "hide_details": "Ocultar detalhes",
         "sheet_title": "Contexto da feature",
+        "suggest_with_ai": "Sugerir com IA",
+        "toast_suggested": "Sugestões aplicadas nos campos vazios.",
+        "toast_suggested_empty": "A IA não tinha sugestões relevantes pra campos vazios.",
         "advanced_toggle": "Avançado",
         "advanced_hint": "restrições, áreas do código, env vars, prioridades",
         "field_name": "Nome da feature",
@@ -789,7 +792,8 @@
           "load": "Não foi possível carregar as features.",
           "save": "Não foi possível salvar o contexto.",
           "delete": "Não foi possível excluir a feature.",
-          "generate": "Falha ao gerar testes para {name}."
+          "generate": "Falha ao gerar testes para {name}.",
+          "suggest": "Não foi possível gerar sugestões com IA."
         }
       }
     },

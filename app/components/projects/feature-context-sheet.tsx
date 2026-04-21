@@ -7,6 +7,7 @@ import {
   Loader2,
   Pencil,
   Play,
+  Sparkles,
   Trash2,
   X,
 } from 'lucide-react'
@@ -85,6 +86,7 @@ export function FeatureContextSheet({
     `model:${projectId}:generate-tests`,
   )
   const anthropicCfg = useAnthropicConfig()
+  const [suggesting, startSuggesting] = useTransition()
 
   useEffect(() => {
     if (!feature) return
@@ -171,6 +173,88 @@ export function FeatureContextSheet({
     })
   }
 
+  const suggestWithAi = () => {
+    startSuggesting(async () => {
+      const res = await fetch(
+        `/api/projects/${projectId}/features/${feature.id}/suggest-context`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'fetch',
+          },
+          body: JSON.stringify(
+            modelOverride ? { model: modelOverride } : {},
+          ),
+        },
+      )
+      if (!res.ok) {
+        toast.error(t('errors.suggest'))
+        return
+      }
+      const body = (await res.json()) as {
+        suggestion: {
+          businessRule?: string | null
+          freeScenarios?: string[]
+          testRestrictions?: string | null
+          expectedEnvVars?: string[]
+        }
+      }
+      const s = body.suggestion
+
+      // Preenche só campos vazios — nunca sobrescreve trabalho da QA.
+      let filledAny = false
+      if (s.businessRule && businessRule.trim().length === 0) {
+        setBusinessRule(s.businessRule)
+        filledAny = true
+      }
+      if (s.testRestrictions && testRestrictions.trim().length === 0) {
+        setTestRestrictions(s.testRestrictions)
+        filledAny = true
+      }
+      if (s.expectedEnvVars && s.expectedEnvVars.length > 0) {
+        const missing = s.expectedEnvVars.filter((v) => !envVars.includes(v))
+        if (missing.length > 0) {
+          setEnvVars((prev) => [...prev, ...missing])
+          filledAny = true
+        }
+      }
+      // Cenários livres: só adiciona os NÃO-duplicados, via POST direto
+      // (reusa a API que já persiste, consistente com o ScenariosEditor).
+      if (s.freeScenarios && s.freeScenarios.length > 0) {
+        for (const desc of s.freeScenarios) {
+          await fetch(
+            `/api/projects/${projectId}/features/${feature.id}/free-scenarios`,
+            {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'X-Requested-With': 'fetch',
+              },
+              body: JSON.stringify({ description: desc, priority: 0 }),
+            },
+          ).catch(() => {})
+        }
+        filledAny = true
+      }
+
+      if (filledAny) {
+        toast.success(t('toast_suggested'))
+        // Expande avançado se alguma coisa caiu lá.
+        if (
+          (s.testRestrictions && testRestrictions.trim().length === 0) ||
+          (s.expectedEnvVars && s.expectedEnvVars.length > 0)
+        ) {
+          setAdvancedOpen(true)
+        }
+        // Recarrega os free scenarios via onChanged (re-fetcha features + counts)
+        await onChanged()
+      } else {
+        toast.info(t('toast_suggested_empty'))
+      }
+    })
+  }
+
   const removeFeature = () => {
     if (!confirm(t('confirm_delete'))) return
     startDelete(async () => {
@@ -242,8 +326,22 @@ export function FeatureContextSheet({
         side="bottom"
         className="mx-auto h-[85vh] max-w-4xl rounded-t-xl"
       >
-        <SheetHeader className="border-b border-border">
+        <SheetHeader className="flex-row items-center justify-between gap-3 border-b border-border">
           <SheetTitle>{t('sheet_title')}</SheetTitle>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={suggestWithAi}
+            disabled={suggesting || saving || deleting || generating}
+          >
+            {suggesting ? (
+              <Loader2 className="size-3.5 animate-spin" />
+            ) : (
+              <Sparkles className="size-3.5" />
+            )}
+            {t('suggest_with_ai')}
+          </Button>
         </SheetHeader>
 
         <div className="flex-1 space-y-5 overflow-y-auto px-6 pb-4">
