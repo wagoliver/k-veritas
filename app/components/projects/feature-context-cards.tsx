@@ -1,37 +1,29 @@
 'use client'
 
 import {
-  AlertTriangle,
   CheckCircle2,
-  ChevronDown,
   ChevronRight,
-  Focus,
+  Circle,
   Loader2,
-  Pencil,
   Play,
-  Trash2,
-  X,
 } from 'lucide-react'
 import { useEffect, useMemo, useState, useTransition } from 'react'
 import { useTranslations } from 'next-intl'
 import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
-import { Checkbox } from '@/components/ui/checkbox'
-import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
-import { ScenariosEditor } from './scenarios-editor'
+import { FeatureContextSheet } from './feature-context-sheet'
 
-type CoveragePriority = 'critical' | 'high' | 'normal' | 'low'
+export type CoveragePriority = 'critical' | 'high' | 'normal' | 'low'
 
 interface CodeFocusItem {
   path: string
   mode: 'focus' | 'ignore'
 }
 
-interface FeatureCard {
+export interface FeatureCard {
   id: string
   externalId: string
   name: string
@@ -50,9 +42,36 @@ interface FeaturesResponse {
   features: FeatureCard[]
 }
 
+interface FreeScenariosResponse {
+  items: Array<{ id: string; description: string; priority: number }>
+}
+
+type StatusFilter = 'all' | 'ready' | 'pending'
+
+/**
+ * Regra simples para considerar uma feature "pronta" pra gerar testes.
+ * Baixo de propósito: QA só precisa ter pensado em algum aspecto de
+ * negócio (regra, cenário livre, env var ou restrição).
+ */
+function isFeatureReady(
+  f: FeatureCard,
+  freeScenariosCount: number,
+): boolean {
+  return (
+    (f.businessRule?.trim().length ?? 0) > 0 ||
+    freeScenariosCount > 0 ||
+    f.expectedEnvVars.length > 0 ||
+    (f.testRestrictions?.trim().length ?? 0) > 0
+  )
+}
+
 export function FeatureContextCards({ projectId }: { projectId: string }) {
   const t = useTranslations('projects.overview.discovery')
   const [features, setFeatures] = useState<FeatureCard[] | null>(null)
+  const [freeCounts, setFreeCounts] = useState<Record<string, number>>({})
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
+  const [selected, setSelected] = useState<FeatureCard | null>(null)
+  const [batchGenerating, startBatch] = useTransition()
 
   const load = async () => {
     const res = await fetch(`/api/projects/${projectId}/features`, {
@@ -65,6 +84,27 @@ export function FeatureContextCards({ projectId }: { projectId: string }) {
     }
     const data = (await res.json()) as FeaturesResponse
     setFeatures(data.features)
+
+    // Busca contagem de cenários livres por feature em paralelo. Sem
+    // rota agregada — fazemos N requests simples e ficamos com o que
+    // responder. Defensivo: falha retorna 0.
+    const counts: Record<string, number> = {}
+    await Promise.all(
+      data.features.map(async (f) => {
+        try {
+          const r = await fetch(
+            `/api/projects/${projectId}/features/${f.id}/free-scenarios`,
+            { headers: { 'X-Requested-With': 'fetch' }, cache: 'no-store' },
+          )
+          if (!r.ok) return
+          const body = (await r.json()) as FreeScenariosResponse
+          counts[f.id] = body.items?.length ?? 0
+        } catch {
+          counts[f.id] = 0
+        }
+      }),
+    )
+    setFreeCounts(counts)
   }
 
   useEffect(() => {
@@ -72,11 +112,30 @@ export function FeatureContextCards({ projectId }: { projectId: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId])
 
-  if (features === null) {
+  // Re-hydrata também quando a sheet é fechada pós-save
+  const onChanged = async () => {
+    await load()
+  }
+
+  const derived = useMemo(() => {
+    if (!features) return null
+    const withReady = features.map((f) => ({
+      feature: f,
+      free: freeCounts[f.id] ?? 0,
+      ready: isFeatureReady(f, freeCounts[f.id] ?? 0),
+    }))
+    return {
+      all: withReady,
+      ready: withReady.filter((x) => x.ready),
+      pending: withReady.filter((x) => !x.ready),
+    }
+  }, [features, freeCounts])
+
+  if (features === null || derived === null) {
     return (
       <div className="space-y-2">
         {[0, 1, 2].map((i) => (
-          <Skeleton key={i} className="h-20" />
+          <Skeleton key={i} className="h-16" />
         ))}
       </div>
     )
@@ -90,90 +149,245 @@ export function FeatureContextCards({ projectId }: { projectId: string }) {
     )
   }
 
-  const filled = features.filter(
-    (f) => f.contextUpdatedAt !== null,
-  ).length
+  const filtered =
+    statusFilter === 'ready'
+      ? derived.ready
+      : statusFilter === 'pending'
+        ? derived.pending
+        : derived.all
+
+  const generateBatch = () => {
+    if (derived.ready.length === 0) return
+    startBatch(async () => {
+      toast.info(t('toast_generating', { count: derived.ready.length }))
+      for (const { feature } of derived.ready) {
+        try {
+          const res = await fetch(
+            `/api/projects/${projectId}/features/${feature.id}/generate-tests`,
+            {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'X-Requested-With': 'fetch',
+              },
+              body: JSON.stringify({}),
+            },
+          )
+          if (!res.ok) {
+            toast.error(t('errors.generate', { name: feature.name }))
+          }
+        } catch {
+          toast.error(t('errors.generate', { name: feature.name }))
+        }
+      }
+      toast.success(t('toast_generate_done'))
+      await load()
+    })
+  }
 
   return (
-    <div className="space-y-4">
-      <header className="flex items-center justify-between">
-        <div>
+    <section className="space-y-4">
+      <header className="flex flex-wrap items-center gap-3">
+        <div className="flex-1 min-w-0">
           <h2 className="font-display text-lg font-semibold">
             {t('heading')}
           </h2>
           <p className="text-xs text-muted-foreground">
-            {t('summary', { filled, total: features.length })}
+            {t('summary_total', { total: features.length })}
+            {' · '}
+            <span className="text-foreground">
+              {t('summary_ready', {
+                ready: derived.ready.length,
+                total: features.length,
+              })}
+            </span>
           </p>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <StatusFilterToggle
+            value={statusFilter}
+            onChange={setStatusFilter}
+            counts={{
+              all: derived.all.length,
+              ready: derived.ready.length,
+              pending: derived.pending.length,
+            }}
+          />
+          <Button
+            size="sm"
+            onClick={generateBatch}
+            disabled={derived.ready.length === 0 || batchGenerating}
+            title={
+              derived.ready.length === 0
+                ? t('generate_tests_batch_disabled')
+                : undefined
+            }
+          >
+            {batchGenerating ? (
+              <Loader2 className="size-3.5 animate-spin" />
+            ) : (
+              <Play className="size-3.5" />
+            )}
+            {t('generate_tests_batch', { count: derived.ready.length })}
+          </Button>
         </div>
       </header>
 
-      <ul className="space-y-3">
-        {features.map((f) => (
-          <FeatureCardItem
-            key={f.id}
-            feature={f}
-            projectId={projectId}
-            onChanged={load}
-          />
-        ))}
-      </ul>
+      {filtered.length === 0 ? (
+        <div className="rounded-lg border border-dashed border-border p-6 text-center text-xs text-muted-foreground">
+          {t(
+            statusFilter === 'ready' ? 'badge_ready' : 'badge_pending',
+          ).toString()}{' '}
+          — 0
+        </div>
+      ) : (
+        <ul className="space-y-2">
+          {filtered.map(({ feature, free, ready }) => (
+            <FeatureCardRow
+              key={feature.id}
+              feature={feature}
+              freeCount={free}
+              ready={ready}
+              onClick={() => setSelected(feature)}
+            />
+          ))}
+        </ul>
+      )}
+
+      <FeatureContextSheet
+        feature={selected}
+        projectId={projectId}
+        open={selected !== null}
+        onOpenChange={(open) => {
+          if (!open) setSelected(null)
+        }}
+        onChanged={onChanged}
+      />
+    </section>
+  )
+}
+
+function StatusFilterToggle({
+  value,
+  onChange,
+  counts,
+}: {
+  value: StatusFilter
+  onChange: (v: StatusFilter) => void
+  counts: { all: number; ready: number; pending: number }
+}) {
+  const t = useTranslations('projects.overview.discovery')
+  const items: Array<{ v: StatusFilter; labelKey: string; count: number }> = [
+    { v: 'all', labelKey: 'filter_all', count: counts.all },
+    { v: 'ready', labelKey: 'filter_ready', count: counts.ready },
+    { v: 'pending', labelKey: 'filter_pending', count: counts.pending },
+  ]
+  return (
+    <div className="flex items-center gap-1 rounded-md border border-border bg-muted/40 p-0.5">
+      {items.map((item) => (
+        <button
+          key={item.v}
+          type="button"
+          onClick={() => onChange(item.v)}
+          className={cn(
+            'inline-flex items-center gap-1.5 rounded px-2 py-1 text-xs font-medium transition-colors',
+            value === item.v
+              ? 'bg-background text-foreground shadow-sm'
+              : 'text-muted-foreground hover:text-foreground',
+          )}
+        >
+          {t(item.labelKey)}
+          <span className="tabular-nums text-[10px] opacity-70">
+            {item.count}
+          </span>
+        </button>
+      ))}
     </div>
   )
 }
 
-function FeatureCardItem({
+function FeatureCardRow({
   feature,
-  projectId,
-  onChanged,
+  freeCount,
+  ready,
+  onClick,
 }: {
   feature: FeatureCard
-  projectId: string
-  onChanged: () => Promise<void> | void
+  freeCount: number
+  ready: boolean
+  onClick: () => void
 }) {
   const t = useTranslations('projects.overview.discovery')
-  const [open, setOpen] = useState(false)
-  const contextFilled = feature.contextUpdatedAt !== null
+
+  const chips: string[] = []
+  if (feature.businessRule && feature.businessRule.trim().length > 0) {
+    chips.push(t('card_chip_business_rule'))
+  }
+  if (freeCount > 0) {
+    chips.push(t('card_chip_scenarios', { count: freeCount }))
+  }
+  if (feature.testRestrictions && feature.testRestrictions.trim().length > 0) {
+    chips.push(t('card_chip_restrictions'))
+  }
+  if (feature.expectedEnvVars.length > 0) {
+    chips.push(
+      t('card_chip_env_vars', { count: feature.expectedEnvVars.length }),
+    )
+  }
+  if (feature.codeFocus.length > 0) {
+    chips.push(
+      t('card_chip_code_focus', { count: feature.codeFocus.length }),
+    )
+  }
+  if (feature.coveragePriorities.length > 0) {
+    chips.push(
+      t('card_chip_priorities', {
+        list: feature.coveragePriorities.join(' + '),
+      }),
+    )
+  }
 
   return (
-    <li className="overflow-hidden rounded-lg border border-border bg-card shadow-sm">
+    <li>
       <button
         type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-start gap-3 p-4 text-left transition-colors hover:bg-accent/20"
+        onClick={onClick}
+        aria-label={t('open_editor')}
+        className="group flex w-full items-start gap-3 rounded-lg border border-border bg-card p-3 text-left shadow-sm transition-colors hover:border-primary/50 hover:bg-accent/20"
       >
-        <ChevronRight
-          className={cn(
-            'mt-1 size-4 shrink-0 text-muted-foreground transition-transform',
-            open && 'rotate-90',
+        <div className="mt-0.5 shrink-0">
+          {ready ? (
+            <CheckCircle2 className="size-5 text-fin-gain" />
+          ) : (
+            <Circle className="size-5 text-muted-foreground/40" />
           )}
-        />
-        <div className="min-w-0 flex-1">
+        </div>
+
+        <div className="min-w-0 flex-1 space-y-1">
           <div className="flex flex-wrap items-center gap-2">
             <span className="font-display text-base font-semibold">
               {feature.name}
             </span>
-            {contextFilled ? (
-              <span className="inline-flex items-center gap-1 rounded-full bg-fin-gain/10 px-2 py-0.5 text-[10px] font-medium text-fin-gain">
-                <CheckCircle2 className="size-3" />
-                {t('badge_context_filled')}
-              </span>
-            ) : (
-              <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
-                <AlertTriangle className="size-3" />
-                {t('badge_context_pending')}
-              </span>
-            )}
+            <span
+              className={cn(
+                'rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider',
+                ready
+                  ? 'bg-fin-gain/10 text-fin-gain'
+                  : 'bg-muted text-muted-foreground',
+              )}
+            >
+              {ready ? t('badge_ready') : t('badge_pending')}
+            </span>
             {feature.source === 'manual' ? (
               <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
                 {t('badge_manual')}
               </span>
             ) : null}
           </div>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {feature.description}
-          </p>
-          <div className="mt-2 flex flex-wrap gap-1">
-            {feature.paths.map((p) => (
+
+          <div className="flex flex-wrap gap-1">
+            {feature.paths.slice(0, 5).map((p) => (
               <span
                 key={p}
                 className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px]"
@@ -181,381 +395,22 @@ function FeatureCardItem({
                 {p}
               </span>
             ))}
+            {feature.paths.length > 5 ? (
+              <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
+                +{feature.paths.length - 5}
+              </span>
+            ) : null}
           </div>
-        </div>
-      </button>
 
-      {open ? (
-        <ContextEditor
-          feature={feature}
-          projectId={projectId}
-          onChanged={onChanged}
-        />
-      ) : null}
+          <p className="text-xs text-muted-foreground">
+            {chips.length > 0
+              ? chips.join(' · ')
+              : t('card_summary_empty')}
+          </p>
+        </div>
+
+        <ChevronRight className="mt-1 size-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
+      </button>
     </li>
   )
-}
-
-function ContextEditor({
-  feature,
-  projectId,
-  onChanged,
-}: {
-  feature: FeatureCard
-  projectId: string
-  onChanged: () => Promise<void> | void
-}) {
-  const t = useTranslations('projects.overview.discovery')
-  const [businessRule, setBusinessRule] = useState(
-    feature.businessRule ?? '',
-  )
-  const [testRestrictions, setTestRestrictions] = useState(
-    feature.testRestrictions ?? '',
-  )
-  const [codeFocus, setCodeFocus] = useState<CodeFocusItem[]>(
-    feature.codeFocus ?? [],
-  )
-  const [envVarDraft, setEnvVarDraft] = useState('')
-  const [envVars, setEnvVars] = useState<string[]>(
-    feature.expectedEnvVars ?? [],
-  )
-  const [priorities, setPriorities] = useState<CoveragePriority[]>(
-    feature.coveragePriorities ?? [],
-  )
-  const [saving, startSave] = useTransition()
-  const [deleting, startDelete] = useTransition()
-  const [name, setName] = useState(feature.name)
-  const [editingName, setEditingName] = useState(false)
-  const [focusDraft, setFocusDraft] = useState('')
-
-  const priorityOptions: CoveragePriority[] = [
-    'critical',
-    'high',
-    'normal',
-    'low',
-  ]
-
-  const togglePriority = (p: CoveragePriority) => {
-    setPriorities((prev) =>
-      prev.includes(p) ? prev.filter((x) => x !== p) : [...prev, p],
-    )
-  }
-
-  const addFocus = (mode: 'focus' | 'ignore') => {
-    const path = focusDraft.trim()
-    if (path.length === 0) return
-    setCodeFocus((prev) => [...prev, { path, mode }])
-    setFocusDraft('')
-  }
-
-  const removeFocus = (idx: number) => {
-    setCodeFocus((prev) => prev.filter((_, i) => i !== idx))
-  }
-
-  const addEnvVar = () => {
-    const v = envVarDraft.trim().toUpperCase()
-    if (!/^[A-Z_][A-Z0-9_]*$/.test(v)) return
-    if (envVars.includes(v)) {
-      setEnvVarDraft('')
-      return
-    }
-    setEnvVars((prev) => [...prev, v])
-    setEnvVarDraft('')
-  }
-
-  const removeEnvVar = (v: string) => {
-    setEnvVars((prev) => prev.filter((x) => x !== v))
-  }
-
-  const save = () => {
-    startSave(async () => {
-      const res = await fetch(
-        `/api/projects/${projectId}/features/${feature.id}`,
-        {
-          method: 'PATCH',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Requested-With': 'fetch',
-          },
-          body: JSON.stringify({
-            name: editingName ? name.trim() : undefined,
-            businessRule: businessRule.trim() || null,
-            testRestrictions: testRestrictions.trim() || null,
-            codeFocus,
-            expectedEnvVars: envVars,
-            coveragePriorities: priorities,
-          }),
-        },
-      )
-      if (!res.ok) {
-        toast.error(t('errors.save'))
-        return
-      }
-      toast.success(t('toast_saved'))
-      setEditingName(false)
-      await onChanged()
-    })
-  }
-
-  const removeFeature = () => {
-    if (!confirm(t('confirm_delete'))) return
-    startDelete(async () => {
-      const res = await fetch(
-        `/api/projects/${projectId}/features/${feature.id}`,
-        {
-          method: 'DELETE',
-          headers: { 'X-Requested-With': 'fetch' },
-        },
-      )
-      if (!res.ok) {
-        toast.error(t('errors.delete'))
-        return
-      }
-      toast.success(t('toast_deleted'))
-      await onChanged()
-    })
-  }
-
-  return (
-    <div className="space-y-5 border-t border-border bg-muted/20 p-4">
-      {/* Nome (editável) */}
-      <section className="space-y-2">
-        <label className="text-xs font-medium text-muted-foreground">
-          {t('field_name')}
-        </label>
-        {editingName ? (
-          <div className="flex gap-2">
-            <Input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              autoFocus
-              disabled={saving}
-            />
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => {
-                setName(feature.name)
-                setEditingName(false)
-              }}
-              disabled={saving}
-            >
-              <X className="size-3.5" />
-            </Button>
-          </div>
-        ) : (
-          <div className="flex items-center gap-2">
-            <span className="text-sm">{name}</span>
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={() => setEditingName(true)}
-            >
-              <Pencil className="size-3.5" />
-            </Button>
-          </div>
-        )}
-      </section>
-
-      {/* Regra de negócio */}
-      <section className="space-y-2">
-        <label className="text-xs font-medium text-muted-foreground">
-          {t('field_business_rule')}
-        </label>
-        <Textarea
-          value={businessRule}
-          onChange={(e) => setBusinessRule(e.target.value)}
-          placeholder={t('placeholder_business_rule')}
-          rows={4}
-          disabled={saving}
-        />
-      </section>
-
-      {/* Cenários livres (reuso) */}
-      <section className="space-y-2">
-        <label className="text-xs font-medium text-muted-foreground">
-          {t('field_free_scenarios')}
-        </label>
-        <ScenariosEditor
-          projectId={projectId}
-          scope={{ kind: 'feature', featureId: feature.id }}
-        />
-      </section>
-
-      {/* Restrições de teste */}
-      <section className="space-y-2">
-        <label className="text-xs font-medium text-muted-foreground">
-          {t('field_test_restrictions')}
-        </label>
-        <Textarea
-          value={testRestrictions}
-          onChange={(e) => setTestRestrictions(e.target.value)}
-          placeholder={t('placeholder_test_restrictions')}
-          rows={3}
-          disabled={saving}
-        />
-      </section>
-
-      {/* Áreas do código (focus/ignore) */}
-      <section className="space-y-2">
-        <label className="text-xs font-medium text-muted-foreground">
-          {t('field_code_focus')}
-        </label>
-        <div className="flex gap-2">
-          <Input
-            value={focusDraft}
-            onChange={(e) => setFocusDraft(e.target.value)}
-            placeholder={t('placeholder_code_focus')}
-            disabled={saving}
-          />
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => addFocus('focus')}
-            disabled={saving || focusDraft.trim().length === 0}
-            title={t('focus_add_focus')}
-          >
-            <Focus className="size-3.5" />
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => addFocus('ignore')}
-            disabled={saving || focusDraft.trim().length === 0}
-            title={t('focus_add_ignore')}
-          >
-            <X className="size-3.5" />
-          </Button>
-        </div>
-        {codeFocus.length > 0 ? (
-          <ul className="flex flex-wrap gap-1.5">
-            {codeFocus.map((item, i) => (
-              <li
-                key={i}
-                className={cn(
-                  'inline-flex items-center gap-1 rounded border px-2 py-0.5 font-mono text-[11px]',
-                  item.mode === 'focus'
-                    ? 'border-primary/40 bg-primary/10 text-primary'
-                    : 'border-destructive/40 bg-destructive/10 text-destructive',
-                )}
-              >
-                {item.mode === 'focus' ? '+' : '-'} {item.path}
-                <button
-                  type="button"
-                  onClick={() => removeFocus(i)}
-                  className="ml-1 opacity-60 hover:opacity-100"
-                >
-                  <X className="size-3" />
-                </button>
-              </li>
-            ))}
-          </ul>
-        ) : null}
-      </section>
-
-      {/* Env vars esperadas */}
-      <section className="space-y-2">
-        <label className="text-xs font-medium text-muted-foreground">
-          {t('field_env_vars')}
-        </label>
-        <div className="flex gap-2">
-          <Input
-            value={envVarDraft}
-            onChange={(e) => setEnvVarDraft(e.target.value.toUpperCase())}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                e.preventDefault()
-                addEnvVar()
-              }
-            }}
-            placeholder={t('placeholder_env_vars')}
-            className="font-mono"
-            disabled={saving}
-          />
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={addEnvVar}
-            disabled={saving || envVarDraft.trim().length === 0}
-          >
-            {t('add')}
-          </Button>
-        </div>
-        {envVars.length > 0 ? (
-          <ul className="flex flex-wrap gap-1.5">
-            {envVars.map((v) => (
-              <li
-                key={v}
-                className="inline-flex items-center gap-1 rounded border border-border bg-background px-2 py-0.5 font-mono text-[11px]"
-              >
-                {v}
-                <button
-                  type="button"
-                  onClick={() => removeEnvVar(v)}
-                  className="ml-1 opacity-60 hover:opacity-100"
-                >
-                  <X className="size-3" />
-                </button>
-              </li>
-            ))}
-          </ul>
-        ) : null}
-      </section>
-
-      {/* Prioridades de cobertura */}
-      <section className="space-y-2">
-        <label className="text-xs font-medium text-muted-foreground">
-          {t('field_priorities')}
-        </label>
-        <div className="flex flex-wrap gap-3">
-          {priorityOptions.map((p) => (
-            <label
-              key={p}
-              className="flex items-center gap-1.5 text-sm cursor-pointer"
-            >
-              <Checkbox
-                checked={priorities.includes(p)}
-                onCheckedChange={() => togglePriority(p)}
-                disabled={saving}
-              />
-              <span className={cn('capitalize', PRIORITY_COLORS[p])}>{p}</span>
-            </label>
-          ))}
-        </div>
-      </section>
-
-      {/* Ações */}
-      <div className="flex items-center justify-between border-t border-border/40 pt-3">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={removeFeature}
-          disabled={deleting || saving}
-          className="text-destructive hover:text-destructive"
-        >
-          {deleting ? (
-            <Loader2 className="size-3.5 animate-spin" />
-          ) : (
-            <Trash2 className="size-3.5" />
-          )}
-          {t('delete')}
-        </Button>
-        <Button onClick={save} disabled={saving || deleting}>
-          {saving ? (
-            <Loader2 className="size-3.5 animate-spin" />
-          ) : (
-            <CheckCircle2 className="size-3.5" />
-          )}
-          {t('save')}
-        </Button>
-      </div>
-    </div>
-  )
-}
-
-const PRIORITY_COLORS: Record<CoveragePriority, string> = {
-  critical: 'text-destructive',
-  high: 'text-orange-600 dark:text-orange-400',
-  normal: 'text-foreground',
-  low: 'text-muted-foreground',
 }

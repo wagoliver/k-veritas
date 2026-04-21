@@ -2,8 +2,9 @@
 
 import {
   AlertCircle,
-  ArrowRight,
   CheckCircle2,
+  ChevronDown,
+  ChevronUp,
   Code2,
   Loader2,
   Play,
@@ -14,7 +15,6 @@ import { useTranslations } from 'next-intl'
 import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
-import { Link } from '@/lib/i18n/navigation'
 import { cn } from '@/lib/utils'
 import { CodeAnalysisLogStream } from './code-analysis-log-stream'
 import { FeatureContextCards } from './feature-context-cards'
@@ -48,9 +48,11 @@ interface LatestResponse {
 
 export function CodeAnalysisPanel({ projectId }: { projectId: string }) {
   const t = useTranslations('projects.overview.map.code')
+  const tDisc = useTranslations('projects.overview.discovery')
   const [data, setData] = useState<LatestResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [starting, setStarting] = useState(false)
+  const [detailsOpen, setDetailsOpen] = useState(false)
   // Guarda o último status que vimos pra tocar o toast "concluído"
   // exatamente uma vez na transição de running→completed.
   const lastStatusRef = useRef<string | null>(null)
@@ -172,77 +174,129 @@ export function CodeAnalysisPanel({ projectId }: { projectId: string }) {
 
   const running = job.status === 'pending' || job.status === 'running'
 
+  // Estado RUNNING/PENDING ou FAILED: painel completo (como antes)
+  if (running || job.status === 'failed') {
+    return (
+      <div className="surface-card overflow-hidden rounded-xl">
+        <header className="flex items-center justify-between gap-3 border-b border-border bg-card/60 px-4 py-3">
+          <div className="flex items-center gap-2">
+            <StatusIcon status={job.status} />
+            <span className="font-mono text-xs font-medium uppercase tracking-wider">
+              {t(`status.${job.status}`)}
+            </span>
+            {running && job.currentStepLabel ? (
+              <span className="text-xs text-muted-foreground">
+                · {job.currentStepLabel}
+              </span>
+            ) : null}
+          </div>
+          <div className="flex items-center gap-2">
+            {!running ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={trigger}
+                disabled={starting || !sourceConfigured}
+              >
+                {starting ? (
+                  <Loader2 className="size-3.5 animate-spin" />
+                ) : (
+                  <RefreshCw className="size-3.5" />
+                )}
+                {t('reanalyze_button')}
+              </Button>
+            ) : null}
+          </div>
+        </header>
+
+        <div className="grid gap-4 p-4 sm:grid-cols-3">
+          <Metric
+            label={t('metrics.steps')}
+            value={String(job.stepsCompleted)}
+          />
+          <Metric
+            label={t('metrics.tokens')}
+            value={`${formatK(job.tokensIn)} / ${formatK(job.tokensOut)}`}
+          />
+          <Metric label={t('metrics.turns')} value={String(job.turnsUsed)} />
+        </div>
+
+        <div className="border-t border-border p-4">
+          <CodeAnalysisLogStream
+            projectId={projectId}
+            jobId={job.id}
+            onComplete={loadLatest}
+          />
+        </div>
+
+        {job.status === 'failed' && job.error ? (
+          <div className="border-t border-border bg-destructive/5 px-4 py-4">
+            <div className="flex items-start gap-3">
+              <AlertCircle className="size-5 shrink-0 translate-y-0.5 text-destructive" />
+              <div className="flex-1 space-y-1">
+                <p className="text-sm font-semibold text-destructive">
+                  {t('completed_failed_title')}
+                </p>
+                <p className="text-xs text-destructive/90">
+                  {job.error.slice(0, 400)}
+                </p>
+              </div>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={trigger}
+                disabled={starting || !sourceConfigured}
+              >
+                {starting ? (
+                  <Loader2 className="size-3.5 animate-spin" />
+                ) : (
+                  <RefreshCw className="size-3.5" />
+                )}
+                {t('reanalyze_button')}
+              </Button>
+            </div>
+          </div>
+        ) : null}
+      </div>
+    )
+  }
+
+  // Estado COMPLETED: header colapsado + cards de feature em foco
+  const ago = formatRelativeAgo(
+    job.finishedAt ? new Date(job.finishedAt) : new Date(job.createdAt),
+  )
+  const agoLabel = ago
+    ? tDisc('last_analysis', { ago })
+    : tDisc('last_analysis_just_now')
+
   return (
-    <div className="surface-card overflow-hidden rounded-xl">
-      <header className="flex items-center justify-between gap-3 border-b border-border bg-card/60 px-4 py-3">
-        <div className="flex items-center gap-2">
-          <StatusIcon status={job.status} />
-          <span className="font-mono text-xs font-medium uppercase tracking-wider">
-            {t(`status.${job.status}`)}
-          </span>
-          {running && job.currentStepLabel ? (
-            <span className="text-xs text-muted-foreground">
-              · {job.currentStepLabel}
+    <div className="space-y-4">
+      <div className="surface-card overflow-hidden rounded-xl">
+        <header className="flex flex-wrap items-center gap-3 px-4 py-3">
+          <CheckCircle2 className="size-4 shrink-0 text-fin-gain" />
+          <span className="text-sm text-muted-foreground">{agoLabel}</span>
+          {job.error ? (
+            <span className="text-xs text-amber-600 dark:text-amber-400">
+              · {t('completed_with_warning_hint')}
             </span>
           ) : null}
-        </div>
-        <div className="flex items-center gap-2">
-          {!running ? (
+          <div className="ml-auto flex items-center gap-2">
             <Button
               type="button"
               size="sm"
-              variant="outline"
-              onClick={trigger}
-              disabled={starting || !sourceConfigured}
+              variant="ghost"
+              onClick={() => setDetailsOpen((v) => !v)}
+              aria-expanded={detailsOpen}
             >
-              {starting ? (
-                <Loader2 className="size-3.5 animate-spin" />
+              {detailsOpen ? (
+                <ChevronUp className="size-3.5" />
               ) : (
-                <RefreshCw className="size-3.5" />
+                <ChevronDown className="size-3.5" />
               )}
-              {t('reanalyze_button')}
+              {detailsOpen ? tDisc('hide_details') : tDisc('show_details')}
             </Button>
-          ) : null}
-        </div>
-      </header>
-
-      <div className="grid gap-4 p-4 sm:grid-cols-3">
-        <Metric
-          label={t('metrics.steps')}
-          value={String(job.stepsCompleted)}
-        />
-        <Metric
-          label={t('metrics.tokens')}
-          value={`${formatK(job.tokensIn)} / ${formatK(job.tokensOut)}`}
-        />
-        <Metric
-          label={t('metrics.turns')}
-          value={String(job.turnsUsed)}
-        />
-      </div>
-
-      <div className="border-t border-border p-4">
-        <CodeAnalysisLogStream
-          projectId={projectId}
-          jobId={job.id}
-          // Força reload imediato do /latest quando o stream detecta
-          // transição pra completed/failed — não espera o tick de 2.5s.
-          onComplete={loadLatest}
-        />
-      </div>
-
-      {job.status === 'failed' && job.error ? (
-        <div className="border-t border-border bg-destructive/5 px-4 py-4">
-          <div className="flex items-start gap-3">
-            <AlertCircle className="size-5 shrink-0 translate-y-0.5 text-destructive" />
-            <div className="flex-1 space-y-1">
-              <p className="text-sm font-semibold text-destructive">
-                {t('completed_failed_title')}
-              </p>
-              <p className="text-xs text-destructive/90">
-                {job.error.slice(0, 400)}
-              </p>
-            </div>
             <Button
               type="button"
               size="sm"
@@ -258,49 +312,47 @@ export function CodeAnalysisPanel({ projectId }: { projectId: string }) {
               {t('reanalyze_button')}
             </Button>
           </div>
-        </div>
-      ) : null}
+        </header>
 
-      {job.status === 'completed' ? (
-        <>
-          <div className="border-t border-fin-gain/30 bg-fin-gain/5 px-4 py-5">
-            <div className="flex items-start gap-3">
-              <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-fin-gain/15 text-fin-gain">
-                <CheckCircle2 className="size-5" />
-              </div>
-              <div className="flex-1 space-y-1">
-                <p className="text-sm font-semibold text-fin-gain">
-                  {t('completed_banner_title')}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {t('completed_banner_subtitle', {
-                    tokens: formatK(job.tokensIn + job.tokensOut),
-                    turns: job.turnsUsed,
-                  })}
-                </p>
-                {job.error ? (
-                  <p className="pt-1 text-xs text-amber-600 dark:text-amber-400">
-                    {t('completed_with_warning_hint')}
-                  </p>
-                ) : null}
-              </div>
-              <div className="flex items-center gap-2">
-                <Button type="button" size="sm" asChild>
-                  <Link href={`/projects/${projectId}/analysis`}>
-                    {t('completed_cta_scenarios')}
-                    <ArrowRight className="size-3.5" />
-                  </Link>
-                </Button>
-              </div>
+        {detailsOpen ? (
+          <div className="space-y-4 border-t border-border bg-muted/20 p-4">
+            <div className="grid gap-4 sm:grid-cols-3">
+              <Metric
+                label={t('metrics.steps')}
+                value={String(job.stepsCompleted)}
+              />
+              <Metric
+                label={t('metrics.tokens')}
+                value={`${formatK(job.tokensIn)} / ${formatK(job.tokensOut)}`}
+              />
+              <Metric
+                label={t('metrics.turns')}
+                value={String(job.turnsUsed)}
+              />
             </div>
+            <CodeAnalysisLogStream
+              projectId={projectId}
+              jobId={job.id}
+              onComplete={loadLatest}
+            />
           </div>
-          <div className="border-t border-border bg-background p-4">
-            <FeatureContextCards projectId={projectId} />
-          </div>
-        </>
-      ) : null}
+        ) : null}
+      </div>
+
+      <FeatureContextCards projectId={projectId} />
     </div>
   )
+}
+
+function formatRelativeAgo(date: Date): string | null {
+  const diffMs = Date.now() - date.getTime()
+  if (diffMs < 60_000) return null
+  const minutes = Math.floor(diffMs / 60_000)
+  if (minutes < 60) return `${minutes}min`
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) return `${hours}h`
+  const days = Math.floor(hours / 24)
+  return `${days}d`
 }
 
 function EmptyState({

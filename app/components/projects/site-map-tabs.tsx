@@ -20,12 +20,34 @@ export function SiteMapTabs({
   sourceType: 'url' | 'repo'
 }) {
   const t = useTranslations('projects.overview.map.subtabs')
-  // Projetos 'repo' abrem na aba Code por padrão — o crawler não se
-  // aplica. Projetos 'url' continuam com Crawler como default.
   const [tab, setTab] = useState<SubTab>(
     sourceType === 'repo' ? 'code' : 'crawler',
   )
 
+  // Projetos code-first não têm crawler rodando — esconde a sub-aba.
+  // Projetos url-first não têm análise de código — esconde Code.
+  // Em ambos os casos, só uma aba relevante resta: não renderiza tabs.
+  if (sourceType === 'repo') {
+    return (
+      <div className="space-y-4">
+        <CodeAnalysisPanel projectId={projectId} />
+      </div>
+    )
+  }
+
+  if (sourceType === 'url') {
+    return (
+      <div className="space-y-4">
+        <SiteMapList
+          projectId={projectId}
+          status={status}
+          sourceType={sourceType}
+        />
+      </div>
+    )
+  }
+
+  // Fallback defensivo: sourceType desconhecido → mostra tabs como antes.
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-1 rounded-lg border border-border bg-muted/40 p-1">
@@ -87,4 +109,3 @@ function SubTabBtn({
     </button>
   )
 }
-
