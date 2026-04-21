@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process'
 
+import type { CodeAnalysisPhase } from './db.ts'
 import type { PromptInput } from './prompt.ts'
 import { buildSystemPrompt, buildUserPrompt } from './prompt.ts'
 
@@ -11,6 +12,7 @@ export interface RunClaudeOptions {
   authMode: 'api_key' | 'oauth'
   model: string
   maxBudgetUsd: number
+  phase: CodeAnalysisPhase
   onEvent?: (evt: ClaudeStreamEvent) => void | Promise<void>
 }
 
@@ -65,7 +67,7 @@ export interface RunClaudeResult {
 export async function runClaude(
   opts: RunClaudeOptions,
 ): Promise<RunClaudeResult> {
-  const systemPrompt = await buildSystemPrompt(opts.repoRoot)
+  const systemPrompt = await buildSystemPrompt(opts.repoRoot, opts.phase)
   const userPrompt = buildUserPrompt(opts.input)
 
   const args: string[] = [

@@ -1,11 +1,11 @@
 import { spawn } from 'node:child_process'
-import { mkdir, writeFile } from 'node:fs/promises'
-import { join } from 'node:path'
+import { cp, mkdir, rm, writeFile } from 'node:fs/promises'
+import { basename, join } from 'node:path'
 
 import AdmZip from 'adm-zip'
 
 import { env } from './env.ts'
-import type { Project } from './db.ts'
+import type { CodeAnalysisPhase, Project } from './db.ts'
 
 const DATA_DIR = env('DATA_DIR', '/data')
 const WORK_DIR = env('WORK_DIR', '/work')
@@ -19,6 +19,7 @@ export interface CloneResult {
 export async function prepareJobWorkspace(
   jobId: string,
   project: Project,
+  phase: CodeAnalysisPhase = 'structure',
 ): Promise<CloneResult> {
   const jobRoot = join(WORK_DIR, jobId)
   const repoRoot = join(jobRoot, 'repo')
@@ -26,16 +27,21 @@ export async function prepareJobWorkspace(
 
   await mkdir(repoRoot, { recursive: true })
   await mkdir(outputDir, { recursive: true })
-  await mkdir(join(outputDir, 'features'), { recursive: true })
-  await mkdir(join(outputDir, 'tests'), { recursive: true })
+  // Só reserva a pasta de specs quando for de fato gerar testes.
+  if (phase === 'tests') {
+    await mkdir(join(outputDir, 'tests'), { recursive: true })
+  }
 
-  // Contexto de negócio escrito pela QA. Vazio → comentário explícito
-  // pra o prompt do Claude entender que não foi fornecido.
-  const contextBody =
-    (project.business_context ?? '').trim().length > 0
-      ? project.business_context!
-      : '> (sem contexto de negócio fornecido pela QA — trabalhe apenas com o código)'
-  await writeFile(join(jobRoot, 'context.md'), contextBody, 'utf8')
+  // Contexto de negócio pra Claude Code só faz sentido na fase 'tests',
+  // que roda escopada a uma feature com contexto preenchido pela QA.
+  // A fase 'structure' só faz inventário — nunca lê context.md.
+  if (phase === 'tests') {
+    const contextBody =
+      (project.business_context ?? '').trim().length > 0
+        ? project.business_context!
+        : '> (sem contexto de negócio fornecido pela QA — trabalhe apenas com o código)'
+    await writeFile(join(jobRoot, 'context.md'), contextBody, 'utf8')
+  }
 
   if (project.source_type === 'repo' && project.repo_url) {
     await gitClone(project.repo_url, project.repo_branch ?? 'main', repoRoot)
@@ -77,4 +83,46 @@ async function unzipFromData(
   const abs = join(DATA_DIR, relativePath)
   const zip = new AdmZip(abs)
   zip.extractAllTo(dest, /*overwrite*/ true)
+}
+
+// Pastas e arquivos que nunca vão para o snapshot persistido em /data —
+// inúteis pro static-inspect do app e só inflam o disco.
+const SNAPSHOT_EXCLUDE = new Set([
+  '.git',
+  'node_modules',
+  '.next',
+  'dist',
+  'build',
+  'out',
+  '.turbo',
+  '.nuxt',
+  '.svelte-kit',
+  'coverage',
+  '.cache',
+])
+
+/**
+ * Persiste uma cópia enxuta do repoRoot em /data/projects/<projectId>/source/
+ * pra que o serviço `app` (volume /data compartilhado) consiga ler o código
+ * quando for gerar testes. O volume /work do codex não é acessível fora
+ * do codex, então precisamos duplicar — aceitável dado que é shallow
+ * clone (só último commit).
+ *
+ * Reescreve se já existir. Exclui pastas pesadas/inúteis.
+ */
+export async function persistRepoSnapshot(
+  projectId: string,
+  repoRoot: string,
+): Promise<string> {
+  const dest = join(DATA_DIR, 'projects', projectId, 'source')
+  await rm(dest, { recursive: true, force: true }).catch(() => {})
+  await mkdir(dest, { recursive: true })
+  await cp(repoRoot, dest, {
+    recursive: true,
+    filter: (src) => {
+      const name = basename(src)
+      return !SNAPSHOT_EXCLUDE.has(name)
+    },
+  })
+  return dest
 }

@@ -15,14 +15,33 @@ interface Scenario {
   priority: number
 }
 
-export function ScenariosEditor({ projectId }: { projectId: string }) {
+export type ScenariosEditorScope =
+  | { kind: 'project' }
+  | { kind: 'feature'; featureId: string }
+
+function endpointFor(projectId: string, scope: ScenariosEditorScope): string {
+  if (scope.kind === 'feature') {
+    return `/api/projects/${projectId}/features/${scope.featureId}/free-scenarios`
+  }
+  return `/api/projects/${projectId}/scenarios`
+}
+
+export function ScenariosEditor({
+  projectId,
+  scope = { kind: 'project' },
+}: {
+  projectId: string
+  scope?: ScenariosEditorScope
+}) {
   const t = useTranslations('projects.overview.scenarios')
   const [scenarios, setScenarios] = useState<Scenario[] | null>(null)
   const [draft, setDraft] = useState('')
   const [pending, start] = useTransition()
 
+  const base = endpointFor(projectId, scope)
+
   const load = async () => {
-    const res = await fetch(`/api/projects/${projectId}/scenarios`, {
+    const res = await fetch(base, {
       headers: { 'X-Requested-With': 'fetch' },
     })
     if (!res.ok) return
@@ -33,13 +52,13 @@ export function ScenariosEditor({ projectId }: { projectId: string }) {
   useEffect(() => {
     load()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [projectId])
+  }, [base])
 
   const add = () => {
     const description = draft.trim()
     if (description.length < 4) return
     start(async () => {
-      const res = await fetch(`/api/projects/${projectId}/scenarios`, {
+      const res = await fetch(base, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -59,10 +78,10 @@ export function ScenariosEditor({ projectId }: { projectId: string }) {
 
   const remove = (id: string) => {
     start(async () => {
-      const res = await fetch(
-        `/api/projects/${projectId}/scenarios/${id}`,
-        { method: 'DELETE', headers: { 'X-Requested-With': 'fetch' } },
-      )
+      const res = await fetch(`${base}/${id}`, {
+        method: 'DELETE',
+        headers: { 'X-Requested-With': 'fetch' },
+      })
       if (!res.ok) {
         toast.error(t('errors.delete'))
         return
@@ -87,7 +106,11 @@ export function ScenariosEditor({ projectId }: { projectId: string }) {
           disabled={pending}
         />
         <Button onClick={add} disabled={pending || draft.trim().length < 4}>
-          {pending ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}
+          {pending ? (
+            <Loader2 className="size-4 animate-spin" />
+          ) : (
+            <Plus className="size-4" />
+          )}
           {t('add')}
         </Button>
       </div>

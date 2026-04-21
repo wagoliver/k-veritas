@@ -33,6 +33,11 @@ import {
 
 export type StepStatus = 'idle' | 'running' | 'passed' | 'failed'
 
+export interface StepArtifact {
+  durationMs: number | null
+  errorMessage: string | null
+}
+
 interface TestFlowViewProps {
   code: string
   /** Índice GLOBAL (flat) do step onde o teste falhou. Destacado em
@@ -41,6 +46,9 @@ interface TestFlowViewProps {
   /** Status por step (índice global, mesmo comprimento de flatten(phases)).
    *  Quando fornecido, cada step ganha bolinha colorida. */
   stepStatuses?: StepStatus[] | null
+  /** Metadata vinda da execução real (duração, erro por step). Quando
+   *  fornecido, cada step exibe o tempo e, se falhou, a mensagem do erro. */
+  stepArtifacts?: (StepArtifact | null)[] | null
   /** Quando true, cada step ganha botão de edição inline. O callback
    *  recebe o code completo já recalculado com a linha substituída. */
   editable?: boolean
@@ -51,6 +59,7 @@ export function TestFlowView({
   code,
   failedStepIndex,
   stepStatuses,
+  stepArtifacts,
   editable = false,
   onCodeChange,
 }: TestFlowViewProps) {
@@ -87,7 +96,7 @@ export function TestFlowView({
     }
   }
 
-  // Corta stepStatuses em fatias por phase mantendo os índices corretos
+  // Corta stepStatuses/stepArtifacts em fatias por phase mantendo os índices
   let globalStepCursor = 0
   return (
     <div className="border-t border-primary/20 bg-muted/30 p-4">
@@ -95,8 +104,11 @@ export function TestFlowView({
         {parsed.phases.map((phase, idx) => {
           const phaseStart = globalStepCursor
           globalStepCursor += phase.steps.length
-          const slice = stepStatuses
+          const statusSlice = stepStatuses
             ? stepStatuses.slice(phaseStart, phaseStart + phase.steps.length)
+            : null
+          const artifactSlice = stepArtifacts
+            ? stepArtifacts.slice(phaseStart, phaseStart + phase.steps.length)
             : null
           return (
             <PhaseBlock
@@ -106,8 +118,9 @@ export function TestFlowView({
               failedStepIndex={
                 failedOffset?.phase === idx ? failedOffset.step : null
               }
-              stepStatuses={slice}
-              phaseStatus={derivePhaseStatus(slice)}
+              stepStatuses={statusSlice}
+              stepArtifacts={artifactSlice}
+              phaseStatus={derivePhaseStatus(statusSlice)}
               editable={editable}
               fullCode={code}
               onCodeChange={onCodeChange}
@@ -176,6 +189,7 @@ function PhaseBlock({
   isLast,
   failedStepIndex,
   stepStatuses,
+  stepArtifacts,
   phaseStatus,
   editable,
   fullCode,
@@ -185,6 +199,7 @@ function PhaseBlock({
   isLast: boolean
   failedStepIndex: number | null
   stepStatuses: StepStatus[] | null
+  stepArtifacts: (StepArtifact | null)[] | null
   phaseStatus: StepStatus | null
   editable: boolean
   fullCode: string
@@ -281,6 +296,7 @@ function PhaseBlock({
                   step={step}
                   failed={failedStepIndex === i}
                   status={stepStatuses?.[i] ?? null}
+                  artifact={stepArtifacts?.[i] ?? null}
                   editable={editable}
                   fullCode={fullCode}
                   onCodeChange={onCodeChange}
@@ -329,6 +345,7 @@ function StepRow({
   step,
   failed = false,
   status = null,
+  artifact = null,
   editable = false,
   fullCode,
   onCodeChange,
@@ -336,6 +353,7 @@ function StepRow({
   step: ParsedStep
   failed?: boolean
   status?: StepStatus | null
+  artifact?: StepArtifact | null
   editable?: boolean
   fullCode: string
   onCodeChange?: (newCode: string) => Promise<void> | void
@@ -441,6 +459,11 @@ function StepRow({
           >
             {step.verb}
           </span>
+          {artifact && typeof artifact.durationMs === 'number' ? (
+            <span className="shrink-0 tabular-nums text-[10px] text-muted-foreground">
+              {formatDuration(artifact.durationMs)}
+            </span>
+          ) : null}
         </button>
         {canEdit && !editing ? (
           <button
@@ -497,20 +520,37 @@ function StepRow({
             </div>
           </div>
         ) : (
-          <pre
+          <div
             className={cn(
-              'overflow-auto border-t px-3 py-2 font-mono text-[10px] leading-relaxed',
+              'border-t',
               isFailed
                 ? 'border-destructive/30 bg-destructive/5'
                 : 'border-border/40 bg-muted/30',
             )}
           >
-            <code>{step.rawLine}</code>
-          </pre>
+            {artifact?.errorMessage ? (
+              <div className="border-b border-destructive/20 px-3 py-2">
+                <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-destructive">
+                  {t('step_error_label')}
+                </p>
+                <p className="whitespace-pre-wrap break-words font-mono text-[10px] leading-relaxed text-destructive">
+                  {artifact.errorMessage}
+                </p>
+              </div>
+            ) : null}
+            <pre className="overflow-auto px-3 py-2 font-mono text-[10px] leading-relaxed">
+              <code>{step.rawLine}</code>
+            </pre>
+          </div>
         )
       ) : null}
     </li>
   )
+}
+
+function formatDuration(ms: number): string {
+  if (ms < 1000) return `${Math.round(ms)}ms`
+  return `${(ms / 1000).toFixed(1)}s`
 }
 
 function StatusDot({ status }: { status: StepStatus }) {

@@ -306,6 +306,20 @@
         "enqueued": "Execution queued. Runner will pick it up shortly.",
         "flow_toggle": "View test flow",
         "flow_failed_at": "step identified",
+        "evidence_loading": "Loading evidence…",
+        "evidence_screenshot_label": "Final test screenshot",
+        "evidence_screenshot_alt": "Browser screenshot at the end of the test",
+        "evidence_trace_download": "Download trace (.zip)",
+        "evidence_screenshot_hint": "Image taken at the end of the test. Click to zoom.",
+        "evidence_trace_hint": "Full Playwright trace with DOM, network, and screenshots per action. Open with 'npx playwright show-trace file.zip'.",
+        "error_category_timeout": "Timeout",
+        "error_category_assertion": "Assertion",
+        "error_category_navigation": "Navigation",
+        "error_category_locator": "Selector",
+        "error_category_target_closed": "Page closed",
+        "error_category_network": "Network",
+        "error_category_unknown": "Error",
+        "error_stack_toggle": "View full stack",
         "errors": {
           "rate_limited": "Wait before queuing another run.",
           "no_generated_test": "Generate this scenario's test before running.",
@@ -445,7 +459,8 @@
             "edit_save": "Save",
             "edit_cancel": "Cancel",
             "edit_saved": "Step updated.",
-            "edit_failed": "Couldn't update the step."
+            "edit_failed": "Couldn't update the step.",
+            "step_error_label": "Error in this step"
           },
           "add_feature": "New feature",
           "add_scenario": "Add scenario",
@@ -715,6 +730,38 @@
         "errors": {
           "create": "Couldn't add scenario.",
           "delete": "Couldn't remove scenario."
+        }
+      },
+      "discovery": {
+        "heading": "Context per feature",
+        "summary": "{filled} of {total} features with context filled",
+        "empty": "No features identified by the analysis yet.",
+        "badge_context_filled": "Context filled",
+        "badge_context_pending": "Context pending",
+        "badge_manual": "manual",
+        "field_name": "Feature name",
+        "field_business_rule": "Business rule",
+        "placeholder_business_rule": "Describe the business capability and what matters to test. E.g.: 'Duplicate CPF returns 409 with generic message; doesn't leak whether the record exists.'",
+        "field_free_scenarios": "Free scenarios (QA text)",
+        "field_test_restrictions": "Test restrictions",
+        "placeholder_test_restrictions": "What the AI should NOT generate. E.g.: 'don't send real email, don't call production payment gateway'.",
+        "field_code_focus": "Code areas (focus / ignore)",
+        "placeholder_code_focus": "e.g., app/checkout/ or src/admin/internal/",
+        "focus_add_focus": "Add as focus",
+        "focus_add_ignore": "Add as ignore",
+        "field_env_vars": "Expected environment variables",
+        "placeholder_env_vars": "e.g., E2E_USER",
+        "field_priorities": "Coverage priorities",
+        "add": "Add",
+        "save": "Save context",
+        "delete": "Delete feature",
+        "confirm_delete": "Delete this feature? Free scenarios in this feature will be deleted too.",
+        "toast_saved": "Context saved.",
+        "toast_deleted": "Feature deleted.",
+        "errors": {
+          "load": "Couldn't load features.",
+          "save": "Couldn't save context.",
+          "delete": "Couldn't delete feature."
         }
       }
     },

@@ -129,6 +129,18 @@ export async function updateRunProgress(
   `
 }
 
+export interface StepEvent {
+  step_index: number
+  title: string
+  status: 'passed' | 'failed' | 'skipped'
+  duration_ms: number | null
+  error_message: string | null
+  error_stack: string | null
+  line_in_spec: number | null
+  started_at: string
+  finished_at: string | null
+}
+
 export interface ResultRow {
   scenario_id: string
   title: string
@@ -139,6 +151,7 @@ export interface ResultRow {
   stdout: string | null
   trace_path: string | null
   screenshot_path: string | null
+  step_events: StepEvent[]
 }
 
 export async function markRunCompleted(
@@ -161,22 +174,41 @@ export async function markRunCompleted(
       WHERE id=${jobId}
     `
 
-    if (results.length > 0) {
-      const values = results.map((r) => ({
-        run_id: jobId,
-        project_id: projectId,
-        scenario_id: r.scenario_id,
-        scenario_id_snapshot: r.scenario_id,
-        title_snapshot: r.title,
-        status: r.status,
-        duration_ms: r.duration_ms,
-        error_message: r.error_message,
-        error_stack: r.error_stack,
-        trace_path: r.trace_path,
-        screenshot_path: r.screenshot_path,
-        stdout: r.stdout,
+    if (results.length === 0) return
+
+    for (const r of results) {
+      const [inserted] = await tx<{ id: string }[]>`
+        INSERT INTO test_exec_results ${tx({
+          run_id: jobId,
+          project_id: projectId,
+          scenario_id: r.scenario_id,
+          scenario_id_snapshot: r.scenario_id,
+          title_snapshot: r.title,
+          status: r.status,
+          duration_ms: r.duration_ms,
+          error_message: r.error_message,
+          error_stack: r.error_stack,
+          trace_path: r.trace_path,
+          screenshot_path: r.screenshot_path,
+          stdout: r.stdout,
+        })}
+        RETURNING id
+      `
+      if (!inserted || r.step_events.length === 0) continue
+
+      const eventValues = r.step_events.map((ev) => ({
+        result_id: inserted.id,
+        step_index: ev.step_index,
+        title: ev.title,
+        status: ev.status,
+        duration_ms: ev.duration_ms,
+        error_message: ev.error_message,
+        error_stack: ev.error_stack,
+        line_in_spec: ev.line_in_spec,
+        started_at: ev.started_at,
+        finished_at: ev.finished_at,
       }))
-      await tx`INSERT INTO test_exec_results ${tx(values)}`
+      await tx`INSERT INTO test_exec_step_events ${tx(eventValues)}`
     }
   })
 }

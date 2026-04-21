@@ -8,6 +8,7 @@ import {
   type Project,
   type ScenarioToRun,
   type ResultRow,
+  type StepEvent,
 } from './db.ts'
 import { decryptSecret } from './crypto.ts'
 
@@ -126,7 +127,14 @@ export async function executeScenarioJob(
       ? (JSON.parse(reportText) as PlaywrightJsonReport)
       : null
 
-    return extractResults(parsed, scenario, exit.stdout, artifactsDir)
+    const results = extractResults(parsed, scenario, exit.stdout, artifactsDir)
+    // Cola os step events coletados em streaming no primeiro result.
+    // Como o runner executa exatamente 1 cenário = 1 test() = 1 result,
+    // essa associação é 1-to-1.
+    if (results.length > 0 && exit.stepEvents.length > 0) {
+      results[0].step_events = exit.stepEvents
+    }
+    return results
   } finally {
     // Limpa scratchpad; mantém artefatos em /data
     await rm(runDir, { recursive: true, force: true }).catch(() => {})
@@ -181,8 +189,8 @@ export default defineConfig({
     baseURL: ${JSON.stringify(project.target_url)},
     actionTimeout: ${opts.actionTimeoutMs},
     navigationTimeout: ${opts.navigationTimeoutMs},
-    trace: 'retain-on-failure',
-    screenshot: 'only-on-failure',
+    trace: 'on',
+    screenshot: { mode: 'on', fullPage: false },
     video: 'off',
     headless: true,
     ignoreHTTPSErrors: true,
@@ -219,7 +227,7 @@ async function spawnPlaywright(
   reportPath: string,
   env: NodeJS.ProcessEnv,
   jobId: string,
-): Promise<{ stdout: string; exitCode: number }> {
+): Promise<{ stdout: string; exitCode: number; stepEvents: StepEvent[] }> {
   return new Promise((resolve) => {
     const child = spawn(
       'npx',
@@ -245,6 +253,8 @@ async function spawnPlaywright(
     let currentLine: number | null = null
     let lastFlushAt = 0
     let pendingFlush = false
+    const stepEvents: StepEvent[] = []
+    const stepStartByIndex = new Map<number, string>()
 
     const flush = () => {
       lastFlushAt = Date.now()
@@ -279,16 +289,47 @@ async function spawnPlaywright(
           title?: string
           line?: number | null
           index?: number
+          durationMs?: number | null
+          status?: 'passed' | 'failed' | 'skipped'
+          errorMessage?: string | null
+          errorStack?: string | null
+          startedAt?: string
+          finishedAt?: string
         }
         switch (payload.type) {
           case 'step-begin':
             stepsTotal = Math.max(stepsTotal, payload.index ?? stepsTotal + 1)
             currentLabel = payload.title ?? null
             currentLine = payload.line ?? null
+            if (typeof payload.index === 'number') {
+              stepStartByIndex.set(
+                payload.index,
+                payload.startedAt ?? new Date().toISOString(),
+              )
+            }
             scheduleFlush()
             break
           case 'step-end':
             stepsCompleted += 1
+            if (typeof payload.index === 'number') {
+              const startedAt =
+                stepStartByIndex.get(payload.index) ??
+                payload.startedAt ??
+                new Date().toISOString()
+              stepStartByIndex.delete(payload.index)
+              stepEvents.push({
+                step_index: payload.index,
+                title: payload.title ?? '',
+                status: payload.status ?? 'passed',
+                duration_ms: payload.durationMs ?? null,
+                error_message: payload.errorMessage ?? null,
+                error_stack: payload.errorStack ?? null,
+                line_in_spec: payload.line ?? null,
+                started_at: startedAt,
+                finished_at:
+                  payload.finishedAt ?? new Date().toISOString(),
+              })
+            }
             scheduleFlush()
             break
           case 'test-end':
@@ -322,12 +363,17 @@ async function spawnPlaywright(
     child.on('close', (code) => {
       if (pendingFlush) flush()
       const combined = stdout + (stderr ? `\n[stderr]\n${stderr}` : '')
-      resolve({ stdout: combined.slice(-8_000), exitCode: code ?? 0 })
+      resolve({
+        stdout: combined.slice(-8_000),
+        exitCode: code ?? 0,
+        stepEvents,
+      })
     })
     child.on('error', (err) => {
       resolve({
         stdout: `[spawn error] ${err instanceof Error ? err.message : String(err)}`,
         exitCode: 1,
+        stepEvents,
       })
     })
   })
@@ -366,6 +412,7 @@ function extractResults(
         stdout,
         trace_path: null,
         screenshot_path: null,
+        step_events: [],
       },
     ]
   }
@@ -402,6 +449,7 @@ function extractResults(
       stdout,
       trace_path: null,
       screenshot_path: null,
+      step_events: [],
     })
   }
 
@@ -435,6 +483,7 @@ function makeRow(
     stdout,
     trace_path: tracePath,
     screenshot_path: screenshotPath,
+    step_events: [],
   }
 }
 

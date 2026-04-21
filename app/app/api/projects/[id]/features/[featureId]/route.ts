@@ -46,6 +46,36 @@ export async function PATCH(
   if (parsed.data.paths !== undefined) updates.paths = parsed.data.paths
   if (parsed.data.sortOrder !== undefined)
     updates.sortOrder = parsed.data.sortOrder
+
+  // Contexto por-feature (code-first). Atualiza context_updated_at/by só
+  // quando algum dos 5 campos foi enviado — evita mexer na marca quando
+  // só nome/paths mudaram.
+  let contextTouched = false
+  if (parsed.data.businessRule !== undefined) {
+    updates.businessRule = parsed.data.businessRule
+    contextTouched = true
+  }
+  if (parsed.data.testRestrictions !== undefined) {
+    updates.testRestrictions = parsed.data.testRestrictions
+    contextTouched = true
+  }
+  if (parsed.data.codeFocus !== undefined) {
+    updates.codeFocus = parsed.data.codeFocus
+    contextTouched = true
+  }
+  if (parsed.data.expectedEnvVars !== undefined) {
+    updates.expectedEnvVars = parsed.data.expectedEnvVars
+    contextTouched = true
+  }
+  if (parsed.data.coveragePriorities !== undefined) {
+    updates.coveragePriorities = parsed.data.coveragePriorities
+    contextTouched = true
+  }
+  if (contextTouched) {
+    updates.contextUpdatedAt = new Date()
+    updates.contextUpdatedBy = session.user.id
+  }
+
   if (parsed.data.reviewed !== undefined) {
     // Feature só pode ser marcada como revisada se houver pelo menos
     // 1 cenário dentro dela marcado como revisado. Desmarcar é sempre ok.

@@ -11,6 +11,7 @@
 class StreamReporter {
   constructor() {
     this.stepCount = 0
+    this.stepStartAt = new Map()
   }
 
   onBegin(_config, suite) {
@@ -29,8 +30,13 @@ class StreamReporter {
   onStepBegin(_test, _result, step) {
     if (!this._isTopLevelApi(step)) return
     this.stepCount++
+    const index = this.stepCount
+    this.stepStartAt.set(this._stepKey(step), {
+      index,
+      startedAt: new Date().toISOString(),
+    })
     this._emit('step-begin', {
-      index: this.stepCount,
+      index,
       title: step.title,
       line: step.location?.line ?? null,
     })
@@ -38,10 +44,22 @@ class StreamReporter {
 
   onStepEnd(_test, _result, step) {
     if (!this._isTopLevelApi(step)) return
+    const key = this._stepKey(step)
+    const meta = this.stepStartAt.get(key)
+    const index = meta ? meta.index : this.stepCount
+    const startedAt = meta ? meta.startedAt : new Date().toISOString()
+    this.stepStartAt.delete(key)
     this._emit('step-end', {
+      index,
       title: step.title,
       line: step.location?.line ?? null,
+      durationMs:
+        typeof step.duration === 'number' ? Math.round(step.duration) : null,
+      status: step.error ? 'failed' : 'passed',
       errorMessage: step.error?.message ?? null,
+      errorStack: step.error?.stack ?? null,
+      startedAt,
+      finishedAt: new Date().toISOString(),
     })
   }
 
@@ -58,6 +76,14 @@ class StreamReporter {
     // Filtra chamadas aninhadas (ex: locator.click internamente chama
     // locator.waitFor) — só contamos a chamada de maior nível.
     return step.parent == null || step.parent.category !== 'pw:api'
+  }
+
+  _stepKey(step) {
+    // step é uma instância e identidade única durante o run; mas como
+    // serializamos via JSON, usamos uma chave estável (title+line+startTime).
+    const line = step.location?.line ?? 0
+    const ts = step.startTime ? step.startTime.getTime() : 0
+    return `${line}:${ts}:${step.title}`
   }
 
   _emit(type, payload) {

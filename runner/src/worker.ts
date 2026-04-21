@@ -7,6 +7,7 @@ import {
   requeueStaleJobs,
 } from './db.ts'
 import { executeScenarioJob } from './executor.ts'
+import { sweepOldExecArtifacts } from './artifact-cleanup.ts'
 import { env } from './env.ts'
 
 const WORKER_ID = `runner-${process.pid}-${Math.random().toString(36).slice(2, 8)}`
@@ -19,6 +20,8 @@ const PW_ACTION_TIMEOUT_MS = Number(
 const PW_NAV_TIMEOUT_MS = Number(
   process.env.RUNNER_PW_NAV_TIMEOUT_MS ?? 30_000,
 )
+const ARTIFACT_TTL_DAYS = Number(process.env.EXEC_ARTIFACT_TTL_DAYS ?? 14)
+const CLEANUP_INTERVAL_MS = 6 * 60 * 60 * 1000
 const WORK_DIR = env('WORK_DIR', '/work')
 const DATA_DIR = env('DATA_DIR', '/data')
 
@@ -33,6 +36,7 @@ process.on('SIGINT', () => {
 export async function runWorkerLoop(): Promise<void> {
   console.log(`[runner] ${WORKER_ID} starting`)
   let lastReQueueAt = 0
+  let lastCleanupAt = 0
 
   while (!stopping) {
     try {
@@ -43,6 +47,22 @@ export async function runWorkerLoop(): Promise<void> {
           console.log(`[runner] requeued ${requeued} stale job(s)`)
         }
         lastReQueueAt = now
+      }
+
+      if (ARTIFACT_TTL_DAYS > 0 && now - lastCleanupAt > CLEANUP_INTERVAL_MS) {
+        try {
+          const { scanned, deleted } = await sweepOldExecArtifacts(
+            ARTIFACT_TTL_DAYS,
+          )
+          if (deleted > 0) {
+            console.log(
+              `[runner] cleanup: removed ${deleted}/${scanned} run dirs older than ${ARTIFACT_TTL_DAYS}d`,
+            )
+          }
+        } catch (err) {
+          console.error('[runner] cleanup error:', err)
+        }
+        lastCleanupAt = now
       }
 
       const next = await claimNextJob(WORKER_ID)

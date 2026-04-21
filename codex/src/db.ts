@@ -8,6 +8,8 @@ export const sql = postgres(requireEnv('DATABASE_URL'), {
   prepare: false,
 })
 
+export type CodeAnalysisPhase = 'structure' | 'tests'
+
 export interface PendingCodeJob {
   id: string
   project_id: string
@@ -16,6 +18,8 @@ export interface PendingCodeJob {
   repo_url: string | null
   repo_branch: string | null
   repo_zip_path: string | null
+  phase: CodeAnalysisPhase
+  target_feature_id: string | null
 }
 
 export interface Project {
@@ -57,7 +61,8 @@ export async function claimNextJob(
       LIMIT 1
     )
     RETURNING id, project_id, requested_by,
-              source_type, repo_url, repo_branch, repo_zip_path
+              source_type, repo_url, repo_branch, repo_zip_path,
+              phase, target_feature_id
   `
   const job = rows[0]
   if (!job) return null
@@ -277,6 +282,62 @@ export function resolveAnthropic(
     }
   }
   return null
+}
+
+// Import do inventário da fase 'structure': cria project_analyses
+// type='code' com features (sem cenários). A QA preenche contexto
+// depois e dispara a fase 'tests' por feature, que é outro fluxo.
+export async function importStructure(params: {
+  jobId: string
+  projectId: string
+  requestedBy: string
+  model: string
+  provider: string
+  inferredLocale: string
+  manifestPath: string
+  durationMs: number
+  tokensIn: number
+  tokensOut: number
+  summary: string
+  features: Array<{
+    externalId: string
+    name: string
+    description: string
+    paths: string[]
+  }>
+}): Promise<string> {
+  return await sql.begin(async (tx) => {
+    const [analysis] = await tx<{ id: string }[]>`
+      INSERT INTO project_analyses
+        (project_id, analysis_type, code_analysis_job_id, manifest_path,
+         status, model, provider, summary, inferred_locale,
+         features, requested_by,
+         tokens_in, tokens_out, duration_ms,
+         started_at, finished_at)
+      VALUES
+        (${params.projectId}, 'code', ${params.jobId}, ${params.manifestPath},
+         'completed', ${params.model}, ${params.provider},
+         ${params.summary}, ${params.inferredLocale},
+         ${JSON.stringify(params.features)}, ${params.requestedBy},
+         ${params.tokensIn}, ${params.tokensOut}, ${params.durationMs},
+         now(), now())
+      RETURNING id
+    `
+
+    let featureOrder = 0
+    for (const f of params.features) {
+      await tx`
+        INSERT INTO analysis_features
+          (project_id, source_analysis_id, external_id, name, description,
+           paths, sort_order, source)
+        VALUES
+          (${params.projectId}, ${analysis.id}, ${f.externalId},
+           ${f.name}, ${f.description},
+           ${JSON.stringify(f.paths)}, ${featureOrder++}, 'ai')
+      `
+    }
+    return analysis.id
+  })
 }
 
 // Import do manifest.json no Postgres. Deleta features/scenarios

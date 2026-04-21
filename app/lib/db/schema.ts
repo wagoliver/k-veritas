@@ -346,6 +346,10 @@ export const codeAnalysisJobs = pgTable(
       .notNull()
       .references(() => projects.id, { onDelete: 'cascade' }),
     status: text('status').notNull().default('pending'),
+    // 'structure': etapa 1, só inventário de rotas/features (barato).
+    // 'tests':     etapa 2, gera testes de uma feature específica.
+    phase: text('phase').notNull().default('structure'),
+    targetFeatureId: uuid('target_feature_id'),
     sourceType: text('source_type').notNull(),
     repoUrl: text('repo_url'),
     repoBranch: text('repo_branch'),
@@ -370,6 +374,10 @@ export const codeAnalysisJobs = pgTable(
   (t) => ({
     projectIdx: index('code_analysis_jobs_project_idx').on(t.projectId),
     statusIdx: index('code_analysis_jobs_status_idx').on(t.status),
+    phaseStatusIdx: index('code_analysis_jobs_phase_status_idx').on(
+      t.phase,
+      t.status,
+    ),
   }),
 )
 
@@ -475,6 +483,22 @@ export const analysisFeatures = pgTable(
       onDelete: 'set null',
     }),
     source: text('source').notNull().default('ai'),
+    // Contexto por-feature preenchido pela QA entre etapas 1 e 2 do
+    // discovery code-first. Opcionais — quando vazios, a IA trabalha só
+    // com código.
+    businessRule: text('business_rule'),
+    testRestrictions: text('test_restrictions'),
+    codeFocus: jsonb('code_focus').notNull().default(sql`'[]'::jsonb`),
+    expectedEnvVars: jsonb('expected_env_vars')
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+    coveragePriorities: jsonb('coverage_priorities')
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+    contextUpdatedAt: timestamp('context_updated_at', { withTimezone: true }),
+    contextUpdatedBy: uuid('context_updated_by').references(() => users.id, {
+      onDelete: 'set null',
+    }),
     createdAt: timestamp('created_at', { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -490,6 +514,31 @@ export const analysisFeatures = pgTable(
     sourceIdx: index('analysis_features_source_analysis_idx').on(
       t.sourceAnalysisId,
     ),
+  }),
+)
+
+export const featureFreeScenarios = pgTable(
+  'feature_free_scenarios',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    projectId: uuid('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    featureId: uuid('feature_id')
+      .notNull()
+      .references(() => analysisFeatures.id, { onDelete: 'cascade' }),
+    description: text('description').notNull(),
+    priority: integer('priority').notNull().default(0),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    featureIdx: index('feature_free_scenarios_feature_idx').on(
+      t.featureId,
+      t.createdAt,
+    ),
+    projectIdx: index('feature_free_scenarios_project_idx').on(t.projectId),
   }),
 )
 
@@ -735,12 +784,38 @@ export const testExecResults = pgTable(
   }),
 )
 
+export const testExecStepEvents = pgTable(
+  'test_exec_step_events',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    resultId: uuid('result_id')
+      .notNull()
+      .references(() => testExecResults.id, { onDelete: 'cascade' }),
+    stepIndex: integer('step_index').notNull(),
+    title: text('title').notNull(),
+    status: text('status').notNull(),
+    durationMs: integer('duration_ms'),
+    errorMessage: text('error_message'),
+    errorStack: text('error_stack'),
+    lineInSpec: integer('line_in_spec'),
+    startedAt: timestamp('started_at', { withTimezone: true }).notNull(),
+    finishedAt: timestamp('finished_at', { withTimezone: true }),
+  },
+  (t) => ({
+    resultIdx: index('test_exec_step_events_result_idx').on(
+      t.resultId,
+      t.stepIndex,
+    ),
+  }),
+)
+
 export type ProjectTestRun = typeof projectTestRuns.$inferSelect
 export type GeneratedTest = typeof generatedTests.$inferSelect
 export type ScenarioTest = typeof scenarioTests.$inferSelect
 export type FeatureTestFile = typeof featureTestFiles.$inferSelect
 export type TestExecRun = typeof testExecRuns.$inferSelect
 export type TestExecResult = typeof testExecResults.$inferSelect
+export type TestExecStepEvent = typeof testExecStepEvents.$inferSelect
 export type TestRunStatus = 'pending' | 'running' | 'completed' | 'failed'
 export type TestResultStatus = 'passed' | 'failed' | 'skipped' | 'timedout'
 export type TestExecScope = 'scenario' | 'feature' | 'project'
@@ -752,8 +827,11 @@ export type AnalysisFeature = typeof analysisFeatures.$inferSelect
 export type NewAnalysisFeature = typeof analysisFeatures.$inferInsert
 export type AnalysisScenario = typeof analysisScenarios.$inferSelect
 export type NewAnalysisScenario = typeof analysisScenarios.$inferInsert
+export type FeatureFreeScenario = typeof featureFreeScenarios.$inferSelect
+export type NewFeatureFreeScenario = typeof featureFreeScenarios.$inferInsert
 export type AnalysisSource = 'ai' | 'manual'
 export type ScenarioPriority = 'critical' | 'high' | 'normal' | 'low'
+export type CodeAnalysisPhase = 'structure' | 'tests'
 export type OrgAiConfig = typeof orgAiConfig.$inferSelect
 export type NewOrgAiConfig = typeof orgAiConfig.$inferInsert
 export type ProjectStatus = 'draft' | 'crawling' | 'ready' | 'failed'

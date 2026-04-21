@@ -306,6 +306,20 @@
         "enqueued": "Execução enfileirada. O runner pega em instantes.",
         "flow_toggle": "Ver fluxo do teste",
         "flow_failed_at": "etapa identificada",
+        "evidence_loading": "Carregando evidências…",
+        "evidence_screenshot_label": "Captura final do teste",
+        "evidence_screenshot_alt": "Screenshot do navegador no momento do teste",
+        "evidence_screenshot_hint": "Imagem tirada ao final do teste. Clique para ampliar.",
+        "evidence_trace_download": "Baixar trace (.zip)",
+        "evidence_trace_hint": "Trace completo do Playwright com DOM, network e screenshots por ação. Abra com 'npx playwright show-trace arquivo.zip'.",
+        "error_category_timeout": "Timeout",
+        "error_category_assertion": "Assertiva",
+        "error_category_navigation": "Navegação",
+        "error_category_locator": "Seletor",
+        "error_category_target_closed": "Página fechada",
+        "error_category_network": "Rede",
+        "error_category_unknown": "Erro",
+        "error_stack_toggle": "Ver stack completo",
         "errors": {
           "rate_limited": "Aguarde antes de disparar outra execução.",
           "no_generated_test": "Gere o teste deste cenário antes de rodar.",
@@ -445,7 +459,8 @@
             "edit_save": "Salvar",
             "edit_cancel": "Cancelar",
             "edit_saved": "Etapa atualizada.",
-            "edit_failed": "Não foi possível atualizar a etapa."
+            "edit_failed": "Não foi possível atualizar a etapa.",
+            "step_error_label": "Erro nesta etapa"
           },
           "add_feature": "Nova feature",
           "add_scenario": "Adicionar cenário",
@@ -715,6 +730,38 @@
         "errors": {
           "create": "Não foi possível adicionar o cenário.",
           "delete": "Não foi possível remover o cenário."
+        }
+      },
+      "discovery": {
+        "heading": "Contexto por feature",
+        "summary": "{filled} de {total} features com contexto preenchido",
+        "empty": "Nenhuma feature identificada pela análise ainda.",
+        "badge_context_filled": "Contexto preenchido",
+        "badge_context_pending": "Contexto pendente",
+        "badge_manual": "manual",
+        "field_name": "Nome da feature",
+        "field_business_rule": "Regra de negócio",
+        "placeholder_business_rule": "Descreva a capacidade de negócio e o que importa testar. Ex.: 'CPF duplicado retorna 409 com mensagem genérica; não vaza se o cadastro existe.'",
+        "field_free_scenarios": "Cenários livres (texto da QA)",
+        "field_test_restrictions": "Restrições de teste",
+        "placeholder_test_restrictions": "O que a IA NÃO deve gerar. Ex.: 'não disparar email real, não chamar gateway de pagamento de produção'.",
+        "field_code_focus": "Áreas do código (focar / ignorar)",
+        "placeholder_code_focus": "ex.: app/checkout/ ou src/admin/internal/",
+        "focus_add_focus": "Adicionar como foco",
+        "focus_add_ignore": "Adicionar como ignorar",
+        "field_env_vars": "Variáveis de ambiente esperadas",
+        "placeholder_env_vars": "ex.: E2E_USER",
+        "field_priorities": "Prioridades de cobertura",
+        "add": "Adicionar",
+        "save": "Salvar contexto",
+        "delete": "Excluir feature",
+        "confirm_delete": "Excluir esta feature? Os cenários livres desta feature também serão apagados.",
+        "toast_saved": "Contexto salvo.",
+        "toast_deleted": "Feature excluída.",
+        "errors": {
+          "load": "Não foi possível carregar as features.",
+          "save": "Não foi possível salvar o contexto.",
+          "delete": "Não foi possível excluir a feature."
         }
       }
     },

@@ -5,7 +5,9 @@ import {
   CheckCircle2,
   ChevronRight,
   Circle,
+  Download,
   FileCode2,
+  Image as ImageIcon,
   Loader2,
   Play,
 } from 'lucide-react'
@@ -21,8 +23,30 @@ import {
   locateFailedStepIndex,
   parseTestCode,
 } from '@/lib/ai/parse-playwright-test'
+import { parsePlaywrightError } from '@/lib/ai/parse-playwright-error'
 import type { EditableFeature, EditableScenario } from './analysis-editor'
-import { TestFlowView, type StepStatus } from './test-flow-view'
+import {
+  TestFlowView,
+  type StepArtifact,
+  type StepStatus,
+} from './test-flow-view'
+
+interface RunStepEvent {
+  stepIndex: number
+  title: string
+  status: 'passed' | 'failed' | 'skipped'
+  durationMs: number | null
+  errorMessage: string | null
+  lineInSpec: number | null
+}
+
+interface RunDetail {
+  screenshotUrl: string | null
+  traceUrl: string | null
+  stepEvents: RunStepEvent[]
+  errorMessage: string | null
+  errorStack: string | null
+}
 
 interface LatestResult {
   scenarioId: string
@@ -371,17 +395,14 @@ function ScenarioRunRow({
         )}
         {isDone && latest && latest.status !== 'passed' && latest.errorMessage ? (
           <>
-            <p className="rounded border border-destructive/30 bg-destructive/5 p-2 font-mono text-[11px] text-destructive">
-              {latest.errorMessage.length > 400
-                ? `${latest.errorMessage.slice(0, 400)}…`
-                : latest.errorMessage}
-            </p>
+            <ErrorSummary message={latest.errorMessage} />
             {scenario.latestTest ? (
               <FailedFlow
                 code={scenario.latestTest.code}
                 errorMessage={latest.errorMessage}
                 projectId={projectId}
                 scenarioId={scenario.id}
+                runId={latest.runId}
                 onChanged={onChanged}
               />
             ) : null}
@@ -442,17 +463,23 @@ function FailedFlow({
   errorMessage,
   projectId,
   scenarioId,
+  runId,
   onChanged,
 }: {
   code: string
   errorMessage: string
   projectId: string
   scenarioId: string
+  runId: string
   onChanged: () => Promise<void> | void
 }) {
   const t = useTranslations('projects.overview.execution')
   const tEditor = useTranslations('projects.overview.analysis.editor')
   const [open, setOpen] = useState(false)
+  const [detail, setDetail] = useState<RunDetail | null>(null)
+  const [loadingDetail, setLoadingDetail] = useState(false)
+  const [lightbox, setLightbox] = useState(false)
+
   const parsed = parseTestCode(code)
   const failedStepIndex = locateFailedStepIndex(parsed, errorMessage)
 
@@ -480,20 +507,93 @@ function FailedFlow({
     }
   }
 
-  // Status derivado: antes do falho → passed (já executou), o falho →
-  // failed, depois → idle (nunca chegou). Sem detecção → todos idle
-  // (mostra bolinhas cinzas + o banner fica sem "etapa identificada").
+  // Carrega os detalhes do run (step events + screenshot + trace) só quando
+  // o usuário expande o flow, pra não fazer N+1 requests no listing.
+  useEffect(() => {
+    if (!open || detail !== null || loadingDetail) return
+    let cancelled = false
+    setLoadingDetail(true)
+    fetch(`/api/projects/${projectId}/test-exec/runs/${runId}`, {
+      headers: { 'X-Requested-With': 'fetch' },
+      cache: 'no-store',
+    })
+      .then(async (res) => {
+        if (!res.ok) throw new Error(String(res.status))
+        const data = (await res.json()) as {
+          results: Array<{
+            scenarioIdSnapshot: string
+            screenshotUrl: string | null
+            traceUrl: string | null
+            errorMessage: string | null
+            errorStack: string | null
+            stepEvents: RunStepEvent[]
+          }>
+        }
+        if (cancelled) return
+        const match =
+          data.results.find((r) => r.scenarioIdSnapshot === scenarioId) ??
+          data.results[0]
+        if (match) {
+          setDetail({
+            screenshotUrl: match.screenshotUrl,
+            traceUrl: match.traceUrl,
+            stepEvents: match.stepEvents,
+            errorMessage: match.errorMessage,
+            errorStack: match.errorStack,
+          })
+        }
+      })
+      .catch(() => {
+        if (!cancelled) toast.error(t('errors.network'))
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingDetail(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [open, detail, loadingDetail, projectId, runId, scenarioId, t])
+
+  // Status derivado a partir dos step events reais (preferível) ou da
+  // heurística `locateFailedStepIndex` (fallback quando ainda carregando).
   const flatCount = parsed.phases.reduce((n, p) => n + p.steps.length, 0)
-  const stepStatuses: StepStatus[] =
-    failedStepIndex !== null
-      ? Array.from({ length: flatCount }, (_, i) =>
-          i < failedStepIndex
-            ? 'passed'
-            : i === failedStepIndex
-              ? 'failed'
-              : 'idle',
-        )
-      : Array.from({ length: flatCount }, () => 'idle' as const)
+
+  const { stepStatuses, stepArtifacts } = useMemo(() => {
+    if (detail && detail.stepEvents.length > 0) {
+      const statuses: StepStatus[] = Array.from({ length: flatCount }, () => 'idle')
+      const artifacts: (StepArtifact | null)[] = Array.from(
+        { length: flatCount },
+        () => null,
+      )
+      const eventsInOrder = [...detail.stepEvents].sort(
+        (a, b) => a.stepIndex - b.stepIndex,
+      )
+      // Map 1:1 pelo índice: o reporter emite steps na mesma ordem em
+      // que o parser vê (ambos filtram top-level pw:api).
+      for (let i = 0; i < eventsInOrder.length && i < flatCount; i++) {
+        const ev = eventsInOrder[i]
+        statuses[i] = ev.status === 'skipped' ? 'idle' : ev.status
+        artifacts[i] = {
+          durationMs: ev.durationMs,
+          errorMessage: ev.errorMessage,
+        }
+      }
+      return { stepStatuses: statuses, stepArtifacts: artifacts }
+    }
+
+    // Fallback heurístico enquanto detalhe não carregou
+    const statuses: StepStatus[] =
+      failedStepIndex !== null
+        ? Array.from({ length: flatCount }, (_, i) =>
+            i < failedStepIndex
+              ? 'passed'
+              : i === failedStepIndex
+                ? 'failed'
+                : 'idle',
+          )
+        : Array.from({ length: flatCount }, () => 'idle' as const)
+    return { stepStatuses: statuses, stepArtifacts: null }
+  }, [detail, failedStepIndex, flatCount])
 
   return (
     <div className="overflow-hidden rounded-md border border-border/60 bg-card">
@@ -517,14 +617,178 @@ function FailedFlow({
         ) : null}
       </button>
       {open ? (
-        <TestFlowView
-          code={code}
-          failedStepIndex={failedStepIndex}
-          stepStatuses={stepStatuses}
-          editable
-          onCodeChange={saveStepEdit}
+        <>
+          <TestFlowView
+            code={code}
+            failedStepIndex={failedStepIndex}
+            stepStatuses={stepStatuses}
+            stepArtifacts={stepArtifacts}
+            editable
+            onCodeChange={saveStepEdit}
+          />
+          <EvidenceBlock
+            detail={detail}
+            loading={loadingDetail}
+            onOpenLightbox={() => setLightbox(true)}
+          />
+        </>
+      ) : null}
+      {lightbox && detail?.screenshotUrl ? (
+        <ScreenshotLightbox
+          url={detail.screenshotUrl}
+          onClose={() => setLightbox(false)}
         />
       ) : null}
+    </div>
+  )
+}
+
+function EvidenceBlock({
+  detail,
+  loading,
+  onOpenLightbox,
+}: {
+  detail: RunDetail | null
+  loading: boolean
+  onOpenLightbox: () => void
+}) {
+  const t = useTranslations('projects.overview.execution')
+
+  if (loading) {
+    return (
+      <div className="flex items-center gap-2 border-t border-border/40 bg-muted/20 px-3 py-2 text-[11px] text-muted-foreground">
+        <Loader2 className="size-3 animate-spin" />
+        {t('evidence_loading')}
+      </div>
+    )
+  }
+
+  if (!detail) return null
+
+  const { screenshotUrl, traceUrl } = detail
+
+  if (!screenshotUrl && !traceUrl) return null
+
+  return (
+    <div className="space-y-3 border-t border-border/40 bg-muted/20 p-3">
+      {screenshotUrl ? (
+        <div>
+          <div className="mb-1.5 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+            <ImageIcon className="size-3" />
+            {t('evidence_screenshot_label')}
+          </div>
+          <button
+            type="button"
+            onClick={onOpenLightbox}
+            className="block w-full overflow-hidden rounded border border-border bg-background transition-opacity hover:opacity-90"
+          >
+            <img
+              src={screenshotUrl}
+              alt={t('evidence_screenshot_alt')}
+              loading="lazy"
+              className="max-h-80 w-full object-contain"
+            />
+          </button>
+          <p className="mt-1 text-[10px] text-muted-foreground">
+            {t('evidence_screenshot_hint')}
+          </p>
+        </div>
+      ) : null}
+      {traceUrl ? (
+        <div>
+          <a
+            href={traceUrl}
+            download
+            className="inline-flex items-center gap-1.5 rounded border border-border bg-background px-2 py-1 text-[11px] font-medium text-foreground transition-colors hover:bg-accent"
+          >
+            <Download className="size-3" />
+            {t('evidence_trace_download')}
+          </a>
+          <p className="mt-1 text-[10px] text-muted-foreground">
+            {t('evidence_trace_hint')}
+          </p>
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
+function ScreenshotLightbox({
+  url,
+  onClose,
+}: {
+  url: string
+  onClose: () => void
+}) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-background/90 p-6 backdrop-blur-sm"
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+    >
+      <img
+        src={url}
+        alt=""
+        className="max-h-[90vh] max-w-[90vw] rounded border border-border shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      />
+    </div>
+  )
+}
+
+function ErrorSummary({ message }: { message: string }) {
+  const t = useTranslations('projects.overview.execution')
+  const parsed = parsePlaywrightError(message)
+
+  const categoryLabel: Record<typeof parsed.category, string> = {
+    timeout: t('error_category_timeout'),
+    assertion: t('error_category_assertion'),
+    navigation: t('error_category_navigation'),
+    locator: t('error_category_locator'),
+    target_closed: t('error_category_target_closed'),
+    network: t('error_category_network'),
+    unknown: t('error_category_unknown'),
+  }
+
+  return (
+    <div className="space-y-2 rounded border border-destructive/30 bg-destructive/5 p-2">
+      <div className="flex flex-wrap items-center gap-1.5 text-[10px]">
+        <span className="rounded bg-destructive/20 px-1.5 py-0.5 font-medium uppercase tracking-wider text-destructive">
+          {categoryLabel[parsed.category]}
+        </span>
+        {parsed.timeoutMs !== null ? (
+          <span className="rounded bg-destructive/10 px-1.5 py-0.5 font-mono tabular-nums text-destructive">
+            {parsed.timeoutMs}ms
+          </span>
+        ) : null}
+        {parsed.locator ? (
+          <span className="truncate rounded bg-destructive/10 px-1.5 py-0.5 font-mono text-destructive">
+            {parsed.locator}
+          </span>
+        ) : null}
+      </div>
+      {parsed.summary ? (
+        <p className="font-mono text-[11px] leading-relaxed text-destructive">
+          {parsed.summary}
+        </p>
+      ) : null}
+      <details className="group">
+        <summary className="cursor-pointer text-[10px] font-medium text-muted-foreground hover:text-foreground">
+          {t('error_stack_toggle')}
+        </summary>
+        <pre className="mt-1 max-h-48 overflow-auto rounded bg-card p-2 font-mono text-[10px] leading-relaxed text-muted-foreground">
+          <code>{message}</code>
+        </pre>
+      </details>
     </div>
   )
 }

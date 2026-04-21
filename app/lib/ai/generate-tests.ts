@@ -8,6 +8,7 @@ import {
   crawlElements,
   crawlJobs,
   crawlPages,
+  featureFreeScenarios,
   featureTestFiles,
   projectTestRuns,
   scenarioTests,
@@ -17,6 +18,7 @@ import {
 import { sql } from 'drizzle-orm'
 import { buildClient } from './client-factory'
 import { resolveAiConfig } from './config'
+import { staticInspect } from './static-inspect'
 import {
   buildTestGenUserMessage,
   TEST_GENERATION_SYSTEM_PROMPT,
@@ -256,9 +258,6 @@ async function buildTestGenPayload(
 
   // Cenários revisados que AINDA NÃO TÊM teste gerado (candidatos).
   // Usa NOT EXISTS contra scenario_tests pra excluir quem já foi gerado.
-  // Se o usuário quiser regenerar um teste existente, ele precisa primeiro
-  // excluir o teste atual (botão trash no ScenarioTestBlock) — aí ele
-  // volta a ser candidato.
   const allScenarios = await db
     .select()
     .from(analysisScenarios)
@@ -282,19 +281,10 @@ async function buildTestGenPayload(
     scenariosByFeature.set(s.featureId, arr)
   }
 
-  // Pega último crawl completo pra extrair elementos por path
-  const [lastCrawl] = await db
-    .select({ id: crawlJobs.id })
-    .from(crawlJobs)
-    .where(
-      and(
-        eq(crawlJobs.projectId, project.id),
-        eq(crawlJobs.status, 'completed'),
-      ),
-    )
-    .orderBy(desc(crawlJobs.finishedAt))
-    .limit(1)
+  const sourceType = (project.sourceType ?? 'url') as 'url' | 'repo'
 
+  // Pages/elements por path — só carrega pro fluxo crawler (URL).
+  // Code-first usa static-inspect por feature, no loop abaixo.
   const pagesByPath = new Map<
     string,
     Array<{
@@ -305,29 +295,43 @@ async function buildTestGenPayload(
     }>
   >()
 
-  if (lastCrawl) {
-    const rows = await db
-      .select({
-        url: crawlPages.url,
-        kind: crawlElements.kind,
-        role: crawlElements.role,
-        label: crawlElements.label,
-        selector: crawlElements.selector,
-      })
-      .from(crawlPages)
-      .innerJoin(crawlElements, eq(crawlElements.pageId, crawlPages.id))
-      .where(eq(crawlPages.crawlId, lastCrawl.id))
+  if (sourceType === 'url') {
+    const [lastCrawl] = await db
+      .select({ id: crawlJobs.id })
+      .from(crawlJobs)
+      .where(
+        and(
+          eq(crawlJobs.projectId, project.id),
+          eq(crawlJobs.status, 'completed'),
+        ),
+      )
+      .orderBy(desc(crawlJobs.finishedAt))
+      .limit(1)
 
-    for (const r of rows) {
-      const path = toPath(r.url)
-      const arr = pagesByPath.get(path) ?? []
-      arr.push({
-        kind: r.kind,
-        role: r.role,
-        label: r.label,
-        selector: r.selector,
-      })
-      pagesByPath.set(path, arr)
+    if (lastCrawl) {
+      const rows = await db
+        .select({
+          url: crawlPages.url,
+          kind: crawlElements.kind,
+          role: crawlElements.role,
+          label: crawlElements.label,
+          selector: crawlElements.selector,
+        })
+        .from(crawlPages)
+        .innerJoin(crawlElements, eq(crawlElements.pageId, crawlPages.id))
+        .where(eq(crawlPages.crawlId, lastCrawl.id))
+
+      for (const r of rows) {
+        const path = toPath(r.url)
+        const arr = pagesByPath.get(path) ?? []
+        arr.push({
+          kind: r.kind,
+          role: r.role,
+          label: r.label,
+          selector: r.selector,
+        })
+        pagesByPath.set(path, arr)
+      }
     }
   }
 
@@ -338,14 +342,7 @@ async function buildTestGenPayload(
     if (scenarios.length === 0) continue
 
     const paths = (f.paths as string[]) ?? []
-    const elementsByPath: TestGenPayload['features'][number]['elementsByPath'] =
-      {}
-    for (const p of paths) {
-      const matched = pagesByPath.get(p) ?? []
-      if (matched.length > 0) elementsByPath[p] = matched
-    }
-
-    features.push({
+    const featurePayload: TestGenPayload['features'][number] = {
       externalId: f.externalId,
       name: f.name,
       description: f.description,
@@ -358,8 +355,76 @@ async function buildTestGenPayload(
         preconditions: (s.preconditions as string[]) ?? [],
         dataNeeded: (s.dataNeeded as string[]) ?? [],
       })),
-      elementsByPath,
-    })
+    }
+
+    if (sourceType === 'url') {
+      const elementsByPath: NonNullable<
+        TestGenPayload['features'][number]['elementsByPath']
+      > = {}
+      for (const p of paths) {
+        const matched = pagesByPath.get(p) ?? []
+        if (matched.length > 0) elementsByPath[p] = matched
+      }
+      featurePayload.elementsByPath = elementsByPath
+    } else {
+      // Code-first: contexto por-feature + inventário estático.
+      featurePayload.businessRule = f.businessRule
+      featurePayload.testRestrictions = f.testRestrictions
+      featurePayload.expectedEnvVars =
+        (f.expectedEnvVars as string[] | null) ?? []
+      featurePayload.coveragePriorities =
+        (f.coveragePriorities as ScenarioPriority[] | null) ?? []
+
+      // Filtra cenários pelas prioridades marcadas pela QA (se alguma).
+      if (
+        featurePayload.coveragePriorities &&
+        featurePayload.coveragePriorities.length > 0
+      ) {
+        const allowed = new Set(featurePayload.coveragePriorities)
+        featurePayload.scenarios = featurePayload.scenarios.filter((s) =>
+          allowed.has(s.priority),
+        )
+        if (featurePayload.scenarios.length === 0) continue
+      }
+
+      // Cenários livres escritos pela QA por-feature.
+      const free = await db
+        .select({ description: featureFreeScenarios.description })
+        .from(featureFreeScenarios)
+        .where(eq(featureFreeScenarios.featureId, f.id))
+        .orderBy(
+          asc(featureFreeScenarios.priority),
+          asc(featureFreeScenarios.createdAt),
+        )
+      if (free.length > 0) {
+        featurePayload.freeScenarios = free.map((r) => r.description)
+      }
+
+      // Inventário estático extraído do snapshot do repo.
+      try {
+        const inventory = await staticInspect({
+          projectId: project.id,
+          paths,
+          codeFocus:
+            (f.codeFocus as Array<{
+              path: string
+              mode: 'focus' | 'ignore'
+            }> | null) ?? undefined,
+        })
+        if (Object.keys(inventory).length > 0) {
+          featurePayload.codeInventory = inventory
+        }
+      } catch (err) {
+        // Best-effort — se static-inspect falhar, o prompt degrada para
+        // o fallback sem código. Não derruba a geração.
+        console.warn(
+          `[generate-tests] static-inspect failed for feature ${f.id}:`,
+          err instanceof Error ? err.message : err,
+        )
+      }
+    }
+
+    features.push(featurePayload)
   }
 
   return {
@@ -369,6 +434,7 @@ async function buildTestGenPayload(
       description: project.description,
       authKind: project.authKind as 'none' | 'form',
       targetLocale: project.targetLocale,
+      sourceType,
     },
     features,
   }

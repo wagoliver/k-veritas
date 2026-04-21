@@ -17,6 +17,7 @@ import { Button } from '@/components/ui/button'
 import { Link } from '@/lib/i18n/navigation'
 import { cn } from '@/lib/utils'
 import { CodeAnalysisLogStream } from './code-analysis-log-stream'
+import { FeatureContextCards } from './feature-context-cards'
 
 interface CodeJobSnapshot {
   id: string
@@ -261,37 +262,42 @@ export function CodeAnalysisPanel({ projectId }: { projectId: string }) {
       ) : null}
 
       {job.status === 'completed' ? (
-        <div className="border-t border-fin-gain/30 bg-fin-gain/5 px-4 py-5">
-          <div className="flex items-start gap-3">
-            <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-fin-gain/15 text-fin-gain">
-              <CheckCircle2 className="size-5" />
-            </div>
-            <div className="flex-1 space-y-1">
-              <p className="text-sm font-semibold text-fin-gain">
-                {t('completed_banner_title')}
-              </p>
-              <p className="text-xs text-muted-foreground">
-                {t('completed_banner_subtitle', {
-                  tokens: formatK(job.tokensIn + job.tokensOut),
-                  turns: job.turnsUsed,
-                })}
-              </p>
-              {job.error ? (
-                <p className="pt-1 text-xs text-amber-600 dark:text-amber-400">
-                  {t('completed_with_warning_hint')}
+        <>
+          <div className="border-t border-fin-gain/30 bg-fin-gain/5 px-4 py-5">
+            <div className="flex items-start gap-3">
+              <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-fin-gain/15 text-fin-gain">
+                <CheckCircle2 className="size-5" />
+              </div>
+              <div className="flex-1 space-y-1">
+                <p className="text-sm font-semibold text-fin-gain">
+                  {t('completed_banner_title')}
                 </p>
-              ) : null}
-            </div>
-            <div className="flex items-center gap-2">
-              <Button type="button" size="sm" asChild>
-                <Link href={`/projects/${projectId}/analysis`}>
-                  {t('completed_cta_scenarios')}
-                  <ArrowRight className="size-3.5" />
-                </Link>
-              </Button>
+                <p className="text-xs text-muted-foreground">
+                  {t('completed_banner_subtitle', {
+                    tokens: formatK(job.tokensIn + job.tokensOut),
+                    turns: job.turnsUsed,
+                  })}
+                </p>
+                {job.error ? (
+                  <p className="pt-1 text-xs text-amber-600 dark:text-amber-400">
+                    {t('completed_with_warning_hint')}
+                  </p>
+                ) : null}
+              </div>
+              <div className="flex items-center gap-2">
+                <Button type="button" size="sm" asChild>
+                  <Link href={`/projects/${projectId}/analysis`}>
+                    {t('completed_cta_scenarios')}
+                    <ArrowRight className="size-3.5" />
+                  </Link>
+                </Button>
+              </div>
             </div>
           </div>
-        </div>
+          <div className="border-t border-border bg-background p-4">
+            <FeatureContextCards projectId={projectId} />
+          </div>
+        </>
       ) : null}
     </div>
   )

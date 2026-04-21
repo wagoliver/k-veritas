@@ -16,9 +16,10 @@ import {
   type PendingCodeJob,
   type Project,
 } from './db.ts'
-import { prepareJobWorkspace } from './clone.ts'
+import { persistRepoSnapshot, prepareJobWorkspace } from './clone.ts'
 import { decryptSecret } from './crypto.ts'
 import { importManifest } from './import.ts'
+import { importStructureManifest } from './import-structure.ts'
 import { runClaude } from './run-claude.ts'
 import { env } from './env.ts'
 
@@ -29,6 +30,9 @@ const HEARTBEAT_MS = 15_000
 // Teto de custo por rodada (USD). Claude Code aborta quando atinge.
 // Default conservador; ajuste via env do compose conforme necessário.
 const MAX_BUDGET_USD = Number(env('CODEX_MAX_BUDGET_USD', '5'))
+// Budget específico da fase 'structure' (inventário). Bem menor que o
+// budget da fase 'tests' — só lista rotas, não explora código.
+const STRUCTURE_BUDGET_USD = Number(env('CODEX_STRUCTURE_BUDGET_USD', '1'))
 const DEFAULT_MODEL = env('CODEX_MODEL', 'claude-sonnet-4-5-20250929')
 const KEEP_WORKDIR = env('CODEX_KEEP_WORKDIR', 'false') === 'true'
 
@@ -70,7 +74,10 @@ async function processJob(
   project: Project,
 ): Promise<void> {
   const jobId = job.id
-  console.log(`[codex] job=${jobId} project=${project.slug} starting`)
+  const phase = job.phase
+  console.log(
+    `[codex] job=${jobId} project=${project.slug} phase=${phase} starting`,
+  )
 
   const hb = setInterval(() => {
     heartbeat(jobId, WORKER_ID).catch((e) =>
@@ -85,11 +92,17 @@ async function processJob(
   let jobRoot: string | null = null
 
   try {
+    if (phase === 'tests') {
+      throw new Error(
+        'phase "tests" ainda não é executada pelo codex — use POST /features/[featureId]/generate-tests (fase 4 do roadmap)',
+      )
+    }
+
     await emitEvent(
       jobId,
       'status',
       'job_started',
-      `worker=${WORKER_ID} project=${project.slug}`,
+      `worker=${WORKER_ID} project=${project.slug} phase=${phase}`,
     )
     await updateProgress(jobId, { label: 'preparando workspace' })
     await emitEvent(
@@ -100,7 +113,7 @@ async function processJob(
         ? `${project.repo_url} (${project.repo_branch ?? 'main'})`
         : project.repo_zip_path ?? '',
     )
-    const workspace = await prepareJobWorkspace(jobId, project)
+    const workspace = await prepareJobWorkspace(jobId, project, phase)
     jobRoot = workspace.jobRoot
     await emitEvent(jobId, 'status', 'clone_done', workspace.repoRoot)
 
@@ -121,8 +134,11 @@ async function processJob(
       jobId,
       'status',
       'claude_started',
-      `model=${model} authMode=${resolved.authMode}`,
+      `model=${model} authMode=${resolved.authMode} phase=${phase}`,
     )
+
+    const budget =
+      phase === 'structure' ? STRUCTURE_BUDGET_USD : MAX_BUDGET_USD
 
     await updateProgress(jobId, { label: 'invocando Claude Code' })
     const result = await runClaude({
@@ -132,13 +148,15 @@ async function processJob(
         jobRoot: workspace.jobRoot,
         outputDir: workspace.outputDir,
         repoRoot: workspace.repoRoot,
+        phase,
       },
       repoRoot: workspace.repoRoot,
       outputDir: workspace.outputDir,
       credential,
       authMode: resolved.authMode,
       model,
-      maxBudgetUsd: MAX_BUDGET_USD,
+      maxBudgetUsd: budget,
+      phase,
       onEvent: async (evt) => {
         // Cada tool_use vira um evento visível no feed. Extrai um
         // preview útil do input pra mostrar contexto (caminho do
@@ -161,8 +179,10 @@ async function processJob(
     turnsUsed = result.turnsUsed
 
     const outputInventory = await listOutputTree(workspace.outputDir)
+    const expectedOutput =
+      phase === 'structure' ? 'features.json' : 'manifest.json'
     const hasManifest = outputInventory.some((p) =>
-      p.startsWith('manifest.json'),
+      p.startsWith(expectedOutput),
     )
 
     // Resumo textual do erro do Claude (se houver) — reusado pra
@@ -171,7 +191,12 @@ async function processJob(
     const errorSummary = buildErrorSummary(result, outputInventory)
 
     if (claudeErrored && !hasManifest) {
-      await emitEvent(jobId, 'error', 'claude_failed', errorSummary.slice(0, 600))
+      await emitEvent(
+        jobId,
+        'error',
+        'claude_failed',
+        errorSummary.slice(0, 600),
+      )
       throw new Error(errorSummary)
     }
 
@@ -180,31 +205,44 @@ async function processJob(
       // erro de rede) MAS chegou a escrever o manifest. Importa assim
       // mesmo; o job fica "completed" com warning no final.
       console.warn(
-        `[codex] job=${jobId} PARTIAL_SUCCESS (claude exit=${result.exitCode} is_error=${result.isError}) — importando manifest existente`,
+        `[codex] job=${jobId} PARTIAL_SUCCESS (claude exit=${result.exitCode} is_error=${result.isError}) — importando ${expectedOutput} existente`,
       )
       await emitEvent(
         jobId,
         'error',
         'partial_success',
-        `${result.errorMessage?.slice(0, 400) ?? 'erro intermediário'} — manifest parcial será importado`,
+        `${result.errorMessage?.slice(0, 400) ?? 'erro intermediário'} — ${expectedOutput} parcial será importado`,
       )
     }
 
-    await updateProgress(jobId, { label: 'importando manifest' })
-    const { analysisId, manifestPath } = await importManifest({
-      jobId,
-      projectId: project.id,
-      requestedBy: job.requested_by,
-      model,
-      provider: 'anthropic',
-      outputDir: workspace.outputDir,
-      durationMs: Date.now() - t0,
-      tokensIn,
-      tokensOut,
-    })
+    await updateProgress(jobId, { label: `importando ${expectedOutput}` })
+    const { analysisId, manifestPath } =
+      phase === 'structure'
+        ? await importStructureManifest({
+            jobId,
+            projectId: project.id,
+            requestedBy: job.requested_by,
+            model,
+            provider: 'anthropic',
+            outputDir: workspace.outputDir,
+            durationMs: Date.now() - t0,
+            tokensIn,
+            tokensOut,
+          })
+        : await importManifest({
+            jobId,
+            projectId: project.id,
+            requestedBy: job.requested_by,
+            model,
+            provider: 'anthropic',
+            outputDir: workspace.outputDir,
+            durationMs: Date.now() - t0,
+            tokensIn,
+            tokensOut,
+          })
 
     console.log(
-      `[codex] job=${jobId} analysis=${analysisId} manifest=${manifestPath}`,
+      `[codex] job=${jobId} analysis=${analysisId} manifest=${manifestPath} phase=${phase}`,
     )
     await emitEvent(
       jobId,
@@ -212,6 +250,34 @@ async function processJob(
       'import_done',
       `analysis=${analysisId} tokens=${tokensIn}/${tokensOut} turns=${turnsUsed}`,
     )
+
+    // Persiste snapshot enxuto do repo pra que o app (volume /data
+    // compartilhado) consiga ler os componentes na hora de gerar testes.
+    if (phase === 'structure') {
+      try {
+        const snapshotPath = await persistRepoSnapshot(
+          project.id,
+          workspace.repoRoot,
+        )
+        console.log(
+          `[codex] job=${jobId} snapshot persisted at ${snapshotPath}`,
+        )
+        await emitEvent(jobId, 'status', 'snapshot_persisted', snapshotPath)
+      } catch (snapErr) {
+        // Snapshot é best-effort — falha não invalida o job, mas o
+        // static-inspect do app vai cair no fallback sem código.
+        console.error(
+          `[codex] job=${jobId} snapshot failed:`,
+          (snapErr as Error).message,
+        )
+        await emitEvent(
+          jobId,
+          'error',
+          'snapshot_failed',
+          (snapErr as Error).message.slice(0, 400),
+        )
+      }
+    }
 
     // Completa o job. Se o Claude errou mas a gente importou mesmo
     // assim, anota o warning no campo error pra QA saber (status

@@ -2,11 +2,24 @@ import { readFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-// Caminho do kveritas-system.md montado no container. É resolvido
-// relativo a este arquivo (src/prompt.ts), então `/app/prompts/...`
-// dentro do container e `./prompts/...` em dev local.
+import type { CodeAnalysisPhase } from './db.ts'
+
+// Caminho dos prompts montados no container. São resolvidos relativos a
+// este arquivo (src/prompt.ts), então `/app/prompts/...` dentro do
+// container e `./prompts/...` em dev local.
 const __dirname = dirname(fileURLToPath(import.meta.url))
-const KVERITAS_SYSTEM_PATH = join(__dirname, '..', 'prompts', 'kveritas-system.md')
+const KVERITAS_SYSTEM_PATH = join(
+  __dirname,
+  '..',
+  'prompts',
+  'kveritas-system.md',
+)
+const STRUCTURE_SYSTEM_PATH = join(
+  __dirname,
+  '..',
+  'prompts',
+  'structure-system.md',
+)
 
 // Limite de leitura pra um CLAUDE.md de repo: evita estourar o context
 // window quando o projeto tem docs gigantes. 256KB bate muito bem.
@@ -18,20 +31,22 @@ export interface PromptInput {
   jobRoot: string // /work/<jobId>
   outputDir: string // /work/<jobId>/output
   repoRoot: string // /work/<jobId>/repo
+  phase: CodeAnalysisPhase
 }
 
 /**
  * Monta o system prompt em camadas, na ordem de precedência:
  *
- *   1. kveritas-system.md (sempre presente, prevalece em conflitos)
+ *   1. Prompt mestre por-fase (structure-system.md OU kveritas-system.md)
  *   2. CLAUDE.md do repo (se existir — adiciona contexto específico do projeto)
- *
- * O context.md da QA (business_context) NÃO entra aqui — ele é
- * referenciado via user prompt e lido pelo modelo como arquivo do
- * workspace. Isso porque é por-rodada, enquanto o system é estável.
  */
-export async function buildSystemPrompt(repoRoot: string): Promise<string> {
-  const kveritas = await readFile(KVERITAS_SYSTEM_PATH, 'utf8')
+export async function buildSystemPrompt(
+  repoRoot: string,
+  phase: CodeAnalysisPhase,
+): Promise<string> {
+  const masterPath =
+    phase === 'structure' ? STRUCTURE_SYSTEM_PATH : KVERITAS_SYSTEM_PATH
+  const master = await readFile(masterPath, 'utf8')
 
   let repoClaudeMd = ''
   try {
@@ -56,15 +71,48 @@ export async function buildSystemPrompt(repoRoot: string): Promise<string> {
     // Repo não tem CLAUDE.md — ok, o system prompt mestre basta.
   }
 
-  return kveritas + repoClaudeMd
+  return master + repoClaudeMd
 }
 
 /**
- * User prompt da rodada. Curto e específico — o grosso das regras vive
- * no system prompt. Referencia explicitamente onde a QA escreveu o
- * contexto de negócio e onde o Claude deve escrever os artefatos.
+ * User prompt da rodada. Divergente por fase:
+ *   - structure: só pede features.json (inventário, sem cenários/testes).
+ *   - tests:     pede manifest.json (cenários) + .spec.ts por feature.
  */
 export function buildUserPrompt(input: PromptInput): string {
+  if (input.phase === 'structure') {
+    return `Analise a ESTRUTURA do projeto "${input.projectName}" no diretório atual (cwd já é o repositório clonado: ${input.repoRoot}).
+
+Esta é a **fase 1 — Organização**. Você NÃO deve ler componentes nem gerar cenários ou código de teste. O objetivo é mapear rotas e propor um agrupamento em features, rápido e barato.
+
+Escreva APENAS:
+
+  ${input.outputDir}/features.json
+
+Formato esperado:
+
+  {
+    "summary": "Resumo curto do sistema (2-3 frases)",
+    "inferredLocale": "${input.targetLocale}",
+    "features": [
+      {
+        "id": "slug-kebab-case",
+        "name": "Nome legível",
+        "description": "Uma frase sobre a capacidade",
+        "paths": ["/rota", "/outra"],
+        "rationale": "Por que essas rotas formam uma feature"
+      }
+    ]
+  }
+
+Idioma obrigatório (summary, name, description, rationale): "${input.targetLocale}".
+
+Regras estritas da fase 'structure' estão no system prompt — siga-as. Quando terminar, responda com uma única linha:
+
+  done: N features, K paths
+`
+  }
+
   return `Analise o projeto "${input.projectName}" no diretório atual (cwd já é o repositório clonado: ${input.repoRoot}).
 
 Antes de explorar o código, leia o arquivo de contexto da QA:

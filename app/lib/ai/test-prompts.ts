@@ -63,8 +63,22 @@ CORPO DOS TESTES:
 - \`dataNeeded\`: criar fixtures inline (arrays/objetos const no topo do test) ou usar variáveis de ambiente quando for credencial. Jamais commitar dados reais de produção.
 
 SELETORES — REGRA CRÍTICA:
-- Você só pode usar seletores que aparecem no input (campo \`selector\`). JAMAIS invente seletores que não foram capturados pelo crawler.
-- Se um cenário exige interagir com um controle que não aparece no mapa de elementos, escreva um comentário \`// TODO: controle não capturado pelo crawler — revisar manualmente\` e faça o melhor palpite com \`page.getByText\`.
+- Use APENAS sinais presentes no input de cada feature (dentro de \`<page>\`). Duas fontes possíveis:
+  • \`source="crawler"\` — elementos reais do DOM renderizado. Use o atributo \`selector\` literal.
+  • \`source="code"\` — sinais extraídos estaticamente do código-fonte. Escolha a API do Playwright que melhor casa com o tipo de sinal:
+      - \`<testid>X</testid>\`       → \`page.getByTestId('X')\`
+      - \`<form_field>email</form_field>\` → \`page.getByRole('textbox', { name: 'email' })\` OU \`page.locator('[name="email"]')\`
+      - \`<label_for>email</label_for>\` → \`page.getByLabel('email')\`
+      - \`<button_text>Entrar</button_text>\` → \`page.getByRole('button', { name: 'Entrar' })\` — nome LITERAL, sem regex.
+      - \`<api_route>/api/foo</api_route>\` → útil pra \`page.waitForResponse\` / mocks.
+- JAMAIS invente seletores que não aparecem no input. Se um cenário exige controle não capturado, escreva \`// TODO: controle não capturado — revisar manualmente\` e use \`page.getByText\` como último recurso.
+
+CONTEXTO DA QA (quando presente, PRECEDE o código):
+- \`<business_rule>\`  — regra de negócio da feature. Molde as assertions ao que importa pra QA. Ex.: se a regra é "409 em CPF duplicado, sem vazar se existe", o teste deve verificar mensagem GENÉRICA, não específica.
+- \`<test_restrictions>\` — o que NÃO fazer. Se diz "não disparar email real", evite clicar em botões que enviam email; se diz "não chamar gateway de pagamento", use \`page.route\` pra interceptar.
+- \`<expected_env_vars>\` — nomes de env vars que os testes devem consumir. Use EXATAMENTE esses nomes (ex.: \`process.env.E2E_USER\`).
+- \`<coverage_priorities>\` — só gere cenários cujo \`priority\` bate com um desses valores. Ignore cenários de prioridade fora da lista.
+- \`<qa_scenarios>\` — textos livres da QA. Se o cenário revisado se alinha com um desses, use a linguagem dela nas assertions.
 
 ESTRITUDADE (Playwright strict mode):
 - Playwright falha se um locator resolver múltiplos elementos (modo estrito padrão). Teste sempre gera locators que resolvem a EXATAMENTE 1 elemento.
@@ -135,6 +149,7 @@ export interface TestGenPayload {
     description: string | null
     authKind: 'none' | 'form'
     targetLocale: string
+    sourceType: 'url' | 'repo'
   }
   features: Array<{
     externalId: string
@@ -149,7 +164,8 @@ export interface TestGenPayload {
       preconditions: string[]
       dataNeeded: string[]
     }>
-    elementsByPath: Record<
+    // Presente em projetos 'url' (crawler alimenta). Ausente em code-first.
+    elementsByPath?: Record<
       string,
       Array<{
         kind: string
@@ -157,6 +173,24 @@ export interface TestGenPayload {
         label: string | null
         selector: string
       }>
+    >
+    // Contexto por-feature (code-first). Todos opcionais — apenas os
+    // campos não-vazios entram no prompt.
+    businessRule?: string | null
+    testRestrictions?: string | null
+    expectedEnvVars?: string[]
+    coveragePriorities?: Array<'critical' | 'high' | 'normal' | 'low'>
+    freeScenarios?: string[]
+    // Inventário estático (code-first). Ausente em projetos 'url'.
+    codeInventory?: Record<
+      string,
+      {
+        testIds: string[]
+        formFields: string[]
+        labels: string[]
+        buttons: string[]
+        apiRoutes: string[]
+      }
     >
   }>
 }
@@ -194,27 +228,83 @@ ${dataNeeded}
         })
         .join('\n')
 
-      const elementsXml = Object.entries(f.elementsByPath)
-        .map(([path, elements]) => {
-          const elementsInner = elements
-            .slice(0, 30)
-            .map(
-              (e) =>
-                `      <el kind="${e.kind}" role="${escapeXml(e.role ?? '')}" selector="${escapeXml(e.selector)}">${escapeXml(e.label ?? '')}</el>`,
-            )
-            .join('\n')
-          return `    <page path="${escapeXml(path)}">
+      const contextBlocks: string[] = []
+      if (f.businessRule && f.businessRule.trim().length > 0) {
+        contextBlocks.push(
+          `    <business_rule>${escapeXml(f.businessRule)}</business_rule>`,
+        )
+      }
+      if (f.testRestrictions && f.testRestrictions.trim().length > 0) {
+        contextBlocks.push(
+          `    <test_restrictions>${escapeXml(f.testRestrictions)}</test_restrictions>`,
+        )
+      }
+      if (f.expectedEnvVars && f.expectedEnvVars.length > 0) {
+        const vars = f.expectedEnvVars
+          .map((v) => `      <var>${escapeXml(v)}</var>`)
+          .join('\n')
+        contextBlocks.push(`    <expected_env_vars>\n${vars}\n    </expected_env_vars>`)
+      }
+      if (f.coveragePriorities && f.coveragePriorities.length > 0) {
+        contextBlocks.push(
+          `    <coverage_priorities>${f.coveragePriorities.join(',')}</coverage_priorities>`,
+        )
+      }
+      if (f.freeScenarios && f.freeScenarios.length > 0) {
+        const free = f.freeScenarios
+          .map((s) => `      <item>${escapeXml(s)}</item>`)
+          .join('\n')
+        contextBlocks.push(`    <qa_scenarios>\n${free}\n    </qa_scenarios>`)
+      }
+      const contextXml = contextBlocks.join('\n')
+
+      // Duas fontes possíveis de seletor — elementsByPath (crawler, URL
+      // flow) OU codeInventory (static-inspect, code-first flow). Emitimos
+      // a que estiver presente.
+      let selectorsXml = ''
+      if (f.elementsByPath && Object.keys(f.elementsByPath).length > 0) {
+        selectorsXml = Object.entries(f.elementsByPath)
+          .map(([path, elements]) => {
+            const elementsInner = elements
+              .slice(0, 30)
+              .map(
+                (e) =>
+                  `      <el kind="${e.kind}" role="${escapeXml(e.role ?? '')}" selector="${escapeXml(e.selector)}">${escapeXml(e.label ?? '')}</el>`,
+              )
+              .join('\n')
+            return `    <page path="${escapeXml(path)}" source="crawler">
 ${elementsInner}
     </page>`
-        })
-        .join('\n')
+          })
+          .join('\n')
+      } else if (f.codeInventory && Object.keys(f.codeInventory).length > 0) {
+        selectorsXml = Object.entries(f.codeInventory)
+          .map(([path, sig]) => {
+            const lines: string[] = []
+            for (const t of sig.testIds.slice(0, 20))
+              lines.push(`      <testid>${escapeXml(t)}</testid>`)
+            for (const n of sig.formFields.slice(0, 20))
+              lines.push(`      <form_field>${escapeXml(n)}</form_field>`)
+            for (const l of sig.labels.slice(0, 20))
+              lines.push(`      <label_for>${escapeXml(l)}</label_for>`)
+            for (const b of sig.buttons.slice(0, 20))
+              lines.push(`      <button_text>${escapeXml(b)}</button_text>`)
+            for (const r of sig.apiRoutes.slice(0, 10))
+              lines.push(`      <api_route>${escapeXml(r)}</api_route>`)
+            return `    <page path="${escapeXml(path)}" source="code">
+${lines.join('\n')}
+    </page>`
+          })
+          .join('\n')
+      }
 
       return `  <feature externalId="${escapeXml(f.externalId)}">
     <name>${escapeXml(f.name)}</name>
     <description>${escapeXml(f.description)}</description>
     <paths>${f.paths.map((p) => escapeXml(p)).join(', ')}</paths>
+${contextXml}
 ${scenariosXml}
-${elementsXml}
+${selectorsXml}
   </feature>`
     })
     .join('\n')
@@ -226,11 +316,12 @@ ${elementsXml}
   <targetUrl>${escapeXml(input.project.targetUrl)}</targetUrl>
   <description>${escapeXml(input.project.description ?? '')}</description>
   <authKind>${input.project.authKind}</authKind>
+  <sourceType>${input.project.sourceType}</sourceType>
 </project>
 
 <features totalCount="${input.features.length}">
 ${featuresXml}
 </features>
 
-Gere o JSON de saída conforme o schema, um arquivo .spec.ts por feature, apenas com os cenários e elementos fornecidos acima.`
+Gere o JSON de saída conforme o schema, um arquivo .spec.ts por feature, apenas com os cenários fornecidos acima.`
 }
