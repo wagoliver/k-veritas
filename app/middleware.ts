@@ -31,9 +31,54 @@ function withoutLocale(pathname: string): string {
 export default async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl
 
-  // API routes: não passa por i18n, mas adiciona headers de segurança
+  // API routes: não passa por i18n, mas ainda tenta silent refresh do
+  // access cookie quando expirou. Sem isso, polling em páginas abertas
+  // por mais de AUTH_ACCESS_TTL_SECONDS começa a cair em 401 mesmo com
+  // o refresh ainda válido. O refresh só dispara quando claims == null,
+  // então chamadas com access válido não pagam custo extra.
   if (pathname.startsWith('/api')) {
-    const res = NextResponse.next()
+    const accessToken = req.cookies.get(ACCESS_COOKIE)?.value
+    const claims = accessToken ? await verifyAccessToken(accessToken) : null
+
+    let newAccessToken: string | null = null
+    if (!claims) {
+      const refreshToken = req.cookies.get(REFRESH_COOKIE)?.value
+      if (refreshToken) {
+        const refreshed = await silentRefreshAccess(refreshToken)
+        if (refreshed.status === 'ok') {
+          newAccessToken = refreshed.accessToken
+        }
+      }
+    }
+
+    // Se renovou, precisa reescrever o header Cookie do request pra que
+    // o route handler (getServerSession) enxergue o token novo. Sem
+    // isso, a chamada atual ainda devolve 401 — só a próxima se
+    // beneficiaria. Truque: NextResponse.next({ request: { headers }})
+    // substitui os headers entregues ao handler.
+    let res: NextResponse
+    if (newAccessToken) {
+      const requestHeaders = new Headers(req.headers)
+      const incomingCookie = requestHeaders.get('cookie') ?? ''
+      const withoutOld = incomingCookie
+        .split(';')
+        .map((c) => c.trim())
+        .filter((c) => !c.startsWith(`${ACCESS_COOKIE}=`))
+      withoutOld.push(`${ACCESS_COOKIE}=${newAccessToken}`)
+      requestHeaders.set('cookie', withoutOld.join('; '))
+      res = NextResponse.next({ request: { headers: requestHeaders } })
+      res.cookies.set({
+        name: ACCESS_COOKIE,
+        value: newAccessToken,
+        httpOnly: true,
+        secure: process.env.AUTH_COOKIE_SECURE === 'true',
+        sameSite: 'lax',
+        path: '/',
+        maxAge: Number(process.env.AUTH_ACCESS_TTL_SECONDS ?? 3600),
+      })
+    } else {
+      res = NextResponse.next()
+    }
     res.headers.set(
       'Content-Security-Policy',
       "default-src 'none'; frame-ancestors 'none'",

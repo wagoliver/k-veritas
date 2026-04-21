@@ -41,7 +41,12 @@ RUN npm install --omit=dev --no-audit --no-fund
 
 COPY . .
 
-RUN mkdir -p /data /work && chown -R node:node /data /work /app
+# O volume /data é compartilhado com o serviço `app`, que cria diretórios
+# como uid 1001. Alinhamos o uid do codex pra escrever sem conflito de
+# perms. `usermod` precisa que o user não esteja em uso — OK durante
+# build. Mantemos o nome "node".
+RUN usermod -u 1001 node && groupmod -g 1001 node && \
+    mkdir -p /data /work && chown -R node:node /work /app
 USER node
 
 # O worker faz polling em loop; não precisa de healthcheck especial.
