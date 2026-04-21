@@ -65,6 +65,16 @@ export async function runTestGeneration(
   const client = buildClient(effectiveConfig)
   const { provider, model } = client.config
 
+  // Code-first: a fase 'structure' só cria features (sem cenários). A QA
+  // escreve cenários em feature_free_scenarios ou só preenche a regra de
+  // negócio. Antes de montar o payload, converte esses em
+  // analysis_scenarios com reviewedAt=now() — idempotente (só cria
+  // quando a feature está sem cenários). Projetos URL passam direto,
+  // pois a análise crawler já preenche analysis_scenarios.
+  if (project.sourceType === 'repo') {
+    await seedCodeFirstScenarios(project, opts.featureIdFilter)
+  }
+
   // Monta payload: só features que têm pelo menos um cenário revisado.
   // Filtra pelo featureId se escopo granular.
   const payload = await buildTestGenPayload(project, opts.featureIdFilter)
@@ -233,6 +243,133 @@ class TestGenParseError extends Error {
   ) {
     super(message)
     this.name = 'TestGenParseError'
+  }
+}
+
+/**
+ * Em projetos code-first, `analysis_scenarios` nasce vazio (a fase
+ * 'structure' do codex só cria features). Essa função converte os
+ * cenários livres da QA (`feature_free_scenarios`) em `analysis_scenarios`
+ * marcados como revisados — fechando o gap pra que o pipeline existente
+ * de geração de testes possa rodar.
+ *
+ * Regras:
+ *   - Idempotente: só cria se a feature NÃO tem analysis_scenarios.
+ *     Segunda chamada não duplica. Se a QA mudou free_scenarios depois
+ *     da primeira geração, os cenários antigos ficam — pra atualizar,
+ *     QA precisa excluir os analysis_scenarios via UI.
+ *   - Se tem free_scenarios: cada um vira um analysis_scenario.
+ *   - Se não tem free_scenarios mas tem business_rule: cria 1 cenário
+ *     genérico ("Cobertura da regra de negócio") com a regra no
+ *     rationale. O LLM expande internamente múltiplos test() a partir
+ *     dele, guiado pela regra.
+ *   - Se não tem nenhum dos dois: feature é pulada (0 cenários =
+ *     runTestGeneration vai dar no_reviewed_scenarios, comportamento
+ *     correto — QA precisa ao menos escrever uma regra ou um cenário).
+ */
+async function seedCodeFirstScenarios(
+  project: Project,
+  featureIdFilter?: string,
+): Promise<void> {
+  const features = await db
+    .select({
+      id: analysisFeatures.id,
+      businessRule: analysisFeatures.businessRule,
+      coveragePriorities: analysisFeatures.coveragePriorities,
+    })
+    .from(analysisFeatures)
+    .where(
+      featureIdFilter
+        ? and(
+            eq(analysisFeatures.projectId, project.id),
+            eq(analysisFeatures.id, featureIdFilter),
+          )
+        : eq(analysisFeatures.projectId, project.id),
+    )
+
+  if (features.length === 0) return
+
+  for (const f of features) {
+    // Checa se já tem cenários (de qualquer source) — se sim, pula
+    const [existing] = await db
+      .select({ id: analysisScenarios.id })
+      .from(analysisScenarios)
+      .where(eq(analysisScenarios.featureId, f.id))
+      .limit(1)
+    if (existing) continue
+
+    const free = await db
+      .select({
+        description: featureFreeScenarios.description,
+        priority: featureFreeScenarios.priority,
+      })
+      .from(featureFreeScenarios)
+      .where(eq(featureFreeScenarios.featureId, f.id))
+      .orderBy(
+        asc(featureFreeScenarios.priority),
+        asc(featureFreeScenarios.createdAt),
+      )
+
+    const priorities =
+      (f.coveragePriorities as ScenarioPriority[] | null) ?? []
+    const defaultPriority: ScenarioPriority =
+      priorities[0] ?? 'normal'
+
+    const now = new Date()
+    const rows: Array<{
+      featureId: string
+      projectId: string
+      title: string
+      rationale: string
+      priority: ScenarioPriority
+      preconditions: string[]
+      dataNeeded: string[]
+      sortOrder: number
+      source: 'manual'
+      reviewedAt: Date
+      reviewedBy: string | null
+    }> = []
+
+    if (free.length > 0) {
+      free.forEach((s, idx) => {
+        const desc = s.description.trim()
+        rows.push({
+          featureId: f.id,
+          projectId: project.id,
+          title: desc.slice(0, 200),
+          rationale:
+            desc.length <= 500
+              ? desc
+              : `${desc.slice(0, 497)}...`,
+          priority: defaultPriority,
+          preconditions: [],
+          dataNeeded: [],
+          sortOrder: idx,
+          source: 'manual',
+          reviewedAt: now,
+          reviewedBy: null,
+        })
+      })
+    } else if (f.businessRule && f.businessRule.trim().length > 0) {
+      const rule = f.businessRule.trim()
+      rows.push({
+        featureId: f.id,
+        projectId: project.id,
+        title: 'Cobertura da regra de negócio',
+        rationale: rule.length <= 500 ? rule : `${rule.slice(0, 497)}...`,
+        priority: defaultPriority,
+        preconditions: [],
+        dataNeeded: [],
+        sortOrder: 0,
+        source: 'manual',
+        reviewedAt: now,
+        reviewedBy: null,
+      })
+    }
+
+    if (rows.length > 0) {
+      await db.insert(analysisScenarios).values(rows)
+    }
   }
 }
 

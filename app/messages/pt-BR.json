@@ -762,6 +762,8 @@
         "show_details": "Detalhes",
         "hide_details": "Ocultar detalhes",
         "sheet_title": "Contexto da feature",
+        "advanced_toggle": "Avançado",
+        "advanced_hint": "restrições, áreas do código, env vars, prioridades",
         "field_name": "Nome da feature",
         "field_business_rule": "Regra de negócio",
         "placeholder_business_rule": "Descreva a capacidade de negócio e o que importa testar. Ex.: 'CPF duplicado retorna 409 com mensagem genérica; não vaza se o cadastro existe.'",

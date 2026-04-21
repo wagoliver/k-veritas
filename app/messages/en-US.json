@@ -762,6 +762,8 @@
         "show_details": "Details",
         "hide_details": "Hide details",
         "sheet_title": "Feature context",
+        "advanced_toggle": "Advanced",
+        "advanced_hint": "restrictions, code areas, env vars, priorities",
         "field_name": "Feature name",
         "field_business_rule": "Business rule",
         "placeholder_business_rule": "Describe the business capability and what matters to test. E.g.: 'Duplicate CPF returns 409 with generic message; doesn't leak whether the record exists.'",

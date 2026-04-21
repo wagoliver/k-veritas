@@ -2,6 +2,7 @@
 
 import {
   CheckCircle2,
+  ChevronRight,
   Focus,
   Loader2,
   Pencil,
@@ -72,6 +73,9 @@ export function FeatureContextSheet({
   const [saving, startSave] = useTransition()
   const [deleting, startDelete] = useTransition()
   const [generating, startGenerate] = useTransition()
+  // "Avançado" só abre automático quando a feature já tem algum campo
+  // não-essencial preenchido — sinaliza que a QA usou aquilo antes.
+  const [advancedOpen, setAdvancedOpen] = useState(false)
 
   useEffect(() => {
     if (!feature) return
@@ -84,6 +88,13 @@ export function FeatureContextSheet({
     setEditingName(false)
     setEnvVarDraft('')
     setFocusDraft('')
+    // Abre "Avançado" se já tem algum campo não-essencial preenchido.
+    const hasAdvanced =
+      (feature.testRestrictions?.trim().length ?? 0) > 0 ||
+      (feature.codeFocus?.length ?? 0) > 0 ||
+      (feature.expectedEnvVars?.length ?? 0) > 0 ||
+      (feature.coveragePriorities?.length ?? 0) > 0
+    setAdvancedOpen(hasAdvanced)
   }, [feature])
 
   if (!feature) return null
@@ -216,12 +227,15 @@ export function FeatureContextSheet({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="w-full sm:max-w-xl">
-        <SheetHeader>
+      <SheetContent
+        side="bottom"
+        className="mx-auto h-[85vh] max-w-4xl rounded-t-xl"
+      >
+        <SheetHeader className="border-b border-border">
           <SheetTitle>{t('sheet_title')}</SheetTitle>
         </SheetHeader>
 
-        <div className="flex-1 space-y-5 overflow-y-auto px-4 pb-4">
+        <div className="flex-1 space-y-5 overflow-y-auto px-6 pb-4">
           {/* Nome */}
           <section className="space-y-2">
             <label className="text-xs font-medium text-muted-foreground">
@@ -296,146 +310,178 @@ export function FeatureContextSheet({
             />
           </section>
 
-          {/* Restrições */}
-          <section className="space-y-2">
-            <label className="text-xs font-medium text-muted-foreground">
-              {t('field_test_restrictions')}
-            </label>
-            <Textarea
-              value={testRestrictions}
-              onChange={(e) => setTestRestrictions(e.target.value)}
-              placeholder={t('placeholder_test_restrictions')}
-              rows={3}
-              disabled={saving}
-            />
-          </section>
-
-          {/* Code focus */}
-          <section className="space-y-2">
-            <label className="text-xs font-medium text-muted-foreground">
-              {t('field_code_focus')}
-            </label>
-            <div className="flex gap-2">
-              <Input
-                value={focusDraft}
-                onChange={(e) => setFocusDraft(e.target.value)}
-                placeholder={t('placeholder_code_focus')}
-                disabled={saving}
+          {/* Avançado: colapsado por padrão. Contém os 4 campos opcionais
+              que 90% das QAs não precisam mexer. */}
+          <section className="rounded-lg border border-border/60 bg-background/50">
+            <button
+              type="button"
+              onClick={() => setAdvancedOpen((v) => !v)}
+              className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+              aria-expanded={advancedOpen}
+            >
+              <ChevronRight
+                className={cn(
+                  'size-3.5 transition-transform',
+                  advancedOpen && 'rotate-90',
+                )}
               />
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => addFocus('focus')}
-                disabled={saving || focusDraft.trim().length === 0}
-                title={t('focus_add_focus')}
-              >
-                <Focus className="size-3.5" />
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => addFocus('ignore')}
-                disabled={saving || focusDraft.trim().length === 0}
-                title={t('focus_add_ignore')}
-              >
-                <X className="size-3.5" />
-              </Button>
-            </div>
-            {codeFocus.length > 0 ? (
-              <ul className="flex flex-wrap gap-1.5">
-                {codeFocus.map((item, i) => (
-                  <li
-                    key={i}
-                    className={cn(
-                      'inline-flex items-center gap-1 rounded border px-2 py-0.5 font-mono text-[11px]',
-                      item.mode === 'focus'
-                        ? 'border-primary/40 bg-primary/10 text-primary'
-                        : 'border-destructive/40 bg-destructive/10 text-destructive',
-                    )}
-                  >
-                    {item.mode === 'focus' ? '+' : '-'} {item.path}
-                    <button
-                      type="button"
-                      onClick={() => removeFocus(i)}
-                      className="ml-1 opacity-60 hover:opacity-100"
-                    >
-                      <X className="size-3" />
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            ) : null}
-          </section>
+              <span className="font-semibold uppercase tracking-wider">
+                {t('advanced_toggle')}
+              </span>
+              <span className="text-[10px] font-normal normal-case tracking-normal opacity-70">
+                {t('advanced_hint')}
+              </span>
+            </button>
 
-          {/* Env vars */}
-          <section className="space-y-2">
-            <label className="text-xs font-medium text-muted-foreground">
-              {t('field_env_vars')}
-            </label>
-            <div className="flex gap-2">
-              <Input
-                value={envVarDraft}
-                onChange={(e) => setEnvVarDraft(e.target.value.toUpperCase())}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault()
-                    addEnvVar()
-                  }
-                }}
-                placeholder={t('placeholder_env_vars')}
-                className="font-mono"
-                disabled={saving}
-              />
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={addEnvVar}
-                disabled={saving || envVarDraft.trim().length === 0}
-              >
-                {t('add')}
-              </Button>
-            </div>
-            {envVars.length > 0 ? (
-              <ul className="flex flex-wrap gap-1.5">
-                {envVars.map((v) => (
-                  <li
-                    key={v}
-                    className="inline-flex items-center gap-1 rounded border border-border bg-background px-2 py-0.5 font-mono text-[11px]"
-                  >
-                    {v}
-                    <button
-                      type="button"
-                      onClick={() => removeEnvVar(v)}
-                      className="ml-1 opacity-60 hover:opacity-100"
-                    >
-                      <X className="size-3" />
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            ) : null}
-          </section>
-
-          {/* Prioridades */}
-          <section className="space-y-2">
-            <label className="text-xs font-medium text-muted-foreground">
-              {t('field_priorities')}
-            </label>
-            <div className="flex flex-wrap gap-3">
-              {PRIORITY_OPTIONS.map((p) => (
-                <label
-                  key={p}
-                  className="flex cursor-pointer items-center gap-1.5 text-sm"
-                >
-                  <Checkbox
-                    checked={priorities.includes(p)}
-                    onCheckedChange={() => togglePriority(p)}
+            {advancedOpen ? (
+              <div className="space-y-5 border-t border-border/60 px-3 py-4">
+                {/* Restrições */}
+                <section className="space-y-2">
+                  <label className="text-xs font-medium text-muted-foreground">
+                    {t('field_test_restrictions')}
+                  </label>
+                  <Textarea
+                    value={testRestrictions}
+                    onChange={(e) => setTestRestrictions(e.target.value)}
+                    placeholder={t('placeholder_test_restrictions')}
+                    rows={3}
                     disabled={saving}
                   />
-                  <span className={cn('capitalize', PRIORITY_COLORS[p])}>{p}</span>
-                </label>
-              ))}
-            </div>
+                </section>
+
+                {/* Code focus */}
+                <section className="space-y-2">
+                  <label className="text-xs font-medium text-muted-foreground">
+                    {t('field_code_focus')}
+                  </label>
+                  <div className="flex gap-2">
+                    <Input
+                      value={focusDraft}
+                      onChange={(e) => setFocusDraft(e.target.value)}
+                      placeholder={t('placeholder_code_focus')}
+                      disabled={saving}
+                    />
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => addFocus('focus')}
+                      disabled={saving || focusDraft.trim().length === 0}
+                      title={t('focus_add_focus')}
+                    >
+                      <Focus className="size-3.5" />
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => addFocus('ignore')}
+                      disabled={saving || focusDraft.trim().length === 0}
+                      title={t('focus_add_ignore')}
+                    >
+                      <X className="size-3.5" />
+                    </Button>
+                  </div>
+                  {codeFocus.length > 0 ? (
+                    <ul className="flex flex-wrap gap-1.5">
+                      {codeFocus.map((item, i) => (
+                        <li
+                          key={i}
+                          className={cn(
+                            'inline-flex items-center gap-1 rounded border px-2 py-0.5 font-mono text-[11px]',
+                            item.mode === 'focus'
+                              ? 'border-primary/40 bg-primary/10 text-primary'
+                              : 'border-destructive/40 bg-destructive/10 text-destructive',
+                          )}
+                        >
+                          {item.mode === 'focus' ? '+' : '-'} {item.path}
+                          <button
+                            type="button"
+                            onClick={() => removeFocus(i)}
+                            className="ml-1 opacity-60 hover:opacity-100"
+                          >
+                            <X className="size-3" />
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+                </section>
+
+                {/* Env vars */}
+                <section className="space-y-2">
+                  <label className="text-xs font-medium text-muted-foreground">
+                    {t('field_env_vars')}
+                  </label>
+                  <div className="flex gap-2">
+                    <Input
+                      value={envVarDraft}
+                      onChange={(e) =>
+                        setEnvVarDraft(e.target.value.toUpperCase())
+                      }
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault()
+                          addEnvVar()
+                        }
+                      }}
+                      placeholder={t('placeholder_env_vars')}
+                      className="font-mono"
+                      disabled={saving}
+                    />
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={addEnvVar}
+                      disabled={saving || envVarDraft.trim().length === 0}
+                    >
+                      {t('add')}
+                    </Button>
+                  </div>
+                  {envVars.length > 0 ? (
+                    <ul className="flex flex-wrap gap-1.5">
+                      {envVars.map((v) => (
+                        <li
+                          key={v}
+                          className="inline-flex items-center gap-1 rounded border border-border bg-background px-2 py-0.5 font-mono text-[11px]"
+                        >
+                          {v}
+                          <button
+                            type="button"
+                            onClick={() => removeEnvVar(v)}
+                            className="ml-1 opacity-60 hover:opacity-100"
+                          >
+                            <X className="size-3" />
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+                </section>
+
+                {/* Prioridades */}
+                <section className="space-y-2">
+                  <label className="text-xs font-medium text-muted-foreground">
+                    {t('field_priorities')}
+                  </label>
+                  <div className="flex flex-wrap gap-3">
+                    {PRIORITY_OPTIONS.map((p) => (
+                      <label
+                        key={p}
+                        className="flex cursor-pointer items-center gap-1.5 text-sm"
+                      >
+                        <Checkbox
+                          checked={priorities.includes(p)}
+                          onCheckedChange={() => togglePriority(p)}
+                          disabled={saving}
+                        />
+                        <span className={cn('capitalize', PRIORITY_COLORS[p])}>
+                          {p}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                </section>
+              </div>
+            ) : null}
           </section>
         </div>
 
