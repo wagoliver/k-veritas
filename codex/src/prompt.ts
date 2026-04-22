@@ -85,6 +85,12 @@ export function buildUserPrompt(input: PromptInput): string {
 
 Esta é a **fase 1 — Organização**. Você NÃO deve ler componentes nem gerar cenários ou código de teste. O objetivo é mapear rotas e propor um agrupamento em features, rápido e barato.
 
+Antes de explorar o código, leia o arquivo de planejamento da QA:
+
+  ${input.jobRoot}/context.md
+
+Esse arquivo descreve a regra de negócio do sistema, os cenários de teste desejados e os tipos de teste (e2e, smoke, regression, integration) que a QA quer cobrir. Pode estar vazio. Use esse contexto pra **agrupar as features de forma alinhada à intenção da QA** (ex.: se a regra fala de "login anti-enumeração", agrupe rotas de autenticação numa feature clara). Não invente features que não existem no código.
+
 Escreva APENAS:
 
   ${input.outputDir}/features.json

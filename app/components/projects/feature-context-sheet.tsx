@@ -21,6 +21,7 @@ import { Input } from '@/components/ui/input'
 import {
   Sheet,
   SheetContent,
+  SheetDescription,
   SheetFooter,
   SheetHeader,
   SheetTitle,
@@ -29,7 +30,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
 import {
   ModelPicker,
-  useAnthropicConfig,
+  useOrgPrimaryConfig,
   usePersistedModel,
 } from './model-picker'
 import { ScenariosEditor } from './scenarios-editor'
@@ -85,7 +86,7 @@ export function FeatureContextSheet({
   const [modelOverride, setModelOverride] = usePersistedModel(
     `model:${projectId}:generate-tests`,
   )
-  const anthropicCfg = useAnthropicConfig()
+  const orgCfg = useOrgPrimaryConfig()
   const [suggesting, startSuggesting] = useTransition()
 
   useEffect(() => {
@@ -326,22 +327,39 @@ export function FeatureContextSheet({
         side="bottom"
         className="mx-auto h-[85vh] max-w-4xl rounded-t-xl"
       >
-        <SheetHeader className="flex-row items-center justify-between gap-3 border-b border-border">
-          <SheetTitle>{t('sheet_title')}</SheetTitle>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={suggestWithAi}
-            disabled={suggesting || saving || deleting || generating}
-          >
-            {suggesting ? (
-              <Loader2 className="size-3.5 animate-spin" />
-            ) : (
-              <Sparkles className="size-3.5" />
-            )}
-            {t('suggest_with_ai')}
-          </Button>
+        <SheetHeader className="flex-row flex-wrap items-center justify-between gap-2 border-b border-border">
+          <div className="min-w-0 flex-1">
+            <SheetTitle>{t('sheet_title')}</SheetTitle>
+            <SheetDescription className="sr-only">
+              {feature.name}
+            </SheetDescription>
+          </div>
+          <div className="flex items-center gap-1">
+            {orgCfg ? (
+              <ModelPicker
+                value={modelOverride}
+                onChange={setModelOverride}
+                provider={orgCfg.provider}
+                baseUrl={orgCfg.baseUrl}
+                defaultModel={orgCfg.defaultModel}
+                compact
+              />
+            ) : null}
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={suggestWithAi}
+              disabled={suggesting || saving || deleting || generating}
+            >
+              {suggesting ? (
+                <Loader2 className="size-3.5 animate-spin" />
+              ) : (
+                <Sparkles className="size-3.5" />
+              )}
+              {t('suggest_with_ai')}
+            </Button>
+          </div>
         </SheetHeader>
 
         <div className="flex-1 space-y-5 overflow-y-auto px-6 pb-4">
@@ -611,16 +629,6 @@ export function FeatureContextSheet({
           </Button>
 
           <div className="ml-auto flex items-center gap-2">
-            {anthropicCfg ? (
-              <ModelPicker
-                value={modelOverride}
-                onChange={setModelOverride}
-                provider={anthropicCfg.provider}
-                baseUrl={anthropicCfg.baseUrl}
-                defaultModel={anthropicCfg.defaultModel}
-                compact
-              />
-            ) : null}
             <Button
               variant="outline"
               size="sm"

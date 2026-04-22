@@ -22,6 +22,21 @@ const repoUrlSchema = z.string().trim().min(6).max(2048)
 const repoBranchSchema = z.string().trim().min(1).max(100).default('main')
 const businessContextSchema = z.string().trim().max(20_000).optional()
 
+export const testTypeSchema = z.enum([
+  'e2e',
+  'smoke',
+  'regression',
+  'integration',
+])
+export type TestType = z.infer<typeof testTypeSchema>
+
+const testScenariosSchema = z
+  .array(z.string().trim().min(4).max(500))
+  .max(50)
+  .optional()
+
+const testTypesSchema = z.array(testTypeSchema).max(4).optional()
+
 export const createProjectSchema = z
   .object({
     name: z.string().trim().min(2).max(80),
@@ -72,6 +87,8 @@ export const updateProjectSchema = z.object({
   repoUrl: repoUrlSchema.optional(),
   repoBranch: repoBranchSchema.optional(),
   businessContext: businessContextSchema,
+  testScenarios: testScenariosSchema,
+  testTypes: testTypesSchema,
 })
 
 export const createScenarioSchema = z.object({

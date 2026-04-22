@@ -9,12 +9,16 @@ import {
   Loader2,
   Play,
   RefreshCw,
+  X,
 } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslations } from 'next-intl'
 import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
 import { CodeAnalysisLogStream } from './code-analysis-log-stream'
 import { FeatureContextCards } from './feature-context-cards'
@@ -23,6 +27,9 @@ import {
   useAnthropicConfig,
   usePersistedModel,
 } from './model-picker'
+
+type TestType = 'e2e' | 'smoke' | 'regression' | 'integration'
+const TEST_TYPES: TestType[] = ['e2e', 'smoke', 'regression', 'integration']
 
 interface CodeJobSnapshot {
   id: string
@@ -66,6 +73,75 @@ export function CodeAnalysisPanel({ projectId }: { projectId: string }) {
   // exatamente uma vez na transição de running→completed.
   const lastStatusRef = useRef<string | null>(null)
   const cancelledRef = useRef(false)
+
+  // Planejamento da análise — só aparece em modo draft (sem job ainda).
+  // Alimenta o codex via context.md; persistido em /api/projects/[id].
+  const [businessRule, setBusinessRule] = useState('')
+  const [testScenarios, setTestScenarios] = useState<string[]>([])
+  const [testTypes, setTestTypes] = useState<TestType[]>(['e2e'])
+  const [planLoaded, setPlanLoaded] = useState(false)
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const skipSaveRef = useRef(true)
+
+  useEffect(() => {
+    let cancelled = false
+    fetch(`/api/projects/${projectId}`, {
+      headers: { 'X-Requested-With': 'fetch' },
+      cache: 'no-store',
+    })
+      .then(async (res) => {
+        if (!res.ok) return
+        const body = (await res.json()) as {
+          businessContext?: string | null
+          testScenarios?: string[]
+          testTypes?: string[]
+        }
+        if (cancelled) return
+        setBusinessRule(body.businessContext ?? '')
+        setTestScenarios(
+          Array.isArray(body.testScenarios) ? body.testScenarios : [],
+        )
+        setTestTypes(
+          Array.isArray(body.testTypes) && body.testTypes.length > 0
+            ? (body.testTypes.filter((t) =>
+                TEST_TYPES.includes(t as TestType),
+              ) as TestType[])
+            : ['e2e'],
+        )
+        setPlanLoaded(true)
+        // Próximas mudanças vão disparar save.
+        skipSaveRef.current = false
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [projectId])
+
+  // Debounced PATCH a cada mudança nos campos de planejamento.
+  useEffect(() => {
+    if (skipSaveRef.current) return
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
+    saveTimerRef.current = setTimeout(() => {
+      fetch(`/api/projects/${projectId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Requested-With': 'fetch',
+        },
+        body: JSON.stringify({
+          businessContext: businessRule.trim(),
+          testScenarios,
+          testTypes,
+        }),
+      }).catch(() => {
+        // Save é best-effort; se falhou a rede, usuário vê ao rodar análise.
+      })
+    }, 800)
+    return () => {
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
+    }
+  }, [businessRule, testScenarios, testTypes, projectId])
 
   const loadLatest = useCallback(async () => {
     try {
@@ -182,6 +258,13 @@ export function CodeAnalysisPanel({ projectId }: { projectId: string }) {
         modelOverride={modelOverride}
         setModelOverride={setModelOverride}
         anthropicCfg={anthropicCfg}
+        planLoaded={planLoaded}
+        businessRule={businessRule}
+        setBusinessRule={setBusinessRule}
+        testScenarios={testScenarios}
+        setTestScenarios={setTestScenarios}
+        testTypes={testTypes}
+        setTestTypes={setTestTypes}
       />
     )
   }
@@ -362,6 +445,13 @@ function EmptyState({
   modelOverride,
   setModelOverride,
   anthropicCfg,
+  planLoaded,
+  businessRule,
+  setBusinessRule,
+  testScenarios,
+  setTestScenarios,
+  testTypes,
+  setTestTypes,
 }: {
   onAnalyze: () => void
   starting: boolean
@@ -371,9 +461,16 @@ function EmptyState({
   modelOverride: string | null
   setModelOverride: (v: string | null) => void
   anthropicCfg: ReturnType<typeof useAnthropicConfig>
+  planLoaded: boolean
+  businessRule: string
+  setBusinessRule: (v: string) => void
+  testScenarios: string[]
+  setTestScenarios: (fn: (prev: string[]) => string[]) => void
+  testTypes: TestType[]
+  setTestTypes: (fn: (prev: TestType[]) => TestType[]) => void
 }) {
   return (
-    <div className="flex flex-col items-center gap-4 rounded-lg border border-dashed border-border p-10 text-center">
+    <div className="flex flex-col items-center gap-4 rounded-lg border border-dashed border-border p-8 text-center">
       <Code2 className="size-10 text-muted-foreground" />
       <div className="max-w-lg space-y-1">
         <p className="text-sm font-medium">{t('empty_title')}</p>
@@ -391,6 +488,20 @@ function EmptyState({
           {t('source_not_configured_hint')}
         </p>
       )}
+
+      {planLoaded ? (
+        <PlanningForm
+          t={t}
+          businessRule={businessRule}
+          setBusinessRule={setBusinessRule}
+          testScenarios={testScenarios}
+          setTestScenarios={setTestScenarios}
+          testTypes={testTypes}
+          setTestTypes={setTestTypes}
+          disabled={starting}
+        />
+      ) : null}
+
       <div className="flex flex-wrap items-center justify-center gap-2">
         <Button
           type="button"
@@ -414,6 +525,143 @@ function EmptyState({
             compact
           />
         ) : null}
+      </div>
+    </div>
+  )
+}
+
+function PlanningForm({
+  t,
+  businessRule,
+  setBusinessRule,
+  testScenarios,
+  setTestScenarios,
+  testTypes,
+  setTestTypes,
+  disabled,
+}: {
+  t: (key: string) => string
+  businessRule: string
+  setBusinessRule: (v: string) => void
+  testScenarios: string[]
+  setTestScenarios: (fn: (prev: string[]) => string[]) => void
+  testTypes: TestType[]
+  setTestTypes: (fn: (prev: TestType[]) => TestType[]) => void
+  disabled: boolean
+}) {
+  const [scenarioDraft, setScenarioDraft] = useState('')
+
+  const addScenario = () => {
+    const v = scenarioDraft.trim()
+    if (v.length < 4) return
+    if (testScenarios.includes(v)) {
+      setScenarioDraft('')
+      return
+    }
+    setTestScenarios((prev) => [...prev, v])
+    setScenarioDraft('')
+  }
+
+  const removeScenario = (idx: number) => {
+    setTestScenarios((prev) => prev.filter((_, i) => i !== idx))
+  }
+
+  const toggleType = (type: TestType) => {
+    setTestTypes((prev) =>
+      prev.includes(type) ? prev.filter((t) => t !== type) : [...prev, type],
+    )
+  }
+
+  return (
+    <div className="w-full max-w-xl space-y-4 rounded-md border border-border bg-card p-4 text-left">
+      <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+        {t('planning_heading')}
+      </p>
+
+      <div className="space-y-1.5">
+        <label className="text-xs font-medium text-muted-foreground">
+          {t('planning_business_rule_label')}
+        </label>
+        <Textarea
+          value={businessRule}
+          onChange={(e) => setBusinessRule(e.target.value)}
+          placeholder={t('planning_business_rule_placeholder')}
+          rows={4}
+          disabled={disabled}
+        />
+      </div>
+
+      <div className="space-y-1.5">
+        <label className="text-xs font-medium text-muted-foreground">
+          {t('planning_scenarios_label')}
+        </label>
+        <div className="flex gap-2">
+          <Input
+            value={scenarioDraft}
+            onChange={(e) => setScenarioDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault()
+                addScenario()
+              }
+            }}
+            placeholder={t('planning_scenarios_placeholder')}
+            disabled={disabled}
+          />
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={addScenario}
+            disabled={disabled || scenarioDraft.trim().length < 4}
+          >
+            {t('planning_scenarios_add')}
+          </Button>
+        </div>
+        {testScenarios.length > 0 ? (
+          <ul className="flex flex-col gap-1.5">
+            {testScenarios.map((s, i) => (
+              <li
+                key={`${i}-${s}`}
+                className="inline-flex items-start gap-2 rounded border border-border bg-background px-2 py-1 text-xs"
+              >
+                <span className="flex-1">{s}</span>
+                <button
+                  type="button"
+                  onClick={() => removeScenario(i)}
+                  className="shrink-0 opacity-60 hover:opacity-100"
+                  disabled={disabled}
+                  aria-label={t('planning_scenarios_remove')}
+                >
+                  <X className="size-3.5" />
+                </button>
+              </li>
+            ))}
+          </ul>
+        ) : null}
+      </div>
+
+      <div className="space-y-1.5">
+        <label className="text-xs font-medium text-muted-foreground">
+          {t('planning_types_label')}
+        </label>
+        <div className="flex flex-wrap gap-3">
+          {TEST_TYPES.map((type) => (
+            <label
+              key={type}
+              className="flex cursor-pointer items-center gap-1.5 text-sm"
+            >
+              <Checkbox
+                checked={testTypes.includes(type)}
+                onCheckedChange={() => toggleType(type)}
+                disabled={disabled}
+              />
+              <span className="uppercase">
+                {t(`planning_types_option.${type}`)}
+              </span>
+            </label>
+          ))}
+        </div>
       </div>
     </div>
   )

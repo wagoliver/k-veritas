@@ -32,16 +32,11 @@ export async function prepareJobWorkspace(
     await mkdir(join(outputDir, 'tests'), { recursive: true })
   }
 
-  // Contexto de negócio pra Claude Code só faz sentido na fase 'tests',
-  // que roda escopada a uma feature com contexto preenchido pela QA.
-  // A fase 'structure' só faz inventário — nunca lê context.md.
-  if (phase === 'tests') {
-    const contextBody =
-      (project.business_context ?? '').trim().length > 0
-        ? project.business_context!
-        : '> (sem contexto de negócio fornecido pela QA — trabalhe apenas com o código)'
-    await writeFile(join(jobRoot, 'context.md'), contextBody, 'utf8')
-  }
+  // Contexto de planejamento preenchido pela QA no projeto (tela Estrutura
+  // em modo draft). Vai pras DUAS fases: structure usa pra agrupar features
+  // de forma mais dirigida; tests usa pra escrever os specs.
+  const contextBody = buildContextMd(project)
+  await writeFile(join(jobRoot, 'context.md'), contextBody, 'utf8')
 
   if (project.source_type === 'repo' && project.repo_url) {
     await gitClone(project.repo_url, project.repo_branch ?? 'main', repoRoot)
@@ -73,6 +68,42 @@ function gitClone(url: string, branch: string, dest: string): Promise<void> {
       reject(new Error(`git clone falhou (code=${code}): ${stderr.slice(-500)}`))
     })
   })
+}
+
+// Monta o context.md a partir dos campos de planejamento do projeto.
+// Formato markdown pra facilitar leitura do LLM. Seções ausentes/vazias
+// são omitidas em vez de virarem "N/A" ruidoso.
+function buildContextMd(project: Project): string {
+  const sections: string[] = []
+
+  const rule = (project.business_context ?? '').trim()
+  if (rule.length > 0) {
+    sections.push(`# Regra de negócio\n\n${rule}`)
+  }
+
+  const scenarios = Array.isArray(project.test_scenarios)
+    ? project.test_scenarios.filter(
+        (s) => typeof s === 'string' && s.trim().length > 0,
+      )
+    : []
+  if (scenarios.length > 0) {
+    const items = scenarios.map((s) => `- ${s.trim()}`).join('\n')
+    sections.push(`# Cenários de teste desejados\n\n${items}`)
+  }
+
+  const types = Array.isArray(project.test_types)
+    ? project.test_types.filter(
+        (t) => typeof t === 'string' && t.trim().length > 0,
+      )
+    : []
+  if (types.length > 0) {
+    sections.push(`# Tipos de teste a cobrir\n\n${types.join(', ')}`)
+  }
+
+  if (sections.length === 0) {
+    return '> (sem contexto de planejamento fornecido pela QA — trabalhe apenas com o código)'
+  }
+  return sections.join('\n\n')
 }
 
 async function unzipFromData(

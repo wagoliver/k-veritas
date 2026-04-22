@@ -241,6 +241,56 @@ export function useAnthropicConfig(): AnthropicConfig | null {
   return cfg
 }
 
+export interface OrgPrimaryConfig {
+  provider: AiProvider
+  baseUrl: string
+  defaultModel: string | null
+  hasKey: boolean
+}
+
+/**
+ * Busca a config primária da org (provider, baseUrl, model) pra alimentar
+ * o ModelPicker em fluxos que respeitam `resolveAiConfig` — ou seja, que
+ * aceitam qualquer provider (Ollama, openai-compatible, Anthropic). Usar
+ * em vez de `useAnthropicConfig` quando o endpoint chamado não é o codex.
+ */
+export function useOrgPrimaryConfig(): OrgPrimaryConfig | null {
+  const [cfg, setCfg] = useState<OrgPrimaryConfig | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    fetch('/api/orgs/current/ai-config', {
+      headers: { 'X-Requested-With': 'fetch' },
+    })
+      .then(async (res) => {
+        if (!res.ok) return
+        const body = (await res.json()) as {
+          config: {
+            provider?: string
+            baseUrl?: string
+            model?: string
+            hasApiKey?: boolean
+          } | null
+        }
+        if (cancelled || !body.config) return
+        const provider = body.config.provider as AiProvider | undefined
+        if (!provider || !body.config.baseUrl) return
+        setCfg({
+          provider,
+          baseUrl: body.config.baseUrl,
+          defaultModel: body.config.model ?? null,
+          hasKey: Boolean(body.config.hasApiKey),
+        })
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  return cfg
+}
+
 /**
  * Hook que persiste a escolha de modelo em localStorage, com chave
  * específica por projeto + ação (ex.: "model:proj-abc:code-analysis").

@@ -218,6 +218,8 @@ export const projects = pgTable(
     repoBranch: text('repo_branch').notNull().default('main'),
     repoZipPath: text('repo_zip_path'),
     businessContext: text('business_context'),
+    testScenarios: jsonb('test_scenarios').notNull().default(sql`'[]'::jsonb`),
+    testTypes: jsonb('test_types').notNull().default(sql`'["e2e"]'::jsonb`),
     createdBy: uuid('created_by')
       .notNull()
       .references(() => users.id),

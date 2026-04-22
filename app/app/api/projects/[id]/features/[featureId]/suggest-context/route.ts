@@ -81,6 +81,12 @@ export async function POST(
     return NextResponse.json({ suggestion })
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'unknown'
+    const stack = err instanceof Error ? err.stack : undefined
+    console.error(
+      `[suggest-context] feature=${featureId} project=${project.id} failed:`,
+      msg,
+      stack,
+    )
     return Problems.server(`suggest_failed: ${msg}`)
   }
 }

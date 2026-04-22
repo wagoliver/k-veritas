@@ -33,6 +33,8 @@ export interface Project {
   repo_branch: string
   repo_zip_path: string | null
   business_context: string | null
+  test_scenarios: string[]
+  test_types: string[]
   target_locale: string
 }
 
@@ -71,7 +73,7 @@ export async function claimNextJob(
   const projectRows = await sql<Project[]>`
     SELECT id, org_id, name, slug,
            source_type, repo_url, repo_branch, repo_zip_path,
-           business_context, target_locale
+           business_context, test_scenarios, test_types, target_locale
     FROM projects WHERE id = ${job.project_id} LIMIT 1
   `
   const project = projectRows[0]

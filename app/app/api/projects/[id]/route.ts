@@ -42,6 +42,8 @@ export async function GET(
     repoUrl: project.repoUrl,
     repoBranch: project.repoBranch,
     businessContext: project.businessContext,
+    testScenarios: project.testScenarios ?? [],
+    testTypes: project.testTypes ?? ['e2e'],
     createdAt: project.createdAt,
     updatedAt: project.updatedAt,
   })
@@ -116,6 +118,19 @@ export async function PATCH(
 
   if (parsed.data.businessContext !== undefined) {
     updates.businessContext = parsed.data.businessContext || null
+  }
+
+  if (parsed.data.testScenarios !== undefined) {
+    updates.testScenarios = parsed.data.testScenarios
+  }
+
+  if (parsed.data.testTypes !== undefined) {
+    // Garante E2E presente: é o tipo default do Playwright e faz pouco
+    // sentido gerar Smoke/Regression sem ter E2E como base.
+    const types = parsed.data.testTypes.includes('e2e')
+      ? parsed.data.testTypes
+      : ['e2e', ...parsed.data.testTypes]
+    updates.testTypes = types
   }
 
   await db.update(projects).set(updates).where(eq(projects.id, project.id))
