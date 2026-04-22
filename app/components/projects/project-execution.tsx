@@ -10,6 +10,7 @@ import {
   Image as ImageIcon,
   Loader2,
   Play,
+  Settings as SettingsIcon,
 } from 'lucide-react'
 import { useEffect, useMemo, useState, useTransition } from 'react'
 import { useTranslations } from 'next-intl'
@@ -25,6 +26,7 @@ import {
   parseTestCode,
 } from '@/lib/ai/parse-playwright-test'
 import { parsePlaywrightError } from '@/lib/ai/parse-playwright-error'
+import { ProjectSetupSheet } from './project-setup'
 import {
   TestFlowView,
   type StepArtifact,
@@ -117,6 +119,7 @@ export function ProjectExecution({ projectId }: { projectId: string }) {
   const [latest, setLatest] = useState<LatestResult[]>([])
   const [running, setRunning] = useState<RunningInfo[]>([])
   const [tick, setTick] = useState(0)
+  const [setupOpen, setSetupOpen] = useState(false)
   void tick
 
   const load = async () => {
@@ -212,12 +215,30 @@ export function ProjectExecution({ projectId }: { projectId: string }) {
 
   if (featuresWithTests.length === 0) {
     return (
-      <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-border p-12 text-center">
-        <Play className="size-8 text-muted-foreground" />
-        <p className="max-w-md text-sm text-muted-foreground">
-          {t('empty')}
-        </p>
-      </div>
+      <section className="space-y-4">
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={() => setSetupOpen(true)}
+          >
+            <SettingsIcon className="size-3.5" />
+            {t('open_setup')}
+          </Button>
+        </div>
+        <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-border p-12 text-center">
+          <Play className="size-8 text-muted-foreground" />
+          <p className="max-w-md text-sm text-muted-foreground">
+            {t('empty')}
+          </p>
+        </div>
+        <ProjectSetupSheet
+          projectId={projectId}
+          open={setupOpen}
+          onOpenChange={setSetupOpen}
+        />
+      </section>
     )
   }
 
@@ -235,6 +256,18 @@ export function ProjectExecution({ projectId }: { projectId: string }) {
 
   return (
     <section className="space-y-4">
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          onClick={() => setSetupOpen(true)}
+        >
+          <SettingsIcon className="size-3.5" />
+          {t('open_setup')}
+        </Button>
+      </div>
+
       <div className="rounded-lg border border-border bg-card p-3 text-xs">
         <div className="font-medium">
           {t('summary', { total: totalTests })}
@@ -278,6 +311,12 @@ export function ProjectExecution({ projectId }: { projectId: string }) {
           />
         ))}
       </div>
+
+      <ProjectSetupSheet
+        projectId={projectId}
+        open={setupOpen}
+        onOpenChange={setSetupOpen}
+      />
     </section>
   )
 }
@@ -671,6 +710,10 @@ function RunFlow({
   const [open, setOpen] = useState(false)
   const [detail, setDetail] = useState<RunDetail | null>(null)
   const [loadingDetail, setLoadingDetail] = useState(false)
+  // `fetched` fecha o loop quando a API responde sem match ou com array
+  // vazio: sem esse flag o effect re-roda pra sempre tentando popular
+  // `detail` que nunca é setado.
+  const [fetched, setFetched] = useState(false)
   const [lightbox, setLightbox] = useState(false)
 
   const parsed = parseTestCode(code)
@@ -703,13 +746,18 @@ function RunFlow({
     }
   }
 
+  // Reset do fetched quando o runId muda (ex.: após um re-run).
+  useEffect(() => {
+    setFetched(false)
+    setDetail(null)
+  }, [runId])
+
   // Carrega os detalhes do run (step events + screenshot + trace) só quando
   // o usuário expande o flow, pra não fazer N+1 requests no listing.
-  // Sem runId (cenário nunca foi rodado) não há detail pra buscar — o
-  // expand só mostra o código parseado em estado idle.
+  // Sem runId (cenário nunca foi rodado) não há detail pra buscar.
   useEffect(() => {
     if (!runId) return
-    if (!open || detail !== null || loadingDetail) return
+    if (!open || fetched || loadingDetail) return
     let cancelled = false
     setLoadingDetail(true)
     fetch(`/api/projects/${projectId}/test-exec/runs/${runId}`, {
@@ -732,26 +780,40 @@ function RunFlow({
         const match =
           data.results.find((r) => r.scenarioIdSnapshot === scenarioId) ??
           data.results[0]
-        if (match) {
-          setDetail({
-            screenshotUrl: match.screenshotUrl,
-            traceUrl: match.traceUrl,
-            stepEvents: match.stepEvents,
-            errorMessage: match.errorMessage,
-            errorStack: match.errorStack,
-          })
-        }
+        // Sempre grava algo no detail: se não achou, fica com campos
+        // vazios pro EvidenceBlock mostrar "sem evidências" em vez de
+        // ficar em loading infinito.
+        setDetail(
+          match
+            ? {
+                screenshotUrl: match.screenshotUrl,
+                traceUrl: match.traceUrl,
+                stepEvents: match.stepEvents,
+                errorMessage: match.errorMessage,
+                errorStack: match.errorStack,
+              }
+            : {
+                screenshotUrl: null,
+                traceUrl: null,
+                stepEvents: [],
+                errorMessage: null,
+                errorStack: null,
+              },
+        )
       })
       .catch(() => {
         if (!cancelled) toast.error(t('errors.network'))
       })
       .finally(() => {
-        if (!cancelled) setLoadingDetail(false)
+        if (!cancelled) {
+          setLoadingDetail(false)
+          setFetched(true)
+        }
       })
     return () => {
       cancelled = true
     }
-  }, [open, detail, loadingDetail, projectId, runId, scenarioId, t])
+  }, [open, fetched, loadingDetail, projectId, runId, scenarioId, t])
 
   // Status derivado a partir dos step events reais (preferível) ou da
   // heurística `locateFailedStepIndex` (fallback quando ainda carregando).
@@ -877,7 +939,13 @@ function EvidenceBlock({
 
   const { screenshotUrl, traceUrl } = detail
 
-  if (!screenshotUrl && !traceUrl) return null
+  if (!screenshotUrl && !traceUrl) {
+    return (
+      <div className="border-t border-border/40 bg-muted/20 px-3 py-2 text-[11px] text-muted-foreground">
+        {t('evidence_empty')}
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-3 border-t border-border/40 bg-muted/20 p-3">

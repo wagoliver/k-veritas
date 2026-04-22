@@ -245,7 +245,7 @@ export function SidebarNav({ org, hasMultipleOrgs }: SidebarNavProps) {
 }
 
 const PROJECT_SECTIONS: Array<{
-  key: 'map' | 'analysis' | 'test_scenarios' | 'setup' | 'execution'
+  key: 'map' | 'analysis' | 'test_scenarios' | 'execution'
   slug: string
   icon: typeof Map
 }> = [
@@ -255,7 +255,6 @@ const PROJECT_SECTIONS: Array<{
   // O slug de URL continua 'analysis' por retrocompatibilidade.
   { key: 'analysis', slug: 'analysis', icon: ScrollText },
   { key: 'test_scenarios', slug: 'test-scenarios', icon: FileCode2 },
-  { key: 'setup', slug: 'setup', icon: SettingsIcon },
   { key: 'execution', slug: 'execution', icon: Play },
 ]
 

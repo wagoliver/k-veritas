@@ -123,7 +123,6 @@
         "map": "Estrutura",
         "analysis": "Cenários",
         "test_scenarios": "Scripts",
-        "setup": "Setup",
         "execution": "Execução"
       }
     },
@@ -290,18 +289,27 @@
         "analysis": "Cenários",
         "tests": "Testes",
         "test_scenarios": "Scripts",
-        "setup": "Setup",
         "execution": "Execução"
       },
       "setup": {
-        "heading": "Setup — Variáveis de ambiente",
-        "description": "As variáveis abaixo são injetadas no processo do Playwright quando você executa os testes. A IA tende a usar credenciais como process.env.E2E_USER / E2E_PASSWORD — cadastre aqui os valores do ambiente de teste.",
-        "pending_hint": "{count} variável(eis) detectada(s) nos testes sem valor cadastrado — preencha antes de rodar, senão o teste vai falhar com 'undefined'.",
-        "table_summary": "{count} variáveis",
-        "empty": "Nenhuma variável cadastrada ou detectada ainda.",
-        "add_heading": "Adicionar variável",
-        "add_name_placeholder": "E2E_USER",
-        "add_value_placeholder": "valor (será cifrado)",
+        "heading": "Variáveis de teste",
+        "description": "Valores injetados no processo do Playwright quando você roda os testes. Cifrados no banco.",
+        "pending_hint": "{count} variável(eis) detectada(s) nos testes sem valor cadastrado. Preencha antes de rodar, senão o teste falha com 'undefined'.",
+        "primary_heading": "Acesso padrão",
+        "primary_label": {
+          "BASE_URL": "URL base",
+          "E2E_USER": "Usuário (login)",
+          "E2E_PASSWORD": "Senha"
+        },
+        "primary_hint": {
+          "BASE_URL": "opcional. sobrescreve URL do projeto",
+          "E2E_USER": "email / login do ambiente de teste",
+          "E2E_PASSWORD": "senha correspondente"
+        },
+        "others_heading": "Outras variáveis",
+        "empty_others": "Nenhuma variável adicional detectada ou cadastrada.",
+        "add_name_placeholder": "NOME_VAR",
+        "add_value_placeholder": "valor (cifrado)",
         "add_button": "Adicionar",
         "detected_badge": "detectada",
         "detected_tooltip": "Variável usada em pelo menos um .spec.ts gerado",
@@ -309,15 +317,14 @@
         "value_placeholder_set": "definir valor",
         "reveal": "Mostrar",
         "hide": "Ocultar",
-        "delete": "Marcar pra remover",
+        "delete": "Remover",
+        "close": "Fechar",
         "save": "Salvar",
         "toast_saved": "Variáveis atualizadas.",
-        "footer_hint": "Valores são cifrados no banco.",
-        "pending_delete": "{count} pra remover ao salvar",
         "errors": {
           "load": "Não foi possível carregar as variáveis.",
           "save": "Falha ao salvar as variáveis.",
-          "invalid_name": "Nome inválido — use UPPER_SNAKE_CASE (ex.: E2E_USER).",
+          "invalid_name": "Nome inválido. use UPPER_SNAKE_CASE (ex.: E2E_USER).",
           "duplicate_name": "Já existe variável com esse nome."
         }
       },
@@ -338,9 +345,11 @@
         "never_run": "Ainda não executado",
         "enqueued": "Execução enfileirada. O runner pega em instantes.",
         "enqueued_batch": "{count} execuções enfileiradas.",
+        "open_setup": "Variáveis",
         "flow_toggle": "Ver fluxo do teste",
         "flow_failed_at": "etapa identificada",
         "evidence_loading": "Carregando evidências…",
+        "evidence_empty": "Este run não tem evidências capturadas (sem screenshot nem trace).",
         "evidence_screenshot_label": "Captura final do teste",
         "evidence_screenshot_alt": "Screenshot do navegador no momento do teste",
         "evidence_screenshot_hint": "Imagem tirada ao final do teste. Clique para ampliar.",
@@ -433,7 +442,7 @@
         "errors": {
           "rate_limited": "Muitas análises iniciadas. Aguarde antes de tentar de novo.",
           "conflict": "Já existe uma análise em andamento.",
-          "no_crawl": "Faça um crawl antes de analisar — a IA precisa do mapa do site.",
+          "no_crawl": "Faça um crawl antes de analisar. a IA precisa do mapa do site.",
           "failed": "Análise falhou: {reason}",
           "failed_title": "A análise falhou",
           "network": "Falha de conexão.",
@@ -533,10 +542,10 @@
             "rationale_placeholder": "Valida que o filtro por CNPJ encontra o cliente mesmo com o filtro por status ativo.",
             "priority_label": "Prioridade",
             "priority": {
-              "critical": "Crítico — falha causa perda financeira/legal",
-              "high": "Alto — fluxo frequente",
-              "normal": "Normal — variação ou caso comum",
-              "low": "Baixo — edge case opcional"
+              "critical": "Crítico. falha causa perda financeira/legal",
+              "high": "Alto. fluxo frequente",
+              "normal": "Normal. variação ou caso comum",
+              "low": "Baixo. edge case opcional"
             },
             "preconditions_label": "Pré-condições",
             "preconditions_hint": "Estado do sistema que deve existir antes do cenário começar.",
@@ -560,7 +569,7 @@
           "sheet_feature": {
             "title_new": "Nova feature",
             "title_edit": "Editar feature",
-            "description_hint": "Feature é um agrupamento funcional — uma capacidade de negócio.",
+            "description_hint": "Feature é um agrupamento funcional. uma capacidade de negócio.",
             "name_label": "Nome",
             "name_placeholder": "Ex.: Gestão de fornecedores",
             "description_label": "Descrição",
@@ -639,9 +648,9 @@
           "completed_banner_title": "Análise concluída!",
           "completed_banner_subtitle": "{tokens} tokens usados em {turns} turnos. Os cenários estão prontos para revisão.",
           "completed_cta_scenarios": "Ver cenários",
-          "completed_with_warning_hint": "Rodou com avisos — o manifest foi importado mesmo assim. Ver detalhes nos eventos acima.",
+          "completed_with_warning_hint": "Rodou com avisos. o manifest foi importado mesmo assim. Ver detalhes nos eventos acima.",
           "completed_failed_title": "A análise falhou",
-          "toast_completed": "Análise concluída — cenários prontos.",
+          "toast_completed": "Análise concluída. cenários prontos.",
           "toast_failed": "A análise falhou. Veja os eventos para detalhes.",
           "status": {
             "pending": "Enfileirado",
@@ -688,7 +697,7 @@
               },
               "error": {
                 "claude_failed": "Erro durante a análise",
-                "partial_success": "Limite atingido — manifest parcial aproveitado"
+                "partial_success": "Limite atingido. manifest parcial aproveitado"
               }
             }
           }
@@ -707,8 +716,8 @@
         },
         "row": {
           "open_detail": "Ver elementos capturados",
-          "no_elements_hint": "Nenhum elemento capturado. Provavelmente a SPA não finalizou de hidratar — tente recrawlear.",
-          "redirected_to": "Redirecionou para {target} — elementos não extraídos"
+          "no_elements_hint": "Nenhum elemento capturado. Provavelmente a SPA não finalizou de hidratar. tente recrawlear.",
+          "redirected_to": "Redirecionou para {target}. elementos não extraídos"
         },
         "view": {
           "tree": "Árvore",
@@ -765,7 +774,7 @@
         "events": {
           "queued": "Crawl agendado, aguardando worker disponível",
           "worker_ready": "Worker acordou, iniciando navegador",
-          "captured": "{url} capturada — {elements} elementos",
+          "captured": "{url} capturada. {elements} elementos",
           "completed": "Concluído: {count} páginas mapeadas",
           "failed": "Falhou: {reason}"
         }
@@ -910,13 +919,13 @@
         "max_depth_label": "Profundidade máxima",
         "max_depth_hint": "A URL inicial é profundidade 0; cada link seguido adiciona +1. Links além deste limite são ignorados (evita paginações infinitas, filtros dinâmicos e loops).",
         "depth_options": {
-          "1": "1 — apenas a URL inicial",
-          "2": "2 — rasa",
-          "3": "3 — simples (recomendado)",
-          "4": "4 — moderada",
-          "5": "5 — complexa (marketplaces)",
-          "7": "7 — profunda",
-          "10": "10 — máxima"
+          "1": "1. apenas a URL inicial",
+          "2": "2. rasa",
+          "3": "3. simples (recomendado)",
+          "4": "4. moderada",
+          "5": "5. complexa (marketplaces)",
+          "7": "7. profunda",
+          "10": "10. máxima"
         }
       },
       "ai": {
@@ -1004,7 +1013,7 @@
         "title": "Análise de código (Claude Code)",
         "subtitle": "A análise de código-fonte usa o Claude Code CLI. Escolha entre colar um ANTHROPIC_API_KEY (consumo por token) ou um token OAuth gerado pela sua assinatura Pro/Max (limites mais altos, uso interno).",
         "required_warning": "Sem uma credencial Anthropic (aqui ou no provider principal), a aba Code dos projetos code-first fica desabilitada.",
-        "reuse_hint": "Seu provider principal já é Anthropic — a mesma chave será reaproveitada a menos que você forneça uma diferente abaixo.",
+        "reuse_hint": "Seu provider principal já é Anthropic. a mesma chave será reaproveitada a menos que você forneça uma diferente abaixo.",
         "auth_mode_label": "Modo de autenticação",
         "auth_mode_api_key_title": "ANTHROPIC_API_KEY",
         "auth_mode_api_key_desc": "Conta Anthropic pay-as-you-go. Custo por token, rate limit por tier (10k–400k TPM).",
@@ -1013,20 +1022,20 @@
         "oauth_setup_title": "Como gerar o token OAuth",
         "oauth_setup_desc": "Na sua máquina, com o Claude Code CLI instalado e logado via conta Pro/Max, rode o comando acima. O CLI devolve um token começando com sk-ant-oat01-... (válido por 90 dias). Cole o token no campo abaixo.",
         "oauth_token_label": "CLAUDE_CODE_OAUTH_TOKEN",
-        "oauth_token_hint": "Cole o token retornado por `claude setup-token` (começa com sk-ant-oat01-...). Fica cifrado em AES-256-GCM e expira em ~90 dias — regere quando necessário.",
-        "oauth_test_saved": "Formato OK (token salvo). Tokens OAuth só podem ser validados de verdade na primeira análise — a Anthropic não expõe endpoint REST pra testar OAuth. Se a análise falhar com 401, regere o token.",
-        "oauth_test_format_ok": "Formato OK (prefixo sk-ant-oat reconhecido). A validação real acontece no primeiro job do codex — tokens OAuth não podem ser testados via REST direto.",
+        "oauth_token_hint": "Cole o token retornado por `claude setup-token` (começa com sk-ant-oat01-...). Fica cifrado em AES-256-GCM e expira em ~90 dias. regere quando necessário.",
+        "oauth_test_saved": "Formato OK (token salvo). Tokens OAuth só podem ser validados de verdade na primeira análise. a Anthropic não expõe endpoint REST pra testar OAuth. Se a análise falhar com 401, regere o token.",
+        "oauth_test_format_ok": "Formato OK (prefixo sk-ant-oat reconhecido). A validação real acontece no primeiro job do codex. tokens OAuth não podem ser testados via REST direto.",
         "oauth_test_format_bad": "Formato inesperado. Tokens OAuth começam com 'sk-ant-oat' e têm ~90 caracteres. Se você colou um ANTHROPIC_API_KEY por engano, troque o modo para \"ANTHROPIC_API_KEY\".",
         "oauth_test_missing": "Cole o token no campo acima antes de testar.",
         "api_key_label": "ANTHROPIC_API_KEY",
         "api_key_hint": "Cole a chave da sua conta Anthropic (começa com sk-ant-api...). Fica cifrada em AES-256-GCM.",
         "api_key_saved": "Uma credencial Anthropic está salva. Deixe em branco para mantê-la. Marque \"remover\" para apagá-la.",
-        "api_key_reused": "Sem credencial dedicada — o codex usa a chave do provider principal (modo API key).",
+        "api_key_reused": "Sem credencial dedicada. o codex usa a chave do provider principal (modo API key).",
         "api_key_clear": "Remover credencial Anthropic dedicada",
         "model_label": "Modelo Claude",
         "model_hint": "Identificador completo do modelo (ex.: claude-sonnet-4-5-20250929 ou claude-haiku-4-5). Deixe em branco para usar o default do container.",
         "model_hint_dynamic": "{count} modelo(s) disponível(is) na sua conta. Clique no campo para ver sugestões ou digite livre.",
-        "model_hint_oauth": "Tokens OAuth (Pro/Max) não listam modelos via REST — digite o identificador manualmente. Ex.: claude-sonnet-4-5-20250929.",
+        "model_hint_oauth": "Tokens OAuth (Pro/Max) não listam modelos via REST. digite o identificador manualmente. Ex.: claude-sonnet-4-5-20250929.",
         "model_hint_no_credential": "Salve uma credencial Anthropic acima para listar os modelos disponíveis automaticamente."
       },
       "providers_section": {
