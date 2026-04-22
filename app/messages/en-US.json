@@ -736,6 +736,31 @@
           "failed": "Failed: {reason}"
         }
       },
+      "test_scripts": {
+        "heading": "Generated scripts",
+        "summary": "{features} features · {tests} tests",
+        "empty_title": "No tests generated yet",
+        "empty_description": "Generate tests on the Scenarios screen. They show up here ready to copy or download as ZIP.",
+        "download_zip": "Download ZIP",
+        "feature_count": "{generated}/{total} tests generated",
+        "empty_feature": "No tests generated for this feature.",
+        "show_code": "Show code",
+        "hide_code": "Hide code",
+        "copy": "Copy",
+        "priority": {
+          "critical": "Critical",
+          "high": "High",
+          "normal": "Normal",
+          "low": "Low"
+        },
+        "toast_downloaded": "Download started.",
+        "toast_copied": "Code copied.",
+        "errors": {
+          "load": "Couldn't load scripts.",
+          "download": "Failed to generate ZIP.",
+          "copy": "Couldn't copy the code."
+        }
+      },
       "scenarios": {
         "heading": "Scenarios per feature",
         "summary": "{features} features · {scenarios} scenarios · {generated} tests generated",

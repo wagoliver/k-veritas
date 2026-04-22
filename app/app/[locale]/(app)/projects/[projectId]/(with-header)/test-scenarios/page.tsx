@@ -3,7 +3,7 @@ import { setRequestLocale } from 'next-intl/server'
 
 import { getServerSession } from '@/lib/auth/session'
 import { authorizeProject } from '@/lib/auth/project-access'
-import { AnalysisEditor } from '@/components/projects/analysis-editor'
+import { ProjectTestScripts } from '@/components/projects/project-test-scripts'
 
 export default async function ProjectTestScenariosPage({
   params,
@@ -18,5 +18,5 @@ export default async function ProjectTestScenariosPage({
   const project = await authorizeProject(session.user.id, projectId)
   if (!project) notFound()
 
-  return <AnalysisEditor projectId={project.id} mode="reviewed" />
+  return <ProjectTestScripts projectId={project.id} />
 }

@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server'
-import { and, eq } from 'drizzle-orm'
+import { and, desc, eq, inArray } from 'drizzle-orm'
 
 import { db } from '@/lib/db/pg'
 import {
@@ -105,6 +105,42 @@ export async function POST(
     (aiCfg?.provider === 'anthropic' && Boolean(aiCfg?.apiKeyEncrypted))
   if (!hasAnthropic) {
     return Problems.invalidBody({ anthropicKey: 'anthropic_key_missing' })
+  }
+
+  // Dedup: se já existe job ativo (pending/running) pra esta combinação
+  // (feature, cenário), reusa em vez de enfileirar duplicata. A QA pode
+  // clicar "Gerar selecionados" várias vezes ou combinar com "Regerar"
+  // sem queimar tokens em execuções idênticas. Upsert final em
+  // feature_ai_scenario_tests garante que qualquer que seja o último a
+  // terminar, o resultado vale.
+  const [existing] = await db
+    .select({
+      id: codeAnalysisJobs.id,
+      status: codeAnalysisJobs.status,
+    })
+    .from(codeAnalysisJobs)
+    .where(
+      and(
+        eq(codeAnalysisJobs.projectId, project.id),
+        eq(codeAnalysisJobs.phase, 'scenario_test'),
+        eq(codeAnalysisJobs.targetFeatureId, featureId),
+        eq(codeAnalysisJobs.targetScenarioId, scenarioId),
+        inArray(codeAnalysisJobs.status, ['pending', 'running']),
+      ),
+    )
+    .orderBy(desc(codeAnalysisJobs.createdAt))
+    .limit(1)
+  if (existing) {
+    return NextResponse.json(
+      {
+        jobId: existing.id,
+        status: existing.status,
+        featureId,
+        scenarioId,
+        deduplicated: true,
+      },
+      { status: 202 },
+    )
   }
 
   // Model override opcional no body

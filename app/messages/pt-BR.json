@@ -736,6 +736,31 @@
           "failed": "Falhou: {reason}"
         }
       },
+      "test_scripts": {
+        "heading": "Scripts gerados",
+        "summary": "{features} features · {tests} testes",
+        "empty_title": "Nenhum teste gerado ainda",
+        "empty_description": "Gere testes na tela Cenários. Eles aparecem aqui prontos pra copiar ou baixar em ZIP.",
+        "download_zip": "Baixar ZIP",
+        "feature_count": "{generated}/{total} testes gerados",
+        "empty_feature": "Sem testes gerados para esta feature.",
+        "show_code": "Ver código",
+        "hide_code": "Esconder código",
+        "copy": "Copiar",
+        "priority": {
+          "critical": "Crítico",
+          "high": "Alto",
+          "normal": "Normal",
+          "low": "Baixo"
+        },
+        "toast_downloaded": "Download iniciado.",
+        "toast_copied": "Código copiado.",
+        "errors": {
+          "load": "Não foi possível carregar os scripts.",
+          "download": "Falha ao gerar o ZIP.",
+          "copy": "Não foi possível copiar o código."
+        }
+      },
       "scenarios": {
         "heading": "Cenários por feature",
         "summary": "{features} features · {scenarios} cenários · {generated} testes gerados",
