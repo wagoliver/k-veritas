@@ -37,16 +37,24 @@ export async function GET(
   // Seed automático: se não há features mas existe análise antiga no jsonb,
   // popula as tabelas editáveis a partir dela. Ocorre no máximo uma vez.
   const featuresReviewer = alias(users, 'features_reviewer')
+  const featuresApprover = alias(users, 'features_approver')
+  const selectShape = {
+    feature: analysisFeatures,
+    reviewerDisplay: featuresReviewer.displayName,
+    reviewerEmail: featuresReviewer.email,
+    approverDisplay: featuresApprover.displayName,
+    approverEmail: featuresApprover.email,
+  } as const
   let features = await db
-    .select({
-      feature: analysisFeatures,
-      reviewerDisplay: featuresReviewer.displayName,
-      reviewerEmail: featuresReviewer.email,
-    })
+    .select(selectShape)
     .from(analysisFeatures)
     .leftJoin(
       featuresReviewer,
       eq(featuresReviewer.id, analysisFeatures.reviewedBy),
+    )
+    .leftJoin(
+      featuresApprover,
+      eq(featuresApprover.id, analysisFeatures.approvedBy),
     )
     .where(eq(analysisFeatures.projectId, project.id))
     .orderBy(asc(analysisFeatures.sortOrder))
@@ -55,15 +63,15 @@ export async function GET(
     const seeded = await seedEditableFromLatestAnalysis(project.id)
     if (seeded) {
       features = await db
-        .select({
-          feature: analysisFeatures,
-          reviewerDisplay: featuresReviewer.displayName,
-          reviewerEmail: featuresReviewer.email,
-        })
+        .select(selectShape)
         .from(analysisFeatures)
         .leftJoin(
           featuresReviewer,
           eq(featuresReviewer.id, analysisFeatures.reviewedBy),
+        )
+        .leftJoin(
+          featuresApprover,
+          eq(featuresApprover.id, analysisFeatures.approvedBy),
         )
         .where(eq(analysisFeatures.projectId, project.id))
         .orderBy(asc(analysisFeatures.sortOrder))
@@ -158,7 +166,13 @@ export async function GET(
           aiUnderstanding: f.aiUnderstanding,
           aiScenarios: f.aiScenarios,
           approvedAt: f.approvedAt,
-          approvedBy: f.approvedBy,
+          approvedBy: f.approvedBy
+            ? {
+                id: f.approvedBy,
+                displayName:
+                  row.approverDisplay ?? row.approverEmail ?? 'Unknown',
+              }
+            : null,
           scenarios: (scenariosByFeature.get(f.id) ?? []).map((r) => {
             const s = r.scenario
             const latestTest = latestTestByScenario.get(s.id) ?? null

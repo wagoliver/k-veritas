@@ -109,9 +109,9 @@ Formato esperado:
         "rationale": "Por que essas rotas formam uma feature",
         "aiUnderstanding": "2-5 frases em prosa sobre como a feature funciona, baseado no que você leu do código",
         "aiScenarios": [
-          "Caminho feliz descrito em linguagem de QA",
-          "Variação/erro esperado",
-          "..."
+          { "description": "Caminho feliz descrito em linguagem de QA", "priority": "critical" },
+          { "description": "Variação/erro esperado", "priority": "high" },
+          { "description": "...", "priority": "normal" }
         ]
       }
     ]

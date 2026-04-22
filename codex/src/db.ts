@@ -308,7 +308,10 @@ export async function importStructure(params: {
     description: string
     paths: string[]
     aiUnderstanding: string | null
-    aiScenarios: string[]
+    aiScenarios: Array<{
+      description: string
+      priority: 'critical' | 'high' | 'normal' | 'low'
+    }>
   }>
 }): Promise<string> {
   return await sql.begin(async (tx) => {

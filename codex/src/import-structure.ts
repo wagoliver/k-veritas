@@ -9,6 +9,13 @@ const DATA_DIR = env('DATA_DIR', '/data')
 // Shape do features.json escrito pelo Claude Code na fase 'structure'.
 // É mais enxuto que o manifest da fase 'tests' — sem cenários, sem
 // preconditions, sem dataNeeded.
+type Priority = 'critical' | 'high' | 'normal' | 'low'
+
+interface StructureScenario {
+  description: string
+  priority: Priority
+}
+
 interface StructureFeature {
   id?: string
   name: string
@@ -16,7 +23,31 @@ interface StructureFeature {
   paths: string[]
   rationale?: string
   aiUnderstanding?: string
-  aiScenarios?: string[]
+  // Suporta os dois formatos durante transição: string[] (legado, pré-prioridade)
+  // e array de objetos (atual). O parser normaliza.
+  aiScenarios?: Array<string | Partial<StructureScenario>>
+}
+
+const VALID_PRIORITIES: Priority[] = ['critical', 'high', 'normal', 'low']
+
+function normalizeScenario(
+  raw: string | Partial<StructureScenario>,
+): StructureScenario | null {
+  if (typeof raw === 'string') {
+    const desc = raw.trim()
+    if (desc.length < 4) return null
+    return { description: desc, priority: 'normal' }
+  }
+  if (!raw || typeof raw !== 'object') return null
+  const desc =
+    typeof raw.description === 'string' ? raw.description.trim() : ''
+  if (desc.length < 4) return null
+  const prio =
+    typeof raw.priority === 'string' &&
+    (VALID_PRIORITIES as string[]).includes(raw.priority)
+      ? (raw.priority as Priority)
+      : 'normal'
+  return { description: desc, priority: prio }
 }
 
 interface StructureManifest {
@@ -103,11 +134,8 @@ export async function importStructureManifest(params: {
           : null,
       aiScenarios: Array.isArray(f.aiScenarios)
         ? f.aiScenarios
-            .filter(
-              (s): s is string =>
-                typeof s === 'string' && s.trim().length > 0,
-            )
-            .map((s) => s.trim())
+            .map((s) => normalizeScenario(s))
+            .filter((s): s is StructureScenario => s !== null)
             .slice(0, 20)
         : [],
     })),

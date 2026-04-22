@@ -13,6 +13,13 @@ import { useTranslations } from 'next-intl'
 import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
+import { DateTime } from '@/components/ui/date-time'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
 import {
   Sheet,
@@ -24,7 +31,20 @@ import {
 } from '@/components/ui/sheet'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
-import type { FeatureCard } from './feature-context-cards'
+import type {
+  AiScenario,
+  FeatureCard,
+  ScenarioPriority,
+} from './feature-context-cards'
+
+const PRIORITIES: ScenarioPriority[] = ['critical', 'high', 'normal', 'low']
+
+const PRIORITY_CLASSES: Record<ScenarioPriority, string> = {
+  critical: 'bg-destructive/15 text-destructive',
+  high: 'bg-amber-500/15 text-amber-600 dark:text-amber-400',
+  normal: 'bg-primary/15 text-primary',
+  low: 'bg-muted text-muted-foreground',
+}
 
 interface Props {
   feature: FeatureCard | null
@@ -46,9 +66,13 @@ export function FeatureContextSheet({
   const [name, setName] = useState('')
   const [editingName, setEditingName] = useState(false)
   const [aiUnderstanding, setAiUnderstanding] = useState('')
-  const [aiScenarios, setAiScenarios] = useState<string[]>([])
+  const [aiScenarios, setAiScenarios] = useState<AiScenario[]>([])
   const [scenarioDraft, setScenarioDraft] = useState('')
   const [approvedAt, setApprovedAt] = useState<string | null>(null)
+  const [approvedBy, setApprovedBy] = useState<{
+    id: string
+    displayName: string
+  } | null>(null)
   const [saving, startSave] = useTransition()
   const [deleting, startDelete] = useTransition()
   const [approving, startApprove] = useTransition()
@@ -58,9 +82,12 @@ export function FeatureContextSheet({
     setName(feature.name)
     setEditingName(false)
     setAiUnderstanding(feature.aiUnderstanding ?? '')
-    setAiScenarios(feature.aiScenarios ?? [])
+    setAiScenarios(
+      Array.isArray(feature.aiScenarios) ? feature.aiScenarios : [],
+    )
     setScenarioDraft('')
     setApprovedAt(feature.approvedAt)
+    setApprovedBy(feature.approvedBy)
   }, [feature])
 
   if (!feature) return null
@@ -70,11 +97,13 @@ export function FeatureContextSheet({
   const addScenario = () => {
     const v = scenarioDraft.trim()
     if (v.length < 4) return
-    if (aiScenarios.includes(v)) {
+    if (aiScenarios.some((s) => s.description === v)) {
       setScenarioDraft('')
       return
     }
-    setAiScenarios((prev) => [...prev, v])
+    // Novo cenário adicionado pela QA entra como 'normal'; ela pode
+    // promover via dropdown depois.
+    setAiScenarios((prev) => [...prev, { description: v, priority: 'normal' }])
     setScenarioDraft('')
   }
 
@@ -82,11 +111,25 @@ export function FeatureContextSheet({
     setAiScenarios((prev) => prev.filter((_, i) => i !== idx))
   }
 
-  const editScenario = (idx: number, value: string) => {
+  const editScenario = (idx: number, description: string) => {
     setAiScenarios((prev) =>
-      prev.map((s, i) => (i === idx ? value : s)),
+      prev.map((s, i) => (i === idx ? { ...s, description } : s)),
     )
   }
+
+  const changePriority = (idx: number, priority: ScenarioPriority) => {
+    setAiScenarios((prev) =>
+      prev.map((s, i) => (i === idx ? { ...s, priority } : s)),
+    )
+  }
+
+  const normalizedScenarios = () =>
+    aiScenarios
+      .map((s) => ({
+        description: s.description.trim(),
+        priority: s.priority,
+      }))
+      .filter((s) => s.description.length >= 4)
 
   const save = (closeAfter = false) => {
     startSave(async () => {
@@ -101,9 +144,7 @@ export function FeatureContextSheet({
           body: JSON.stringify({
             name: editingName ? name.trim() : undefined,
             aiUnderstanding: aiUnderstanding.trim() || null,
-            aiScenarios: aiScenarios
-              .map((s) => s.trim())
-              .filter((s) => s.length >= 4),
+            aiScenarios: normalizedScenarios(),
           }),
         },
       )
@@ -120,8 +161,8 @@ export function FeatureContextSheet({
 
   const toggleApprove = () => {
     startApprove(async () => {
-      // Se ainda tem alterações não salvas, salva antes de aprovar —
-      // senão a QA aprova uma versão "em disco" diferente do que tá na tela.
+      // Salva antes de aprovar pra evitar aprovar versão "em disco"
+      // diferente do que tá na tela.
       const res = await fetch(
         `/api/projects/${projectId}/features/${feature.id}`,
         {
@@ -132,9 +173,7 @@ export function FeatureContextSheet({
           },
           body: JSON.stringify({
             aiUnderstanding: aiUnderstanding.trim() || null,
-            aiScenarios: aiScenarios
-              .map((s) => s.trim())
-              .filter((s) => s.length >= 4),
+            aiScenarios: normalizedScenarios(),
           }),
         },
       )
@@ -154,10 +193,9 @@ export function FeatureContextSheet({
         toast.error(t('errors.approve'))
         return
       }
-      const body = (await approveRes.json()) as {
-        feature: { approvedAt: string | null }
-      }
-      setApprovedAt(body.feature.approvedAt)
+      setApprovedAt(approved ? null : new Date().toISOString())
+      // approvedBy na resposta vem só como UUID; re-fetch no onChanged
+      // traz o displayName via join no endpoint GET /features.
       toast.success(
         approved ? t('toast_unapproved') : t('toast_approved'),
       )
@@ -198,17 +236,27 @@ export function FeatureContextSheet({
               {feature.name}
             </SheetDescription>
           </div>
-          {approved ? (
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-fin-gain/10 px-2.5 py-1 text-xs font-medium text-fin-gain">
-              <CheckCircle2 className="size-3.5" />
-              {t('approved_badge')}
-            </span>
-          ) : (
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground">
-              <Circle className="size-3.5" />
-              {t('pending_badge')}
-            </span>
-          )}
+          <div className="flex flex-col items-end gap-1">
+            {approved ? (
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-fin-gain/10 px-2.5 py-1 text-xs font-medium text-fin-gain">
+                <CheckCircle2 className="size-3.5" />
+                {t('approved_badge')}
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground">
+                <Circle className="size-3.5" />
+                {t('pending_badge')}
+              </span>
+            )}
+            {approved && approvedAt && approvedBy ? (
+              <p className="flex items-center gap-1 text-[11px] text-fin-gain">
+                <span>
+                  {t('approved_by_prefix', { name: approvedBy.displayName })}
+                </span>
+                <DateTime value={approvedAt} />
+              </p>
+            ) : null}
+          </div>
         </SheetHeader>
 
         <div className="flex-1 space-y-5 overflow-y-auto px-6 pb-4">
@@ -317,8 +365,43 @@ export function FeatureContextSheet({
                     key={i}
                     className="flex items-start gap-2 rounded border border-border bg-background px-2 py-1.5"
                   >
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button
+                          type="button"
+                          disabled={saving}
+                          className={cn(
+                            'mt-0.5 inline-flex shrink-0 cursor-pointer items-center rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider transition-opacity hover:opacity-80 disabled:cursor-not-allowed',
+                            PRIORITY_CLASSES[s.priority],
+                          )}
+                        >
+                          {t(`priority.${s.priority}`)}
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="start" className="w-40">
+                        {PRIORITIES.map((p) => (
+                          <DropdownMenuItem
+                            key={p}
+                            onSelect={() => changePriority(i, p)}
+                            className={cn(
+                              'text-xs',
+                              s.priority === p && 'bg-accent',
+                            )}
+                          >
+                            <span
+                              className={cn(
+                                'mr-2 inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider',
+                                PRIORITY_CLASSES[p],
+                              )}
+                            >
+                              {t(`priority.${p}`)}
+                            </span>
+                          </DropdownMenuItem>
+                        ))}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                     <Textarea
-                      value={s}
+                      value={s.description}
                       onChange={(e) => editScenario(i, e.target.value)}
                       rows={1}
                       className="flex-1 resize-none border-none bg-transparent p-0 text-xs shadow-none focus-visible:ring-0"

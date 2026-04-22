@@ -5,15 +5,27 @@ import { useEffect, useMemo, useState } from 'react'
 import { useTranslations } from 'next-intl'
 import { toast } from 'sonner'
 
+import { DateTime } from '@/components/ui/date-time'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 import { FeatureContextSheet } from './feature-context-sheet'
 
 export type CoveragePriority = 'critical' | 'high' | 'normal' | 'low'
+export type ScenarioPriority = 'critical' | 'high' | 'normal' | 'low'
+
+export interface AiScenario {
+  description: string
+  priority: ScenarioPriority
+}
 
 interface CodeFocusItem {
   path: string
   mode: 'focus' | 'ignore'
+}
+
+interface ApproverRef {
+  id: string
+  displayName: string
 }
 
 export interface FeatureCard {
@@ -32,9 +44,9 @@ export interface FeatureCard {
   contextUpdatedAt: string | null
   // Novo modelo: IA escreve, QA aprova.
   aiUnderstanding: string | null
-  aiScenarios: string[]
+  aiScenarios: AiScenario[]
   approvedAt: string | null
-  approvedBy: string | null
+  approvedBy: ApproverRef | null
 }
 
 interface FeaturesResponse {
@@ -291,6 +303,18 @@ function FeatureCardRow({
                   : '')
               : t('card_summary_empty')}
           </p>
+
+          {approved && feature.approvedAt && feature.approvedBy ? (
+            <p className="flex items-center gap-1 text-[11px] text-fin-gain">
+              <CheckCircle2 className="size-3" />
+              <span>
+                {t('approved_by_prefix', {
+                  name: feature.approvedBy.displayName,
+                })}
+              </span>
+              <DateTime value={feature.approvedAt} />
+            </p>
+          ) : null}
         </div>
 
         <ChevronRight className="mt-1 size-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" />

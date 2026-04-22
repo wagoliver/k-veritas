@@ -785,6 +785,13 @@
         "toast_deleted": "Feature excluída.",
         "toast_approved": "Feature aprovada.",
         "toast_unapproved": "Aprovação removida.",
+        "approved_by_prefix": "Aprovado por {name}",
+        "priority": {
+          "critical": "Crítico",
+          "high": "Alto",
+          "normal": "Normal",
+          "low": "Baixo"
+        },
         "errors": {
           "load": "Não foi possível carregar as features.",
           "save": "Não foi possível salvar as alterações.",

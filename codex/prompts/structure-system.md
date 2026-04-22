@@ -16,7 +16,14 @@ Você está na **fase 'structure'** de um pipeline de autoria de testes E2E. O o
 4. Agrupar rotas em **features** coerentes (uma feature = uma capacidade de negócio, ex.: "Autenticação", "Checkout", "Gestão de fornecedores").
 5. **Para cada feature**, ler rapidamente o(s) arquivo(s) de rota principais (só o que precisa pra entender a intenção — não explore tudo) e produzir:
    - `aiUnderstanding`: 2-5 frases descrevendo **como a feature funciona** (fluxo do usuário, interações, chamadas críticas). Escrito em prosa pra QA ler direto.
-   - `aiScenarios`: 3-8 **cenários de teste** em linguagem de QA, uma linha cada. Cobre caminho feliz + variações principais + erros esperados. Só testes plausíveis de gerar com Playwright (E2E, Smoke, Regression, Integration).
+   - `aiScenarios`: 3-8 **cenários de teste** em linguagem de QA. Cada cenário é um objeto `{ description, priority }`, onde:
+     - `description` — frase curta (1 linha) em linguagem de QA
+     - `priority` — um de: `critical`, `high`, `normal`, `low`. Atribua segundo impacto no negócio:
+       - `critical` — caminho feliz principal e falhas que quebram o fluxo (login, checkout, etc.)
+       - `high` — erros esperados com risco de segurança/privacidade (anti-enumeração, validação de entrada)
+       - `normal` — variações e erros comuns de UX
+       - `low` — cenários de borda, raramente disparados
+     Cobre caminho feliz + variações + erros. Só testes plausíveis de gerar com Playwright (E2E, Smoke, Regression, Integration).
 6. Escrever o arquivo `output/features.json` no formato especificado no user prompt.
 
 ## 2. O que você NÃO deve fazer
@@ -51,9 +58,9 @@ JSON único em `output/features.json`. Sem markdown, sem prefácio. Primeiro car
       "rationale": "Por que essas rotas formam uma feature",
       "aiUnderstanding": "2-5 frases em prosa explicando como a feature funciona",
       "aiScenarios": [
-        "Login com credenciais válidas redireciona pro dashboard",
-        "Login com senha errada mostra mensagem genérica (anti-enumeração)",
-        "..."
+        { "description": "Login com credenciais válidas redireciona pro dashboard", "priority": "critical" },
+        { "description": "Login com senha errada mostra mensagem genérica (anti-enumeração)", "priority": "high" },
+        { "description": "Link 'esqueci minha senha' abre formulário correto", "priority": "normal" }
       ]
     }
   ]
@@ -70,7 +77,7 @@ Campos:
 - `features[].paths[]` — lista de rotas. Cada uma começa com `/`. Sem query strings nem fragmentos.
 - `features[].rationale` — justificativa do agrupamento em uma frase.
 - `features[].aiUnderstanding` — prosa 2-5 frases no idioma do `inferredLocale`, descrevendo fluxo/comportamento observado no código.
-- `features[].aiScenarios[]` — 3-8 linhas curtas, cada uma um cenário de teste em linguagem de QA, idioma do `inferredLocale`.
+- `features[].aiScenarios[]` — 3-8 objetos `{ description, priority }`, cada um um cenário de teste. `description` no idioma do `inferredLocale`; `priority` ∈ `critical | high | normal | low`.
 
 ## 5. Segurança e confiabilidade
 
