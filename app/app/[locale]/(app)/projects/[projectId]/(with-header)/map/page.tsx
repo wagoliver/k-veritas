@@ -3,6 +3,7 @@ import { setRequestLocale } from 'next-intl/server'
 
 import { getServerSession } from '@/lib/auth/session'
 import { authorizeProject } from '@/lib/auth/project-access'
+import { ProjectFlowNav } from '@/components/projects/project-flow-nav'
 import { SiteMapTabs } from '@/components/projects/site-map-tabs'
 
 export default async function ProjectMapPage({
@@ -19,10 +20,13 @@ export default async function ProjectMapPage({
   if (!project) notFound()
 
   return (
-    <SiteMapTabs
-      projectId={project.id}
-      status={project.status}
-      sourceType={project.sourceType as 'url' | 'repo'}
-    />
+    <>
+      <SiteMapTabs
+        projectId={project.id}
+        status={project.status}
+        sourceType={project.sourceType as 'url' | 'repo'}
+      />
+      <ProjectFlowNav projectId={project.id} current="map" />
+    </>
   )
 }

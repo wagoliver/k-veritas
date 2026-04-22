@@ -53,6 +53,7 @@ export async function GET(
       errorStack: testExecResults.errorStack,
       tracePath: testExecResults.tracePath,
       screenshotPath: testExecResults.screenshotPath,
+      videoPath: testExecResults.videoPath,
       createdAt: testExecResults.createdAt,
     })
     .from(testExecResults)
@@ -114,6 +115,7 @@ export async function GET(
     ...r,
     screenshotUrl: artifactUrl(r.screenshotPath),
     traceUrl: artifactUrl(r.tracePath),
+    videoUrl: artifactUrl(r.videoPath),
     stepEvents: (eventsByResult.get(r.id) ?? []).map((ev) => ({
       stepIndex: ev.stepIndex,
       title: ev.title,

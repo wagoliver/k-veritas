@@ -194,6 +194,7 @@ export interface ResultRow {
   stdout: string | null
   trace_path: string | null
   screenshot_path: string | null
+  video_path: string | null
   step_events: StepEvent[]
 }
 
@@ -237,6 +238,7 @@ export async function markRunCompleted(
           error_stack: r.error_stack,
           trace_path: r.trace_path,
           screenshot_path: r.screenshot_path,
+          video_path: r.video_path,
           stdout: r.stdout,
         })}
         RETURNING id

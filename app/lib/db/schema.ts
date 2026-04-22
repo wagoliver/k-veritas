@@ -849,6 +849,7 @@ export const testExecResults = pgTable(
     errorStack: text('error_stack'),
     tracePath: text('trace_path'),
     screenshotPath: text('screenshot_path'),
+    videoPath: text('video_path'),
     stdout: text('stdout'),
     createdAt: timestamp('created_at', { withTimezone: true })
       .notNull()

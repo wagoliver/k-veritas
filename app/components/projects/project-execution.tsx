@@ -71,6 +71,7 @@ interface RunStepEvent {
 interface RunDetail {
   screenshotUrl: string | null
   traceUrl: string | null
+  videoUrl: string | null
   stepEvents: RunStepEvent[]
   errorMessage: string | null
   errorStack: string | null
@@ -771,6 +772,7 @@ function RunFlow({
             scenarioIdSnapshot: string
             screenshotUrl: string | null
             traceUrl: string | null
+            videoUrl: string | null
             errorMessage: string | null
             errorStack: string | null
             stepEvents: RunStepEvent[]
@@ -788,6 +790,7 @@ function RunFlow({
             ? {
                 screenshotUrl: match.screenshotUrl,
                 traceUrl: match.traceUrl,
+                videoUrl: match.videoUrl,
                 stepEvents: match.stepEvents,
                 errorMessage: match.errorMessage,
                 errorStack: match.errorStack,
@@ -795,6 +798,7 @@ function RunFlow({
             : {
                 screenshotUrl: null,
                 traceUrl: null,
+                videoUrl: null,
                 stepEvents: [],
                 errorMessage: null,
                 errorStack: null,
@@ -937,9 +941,9 @@ function EvidenceBlock({
 
   if (!detail) return null
 
-  const { screenshotUrl, traceUrl } = detail
+  const { screenshotUrl, traceUrl, videoUrl } = detail
 
-  if (!screenshotUrl && !traceUrl) {
+  if (!screenshotUrl && !traceUrl && !videoUrl) {
     return (
       <div className="border-t border-border/40 bg-muted/20 px-3 py-2 text-[11px] text-muted-foreground">
         {t('evidence_empty')}
@@ -949,6 +953,23 @@ function EvidenceBlock({
 
   return (
     <div className="space-y-3 border-t border-border/40 bg-muted/20 p-3">
+      {videoUrl ? (
+        <div>
+          <div className="mb-1.5 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+            <Play className="size-3" />
+            {t('evidence_video_label')}
+          </div>
+          <video
+            src={videoUrl}
+            controls
+            preload="metadata"
+            className="w-full max-h-96 rounded border border-border bg-background"
+          />
+          <p className="mt-1 text-[10px] text-muted-foreground">
+            {t('evidence_video_hint')}
+          </p>
+        </div>
+      ) : null}
       {screenshotUrl ? (
         <div>
           <div className="mb-1.5 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">

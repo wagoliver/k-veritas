@@ -3,6 +3,7 @@ import { setRequestLocale } from 'next-intl/server'
 
 import { getServerSession } from '@/lib/auth/session'
 import { authorizeProject } from '@/lib/auth/project-access'
+import { ProjectFlowNav } from '@/components/projects/project-flow-nav'
 import { ProjectTestScripts } from '@/components/projects/project-test-scripts'
 
 export default async function ProjectTestScenariosPage({
@@ -18,5 +19,10 @@ export default async function ProjectTestScenariosPage({
   const project = await authorizeProject(session.user.id, projectId)
   if (!project) notFound()
 
-  return <ProjectTestScripts projectId={project.id} />
+  return (
+    <>
+      <ProjectTestScripts projectId={project.id} />
+      <ProjectFlowNav projectId={project.id} current="test_scenarios" />
+    </>
+  )
 }

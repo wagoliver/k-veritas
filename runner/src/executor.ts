@@ -215,7 +215,7 @@ export default defineConfig({
     navigationTimeout: ${opts.navigationTimeoutMs},
     trace: 'on',
     screenshot: { mode: 'on', fullPage: false },
-    video: 'off',
+    video: { mode: 'on', size: { width: 1280, height: 720 } },
     headless: true,
     ignoreHTTPSErrors: true,
   },
@@ -496,6 +496,7 @@ function makeRow(
 
   const tracePath = pickAttachment(result, 'trace', artifactsDir)
   const screenshotPath = pickAttachment(result, 'screenshot', artifactsDir)
+  const videoPath = pickAttachment(result, 'video', artifactsDir)
 
   return {
     scenario_id: scenario.scenario_id,
@@ -507,6 +508,7 @@ function makeRow(
     stdout,
     trace_path: tracePath,
     screenshot_path: screenshotPath,
+    video_path: videoPath,
     step_events: [],
   }
 }
@@ -527,17 +529,21 @@ function mapStatus(s: string | undefined): ResultRow['status'] {
 
 function pickAttachment(
   result: PwTestResult | null,
-  kind: 'trace' | 'screenshot',
+  kind: 'trace' | 'screenshot' | 'video',
   artifactsDir: string,
 ): string | null {
   if (!result?.attachments) return null
-  const match = result.attachments.find((a) =>
-    kind === 'trace'
-      ? a.name === 'trace' || a.contentType === 'application/zip'
-      : a.contentType?.startsWith('image/'),
-  )
+  const match = result.attachments.find((a) => {
+    if (kind === 'trace') {
+      return a.name === 'trace' || a.contentType === 'application/zip'
+    }
+    if (kind === 'screenshot') {
+      return a.contentType?.startsWith('image/')
+    }
+    // video: Playwright anexa com contentType video/webm ou video/mp4
+    return a.contentType?.startsWith('video/')
+  })
   if (!match?.path) return null
-  // Caminho absoluto vem do Playwright; guarda relativo a /data pra servir depois
   if (match.path.startsWith(artifactsDir)) {
     return match.path
   }
