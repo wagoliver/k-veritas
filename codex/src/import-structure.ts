@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
 import { join, relative } from 'node:path'
 
@@ -12,6 +13,7 @@ const DATA_DIR = env('DATA_DIR', '/data')
 type Priority = 'critical' | 'high' | 'normal' | 'low'
 
 interface StructureScenario {
+  id: string
   description: string
   priority: Priority
 }
@@ -36,7 +38,7 @@ function normalizeScenario(
   if (typeof raw === 'string') {
     const desc = raw.trim()
     if (desc.length < 4) return null
-    return { description: desc, priority: 'normal' }
+    return { id: randomUUID(), description: desc, priority: 'normal' }
   }
   if (!raw || typeof raw !== 'object') return null
   const desc =
@@ -47,7 +49,10 @@ function normalizeScenario(
     (VALID_PRIORITIES as string[]).includes(raw.priority)
       ? (raw.priority as Priority)
       : 'normal'
-  return { description: desc, priority: prio }
+  // Cenários vindos do codex não têm ID estável — geramos aqui. Ex.: de
+  // re-análises subsequentes sempre inserem cenários com novo UUID, pois
+  // a rodada é uma nova importação (features.source='ai' é truncado).
+  return { id: randomUUID(), description: desc, priority: prio }
 }
 
 interface StructureManifest {

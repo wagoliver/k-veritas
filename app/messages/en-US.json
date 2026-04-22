@@ -737,13 +737,44 @@
         }
       },
       "scenarios": {
-        "placeholder": "Add scenario",
-        "add": "Add",
-        "delete": "Remove",
-        "empty": "No scenarios yet. Add the first one above.",
+        "heading": "Scenarios per feature",
+        "summary": "{features} features · {scenarios} scenarios · {generated} tests generated",
+        "empty_title": "No approved features yet",
+        "empty_description": "Approve features on the Structure screen so they appear here and you can generate Playwright tests per scenario.",
+        "approved_badge": "approved",
+        "scenarios_count": "{generated}/{count} tests generated",
+        "empty_scenarios": "This feature has no scenarios. Add the first one below.",
+        "add_scenario_placeholder": "e.g.: Wrong password shows a generic message",
+        "add_scenario": "Add",
+        "remove_scenario": "Remove scenario",
+        "confirm_remove_scenario": "Remove this scenario? If there's a generated test, it will be deleted too.",
+        "generate": "Generate test",
+        "regenerate": "Regenerate",
+        "generate_tooltip": "Generate Playwright .spec.ts for this scenario",
+        "regenerate_tooltip": "Regenerate .spec.ts (overwrites the current one)",
+        "batch_feature": "Generate all ({count})",
+        "batch_all_pending": "Generate all pending ({count})",
+        "show_code": "Show code",
+        "hide_code": "Hide code",
+        "copy": "Copy",
+        "priority": {
+          "critical": "Critical",
+          "high": "High",
+          "normal": "Normal",
+          "low": "Low"
+        },
+        "toast_generated": "Test generated.",
+        "toast_copied": "Code copied.",
+        "toast_all_done": "All scenarios already have generated tests.",
+        "toast_batch_starting": "Generating {count} tests sequentially…",
+        "toast_batch_done": "Generation complete: {ok}/{total}.",
         "errors": {
-          "create": "Couldn't add scenario.",
-          "delete": "Couldn't remove scenario."
+          "load": "Couldn't load features.",
+          "save": "Couldn't save changes.",
+          "generate": "Test generation failed.",
+          "not_approved": "Approve the feature on the Structure screen before generating.",
+          "rate_limited": "Too many generations. Wait a moment.",
+          "copy": "Couldn't copy the code."
         }
       },
       "discovery": {

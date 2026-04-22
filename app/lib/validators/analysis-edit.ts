@@ -42,12 +42,14 @@ export const updateFeatureSchema = z.object({
   expectedEnvVars: z.array(envVarNameSchema).max(20).optional(),
   coveragePriorities: z.array(coveragePriorityEnum).max(4).optional(),
   // Novo modelo: entendimento + cenários gerados pela IA + aprovação.
-  // Cenários são objetos com descrição + prioridade (crítico/alto/normal/baixo)
-  // que a IA atribui por cenário; QA pode ajustar via dropdown.
+  // Cenários são objetos `{id, description, priority}` onde `id` é UUID
+  // estável — gerado server-side no import do codex ou ao receber PATCH
+  // com id ausente (cenário novo criado pela QA).
   aiUnderstanding: z.string().trim().max(10_000).nullable().optional(),
   aiScenarios: z
     .array(
       z.object({
+        id: z.string().uuid().optional(),
         description: z.string().trim().min(4).max(500),
         priority: priorityEnum,
       }),

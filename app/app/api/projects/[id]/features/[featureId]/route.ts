@@ -76,7 +76,12 @@ export async function PATCH(
     contextTouched = true
   }
   if (parsed.data.aiScenarios !== undefined) {
-    updates.aiScenarios = parsed.data.aiScenarios
+    // Preserva IDs existentes; gera UUID pra cenários novos sem id.
+    updates.aiScenarios = parsed.data.aiScenarios.map((s) => ({
+      id: s.id ?? crypto.randomUUID(),
+      description: s.description,
+      priority: s.priority,
+    }))
     contextTouched = true
   }
   if (contextTouched) {

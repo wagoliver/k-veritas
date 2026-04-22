@@ -6,6 +6,7 @@ import { db } from '@/lib/db/pg'
 import {
   analysisFeatures,
   analysisScenarios,
+  featureAiScenarioTests,
   scenarioTests,
   users,
 } from '@/lib/db/schema'
@@ -136,6 +137,34 @@ export async function GET(
     scenariosByFeature.set(row.scenario.featureId, arr)
   }
 
+  // Testes gerados por cenário do aiScenarios (1 row por (feature, scenario)
+  // graças à UNIQUE constraint). Indexa por featureId:scenarioId.
+  const aiScenarioTests = await db
+    .select()
+    .from(featureAiScenarioTests)
+    .where(eq(featureAiScenarioTests.projectId, project.id))
+
+  const aiTestsByKey = new Map<
+    string,
+    {
+      code: string
+      model: string | null
+      createdAt: string
+      createdBy: string | null
+    }
+  >()
+  for (const t of aiScenarioTests) {
+    aiTestsByKey.set(`${t.featureId}:${t.scenarioId}`, {
+      code: t.code,
+      model: t.model,
+      createdAt:
+        t.createdAt instanceof Date
+          ? t.createdAt.toISOString()
+          : String(t.createdAt),
+      createdBy: t.createdBy,
+    })
+  }
+
   return NextResponse.json(
     {
       features: features.map((row) => {
@@ -164,7 +193,16 @@ export async function GET(
           coveragePriorities: f.coveragePriorities,
           contextUpdatedAt: f.contextUpdatedAt,
           aiUnderstanding: f.aiUnderstanding,
-          aiScenarios: f.aiScenarios,
+          aiScenarios: Array.isArray(f.aiScenarios)
+            ? (f.aiScenarios as Array<{
+                id: string
+                description: string
+                priority: 'critical' | 'high' | 'normal' | 'low'
+              }>).map((s) => ({
+                ...s,
+                latestTest: aiTestsByKey.get(`${f.id}:${s.id}`) ?? null,
+              }))
+            : [],
           approvedAt: f.approvedAt,
           approvedBy: f.approvedBy
             ? {

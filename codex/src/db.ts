@@ -309,6 +309,7 @@ export async function importStructure(params: {
     paths: string[]
     aiUnderstanding: string | null
     aiScenarios: Array<{
+      id: string
       description: string
       priority: 'critical' | 'high' | 'normal' | 'low'
     }>

@@ -530,6 +530,41 @@ export const analysisFeatures = pgTable(
   }),
 )
 
+export const featureAiScenarioTests = pgTable(
+  'feature_ai_scenario_tests',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    projectId: uuid('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    featureId: uuid('feature_id')
+      .notNull()
+      .references(() => analysisFeatures.id, { onDelete: 'cascade' }),
+    // scenario_id é o UUID do cenário dentro de aiScenarios (jsonb). Sem
+    // FK relacional — o pareamento é por string.
+    scenarioId: text('scenario_id').notNull(),
+    code: text('code').notNull(),
+    model: text('model'),
+    provider: text('provider'),
+    tokensIn: integer('tokens_in'),
+    tokensOut: integer('tokens_out'),
+    createdBy: uuid('created_by').references(() => users.id, {
+      onDelete: 'set null',
+    }),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    uniqueScenario: uniqueIndex('feature_ai_scenario_tests_unique').on(
+      t.featureId,
+      t.scenarioId,
+    ),
+    projectIdx: index('feature_ai_scenario_tests_project_idx').on(t.projectId),
+    featureIdx: index('feature_ai_scenario_tests_feature_idx').on(t.featureId),
+  }),
+)
+
 export const featureFreeScenarios = pgTable(
   'feature_free_scenarios',
   {

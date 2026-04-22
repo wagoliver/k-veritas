@@ -737,13 +737,44 @@
         }
       },
       "scenarios": {
-        "placeholder": "Adicionar cenário",
-        "add": "Adicionar",
-        "delete": "Remover",
-        "empty": "Nenhum cenário ainda. Adicione o primeiro acima.",
+        "heading": "Cenários por feature",
+        "summary": "{features} features · {scenarios} cenários · {generated} testes gerados",
+        "empty_title": "Nenhuma feature aprovada ainda",
+        "empty_description": "Aprove features na tela Estrutura pra elas aparecerem aqui e você poder gerar testes Playwright por cenário.",
+        "approved_badge": "aprovado",
+        "scenarios_count": "{generated}/{count} testes gerados",
+        "empty_scenarios": "Esta feature não tem cenários. Adicione o primeiro abaixo.",
+        "add_scenario_placeholder": "ex.: Tentativa com senha errada mostra mensagem genérica",
+        "add_scenario": "Adicionar",
+        "remove_scenario": "Remover cenário",
+        "confirm_remove_scenario": "Remover este cenário? Se houver teste gerado, ele também será apagado.",
+        "generate": "Gerar teste",
+        "regenerate": "Regerar",
+        "generate_tooltip": "Gerar .spec.ts Playwright pra este cenário",
+        "regenerate_tooltip": "Regerar .spec.ts (substitui o atual)",
+        "batch_feature": "Gerar todos ({count})",
+        "batch_all_pending": "Gerar todos pendentes ({count})",
+        "show_code": "Ver código",
+        "hide_code": "Esconder código",
+        "copy": "Copiar",
+        "priority": {
+          "critical": "Crítico",
+          "high": "Alto",
+          "normal": "Normal",
+          "low": "Baixo"
+        },
+        "toast_generated": "Teste gerado.",
+        "toast_copied": "Código copiado.",
+        "toast_all_done": "Todos os cenários já têm teste gerado.",
+        "toast_batch_starting": "Gerando {count} testes em sequência…",
+        "toast_batch_done": "Geração concluída: {ok}/{total}.",
         "errors": {
-          "create": "Não foi possível adicionar o cenário.",
-          "delete": "Não foi possível remover o cenário."
+          "load": "Não foi possível carregar as features.",
+          "save": "Não foi possível salvar as alterações.",
+          "generate": "Falha na geração do teste.",
+          "not_approved": "Aprove a feature na tela Estrutura antes de gerar.",
+          "rate_limited": "Muitas gerações seguidas. Aguarde um pouco.",
+          "copy": "Não foi possível copiar o código."
         }
       },
       "discovery": {
