@@ -949,6 +949,21 @@
         "repo_url_label": "GitHub repository URL",
         "repo_url_hint": "Accepts https, SSH (git@github.com:...) or the owner/repo shorthand.",
         "repo_branch_label": "Branch",
+        "zip": {
+          "label": "ZIP upload",
+          "hint": "Alternative to git clone. Useful for private repos: download the .zip from GitHub (Code > Download ZIP) and upload here. Replaces the URL above. Limit: 100 MB.",
+          "upload_button": "Choose .zip file",
+          "replace": "Replace",
+          "remove": "Remove",
+          "uploaded": "File uploaded successfully.",
+          "removed": "File removed.",
+          "errors": {
+            "not_zip": "Please choose a .zip file.",
+            "too_large": "File exceeds 100 MB limit.",
+            "upload": "Upload failed.",
+            "remove": "Failed to remove file."
+          }
+        },
         "business_context_label": "Business context (optional)",
         "business_context_placeholder": "Describe use cases and business rules QA wants to cover. E.g.: 'When the user tries to register with an existing CPF, the API returns 409 and the UI shows a generic toast'.",
         "business_context_hint": "This text is sent together with the code to Claude Code on each analysis."

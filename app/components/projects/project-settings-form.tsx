@@ -1,9 +1,9 @@
 'use client'
 
 import { zodResolver } from '@hookform/resolvers/zod'
-import { Loader2 } from 'lucide-react'
+import { CheckCircle2, Loader2, Trash2, Upload } from 'lucide-react'
 import { useTranslations } from 'next-intl'
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { toast } from 'sonner'
 import { z } from 'zod'
@@ -79,6 +79,7 @@ interface ProjectSettingsFormProps {
     sourceType: 'url' | 'repo'
     repoUrl: string | null
     repoBranch: string
+    repoZipPath: string | null
     businessContext: string | null
   }
 }
@@ -366,6 +367,11 @@ export function ProjectSettingsForm({ project }: ProjectSettingsFormProps) {
                   )}
                 />
 
+                <RepoZipUpload
+                  projectId={project.id}
+                  initialZipPath={project.repoZipPath}
+                />
+
                 <FormField
                   control={form.control}
                   name="businessContext"
@@ -477,6 +483,146 @@ export function ProjectSettingsForm({ project }: ProjectSettingsFormProps) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </div>
+  )
+}
+
+function RepoZipUpload({
+  projectId,
+  initialZipPath,
+}: {
+  projectId: string
+  initialZipPath: string | null
+}) {
+  const t = useTranslations('projects.settings')
+  const [zipPath, setZipPath] = useState(initialZipPath)
+  const [uploading, setUploading] = useState(false)
+  const [removing, setRemoving] = useState(false)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  const triggerSelect = () => inputRef.current?.click()
+
+  const handleFile = async (file: File) => {
+    if (!file) return
+    if (!file.name.toLowerCase().endsWith('.zip')) {
+      toast.error(t('repo.zip.errors.not_zip'))
+      return
+    }
+    // 100 MB — match do backend.
+    if (file.size > 100 * 1024 * 1024) {
+      toast.error(t('repo.zip.errors.too_large'))
+      return
+    }
+
+    setUploading(true)
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      const res = await fetch(`/api/projects/${projectId}/repo/upload`, {
+        method: 'POST',
+        headers: { 'X-Requested-With': 'fetch' },
+        body: fd,
+      })
+      if (!res.ok) {
+        toast.error(t('repo.zip.errors.upload'))
+        return
+      }
+      const body = (await res.json()) as { repoZipPath: string }
+      setZipPath(body.repoZipPath)
+      toast.success(t('repo.zip.uploaded'))
+    } finally {
+      setUploading(false)
+      if (inputRef.current) inputRef.current.value = ''
+    }
+  }
+
+  const remove = async () => {
+    setRemoving(true)
+    try {
+      const res = await fetch(`/api/projects/${projectId}/repo/upload`, {
+        method: 'DELETE',
+        headers: { 'X-Requested-With': 'fetch' },
+      })
+      if (!res.ok) {
+        toast.error(t('repo.zip.errors.remove'))
+        return
+      }
+      setZipPath(null)
+      toast.success(t('repo.zip.removed'))
+    } finally {
+      setRemoving(false)
+    }
+  }
+
+  return (
+    <div className="space-y-2">
+      <div>
+        <h3 className="text-sm font-medium">{t('repo.zip.label')}</h3>
+        <p className="text-xs text-muted-foreground">{t('repo.zip.hint')}</p>
+      </div>
+
+      <input
+        ref={inputRef}
+        type="file"
+        accept=".zip,application/zip"
+        className="sr-only"
+        onChange={(e) => {
+          const file = e.target.files?.[0]
+          if (file) void handleFile(file)
+        }}
+      />
+
+      {zipPath ? (
+        <div className="flex items-center gap-3 rounded-md border border-fin-gain/40 bg-fin-gain/5 px-3 py-2">
+          <CheckCircle2 className="size-4 shrink-0 text-fin-gain" />
+          <span className="flex-1 truncate font-mono text-xs">
+            {zipPath}
+          </span>
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            onClick={triggerSelect}
+            disabled={uploading || removing}
+          >
+            {uploading ? (
+              <Loader2 className="size-3.5 animate-spin" />
+            ) : (
+              <Upload className="size-3.5" />
+            )}
+            {t('repo.zip.replace')}
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            onClick={remove}
+            disabled={uploading || removing}
+            className="text-destructive hover:text-destructive"
+          >
+            {removing ? (
+              <Loader2 className="size-3.5 animate-spin" />
+            ) : (
+              <Trash2 className="size-3.5" />
+            )}
+            {t('repo.zip.remove')}
+          </Button>
+        </div>
+      ) : (
+        <Button
+          type="button"
+          variant="outline"
+          onClick={triggerSelect}
+          disabled={uploading}
+        >
+          {uploading ? (
+            <Loader2 className="size-4 animate-spin" />
+          ) : (
+            <Upload className="size-4" />
+          )}
+          {t('repo.zip.upload_button')}
+        </Button>
+      )}
     </div>
   )
 }

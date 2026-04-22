@@ -61,6 +61,7 @@ export default async function ProjectSettingsPage({
             sourceType: project.sourceType as 'url' | 'repo',
             repoUrl: project.repoUrl,
             repoBranch: project.repoBranch,
+            repoZipPath: project.repoZipPath,
             businessContext: project.businessContext,
           }}
         />
