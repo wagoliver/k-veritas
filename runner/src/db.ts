@@ -72,31 +72,74 @@ export async function claimNextJob(
 
 /**
  * Pra um job de escopo 'scenario', busca os dados necessários pra
- * reconstruir o arquivo .spec.ts: header/footer da feature + snippet
- * do cenário específico.
+ * montar o arquivo .spec.ts. No modelo novo:
+ *   - code vem de feature_ai_scenario_tests (UNIQUE por feature+scenario,
+ *     então 1 row por cenário)
+ *   - title vem do jsonb analysis_features.ai_scenarios (match por id)
+ *   - feature_external_id vem de analysis_features.external_id
+ *   - file_header/file_footer ficam vazios (código gerado é self-contained,
+ *     inclui o import do @playwright/test direto)
  */
 export async function loadScenarioExecData(
   projectId: string,
   scenarioId: string,
 ): Promise<ScenarioToRun | null> {
-  const rows = await sql<ScenarioToRun[]>`
+  const rows = await sql<
+    Array<{
+      scenario_id: string
+      title: string | null
+      code: string
+      feature_external_id: string
+    }>
+  >`
     SELECT
-      st.scenario_id_snapshot AS scenario_id,
-      st.title_snapshot AS title,
-      st.code AS code,
-      ftf.file_header AS file_header,
-      ftf.file_footer AS file_footer,
-      st.feature_external_id_snapshot AS feature_external_id
-    FROM scenario_tests st
-    LEFT JOIN feature_test_files ftf
-      ON ftf.test_run_id = st.test_run_id
-     AND ftf.feature_external_id_snapshot = st.feature_external_id_snapshot
-    WHERE st.project_id = ${projectId}
-      AND st.scenario_id_snapshot = ${scenarioId}
-    ORDER BY st.created_at DESC
+      t.scenario_id AS scenario_id,
+      (
+        SELECT elem->>'description'
+        FROM jsonb_array_elements(f.ai_scenarios) AS elem
+        WHERE elem->>'id' = t.scenario_id
+        LIMIT 1
+      ) AS title,
+      t.code AS code,
+      f.external_id AS feature_external_id
+    FROM feature_ai_scenario_tests t
+    JOIN analysis_features f ON f.id = t.feature_id
+    WHERE t.project_id = ${projectId}
+      AND t.scenario_id = ${scenarioId}
     LIMIT 1
   `
-  return rows[0] ?? null
+  const row = rows[0]
+  if (!row) return null
+  return {
+    scenario_id: row.scenario_id,
+    title: row.title ?? 'Test scenario',
+    code: row.code,
+    file_header: '',
+    file_footer: '',
+    feature_external_id: row.feature_external_id,
+  }
+}
+
+/**
+ * Carrega todas as variáveis de ambiente cadastradas pra este projeto
+ * na tela Setup. Valor vem cifrado (bytea) — o chamador decifra via
+ * `decryptSecret` e injeta no env do processo do Playwright.
+ */
+export async function loadProjectTestEnvVars(
+  projectId: string,
+): Promise<Array<{ name: string; valueEncrypted: Buffer }>> {
+  const rows = await sql<
+    Array<{ name: string; value_encrypted: Buffer }>
+  >`
+    SELECT name, value_encrypted
+    FROM project_test_env_vars
+    WHERE project_id = ${projectId}
+    ORDER BY name
+  `
+  return rows.map((r) => ({
+    name: r.name,
+    valueEncrypted: r.value_encrypted,
+  }))
 }
 
 export async function heartbeat(jobId: string, workerId: string): Promise<void> {
@@ -177,11 +220,15 @@ export async function markRunCompleted(
     if (results.length === 0) return
 
     for (const r of results) {
+      // scenario_id tem FK pra analysis_scenarios (modelo legado). No modelo
+      // novo o cenário vive como UUID dentro de analysis_features.ai_scenarios
+      // (jsonb), sem row relacional — setamos NULL. O scenario_id_snapshot
+      // é o UUID real do cenário e não tem FK; é o que a UI consulta.
       const [inserted] = await tx<{ id: string }[]>`
         INSERT INTO test_exec_results ${tx({
           run_id: jobId,
           project_id: projectId,
-          scenario_id: r.scenario_id,
+          scenario_id: null,
           scenario_id_snapshot: r.scenario_id,
           title_snapshot: r.title,
           status: r.status,

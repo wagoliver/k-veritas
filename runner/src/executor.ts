@@ -3,6 +3,7 @@ import { spawn } from 'node:child_process'
 import { join } from 'node:path'
 
 import {
+  loadProjectTestEnvVars,
   updateRunProgress,
   type PendingExecJob,
   type Project,
@@ -119,6 +120,15 @@ export async function executeScenarioJob(
       if (creds.loginUrl) env.TEST_LOGIN_URL = creds.loginUrl
     }
 
+    // Variáveis cadastradas pela QA na tela Setup. O código gerado usa
+    // `process.env.E2E_USER` (etc.) — o valor vem daqui. Se a QA não
+    // cadastrou, a env fica undefined e o teste falha com mensagem
+    // explícita do Playwright (intencional).
+    const projectVars = await loadProjectTestEnvVars(project.id)
+    for (const v of projectVars) {
+      env[v.name] = decryptSecret(v.valueEncrypted)
+    }
+
     // Spawn + parse de eventos do reporter em streaming pra progresso live
     const exit = await spawnPlaywright(runDir, reportPath, env, job.id)
 
@@ -145,8 +155,23 @@ function buildSpecFile(scenario: ScenarioToRun): {
   specFileName: string
   specContent: string
 } {
-  // Reconstitui o arquivo a partir do header/footer + snippet do cenário.
-  // Se feature_test_files não existir (runs antigos), usa fallback.
+  const specFileName = `scenario-${scenario.scenario_id}.spec.ts`
+
+  // Modelo novo (codex): code é self-contained — já traz o import do
+  // @playwright/test e o test() completo. Usa como está, sem wrapper.
+  // Regex: `import { ... } from '@playwright/test'` — repara que `[^}]*`
+  // para no `}` mas o regex antigo esqueceu esse fecha-chave antes do
+  // `from`, então nunca matchava.
+  const selfContained = /import\s*\{[^}]*\}\s*from\s*['"]@playwright\/test['"]/.test(
+    scenario.code,
+  )
+  if (selfContained) {
+    return { specFileName, specContent: `${scenario.code.trim()}\n` }
+  }
+
+  // Modelo antigo (runs pré-migração): code era snippet, precisava ser
+  // embrulhado em test.describe(...) + import do header/footer guardados
+  // em feature_test_files. Fallback defensivo pra dados legados.
   const header =
     scenario.file_header ||
     `import { test, expect } from '@playwright/test'\n\ntest.describe('${scenario.feature_external_id}', () => {\n`
@@ -158,7 +183,6 @@ function buildSpecFile(scenario: ScenarioToRun): {
     .join('\n')
 
   const specContent = `${header}\n${indentedCode}\n${footer}\n`
-  const specFileName = `scenario-${scenario.scenario_id}.spec.ts`
   return { specFileName, specContent }
 }
 

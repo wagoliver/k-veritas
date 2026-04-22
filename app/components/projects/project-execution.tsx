@@ -16,6 +16,7 @@ import { useTranslations } from 'next-intl'
 import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import { DateTime } from '@/components/ui/date-time'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
@@ -24,12 +25,37 @@ import {
   parseTestCode,
 } from '@/lib/ai/parse-playwright-test'
 import { parsePlaywrightError } from '@/lib/ai/parse-playwright-error'
-import type { EditableFeature, EditableScenario } from './analysis-editor'
 import {
   TestFlowView,
   type StepArtifact,
   type StepStatus,
 } from './test-flow-view'
+
+// Tipos locais do modelo novo (feature_ai_scenario_tests). Mapeamos
+// aiScenarios[].description → title pra preservar a UX herdada do
+// analysis-editor sem acoplar com o tipo antigo.
+interface ExecLatestTest {
+  code: string
+  model: string | null
+  createdAt: string
+  createdBy: string | null
+}
+
+interface ExecScenario {
+  id: string
+  title: string
+  priority: 'critical' | 'high' | 'normal' | 'low'
+  latestTest: ExecLatestTest | null
+}
+
+interface ExecFeature {
+  id: string
+  externalId: string
+  name: string
+  description: string
+  paths: string[]
+  scenarios: ExecScenario[]
+}
 
 interface RunStepEvent {
   stepIndex: number
@@ -68,9 +94,26 @@ interface RunningInfo {
   currentStepLine: number | null
 }
 
+interface FeaturesPayload {
+  features: Array<{
+    id: string
+    externalId: string
+    name: string
+    description: string
+    paths: string[]
+    approvedAt: string | null
+    aiScenarios?: Array<{
+      id: string
+      description: string
+      priority: 'critical' | 'high' | 'normal' | 'low'
+      latestTest: ExecLatestTest | null
+    }>
+  }>
+}
+
 export function ProjectExecution({ projectId }: { projectId: string }) {
   const t = useTranslations('projects.overview.execution')
-  const [features, setFeatures] = useState<EditableFeature[] | null>(null)
+  const [features, setFeatures] = useState<ExecFeature[] | null>(null)
   const [latest, setLatest] = useState<LatestResult[]>([])
   const [running, setRunning] = useState<RunningInfo[]>([])
   const [tick, setTick] = useState(0)
@@ -88,8 +131,25 @@ export function ProjectExecution({ projectId }: { projectId: string }) {
       }),
     ])
     if (fRes.ok) {
-      const data = (await fRes.json()) as { features: EditableFeature[] }
-      setFeatures(data.features)
+      const data = (await fRes.json()) as FeaturesPayload
+      // Mapeia aiScenarios (modelo novo) → shape usada pela UI de execução.
+      // description vira title; só entra feature que está aprovada.
+      const mapped: ExecFeature[] = data.features
+        .filter((f) => f.approvedAt !== null)
+        .map((f) => ({
+          id: f.id,
+          externalId: f.externalId,
+          name: f.name,
+          description: f.description,
+          paths: f.paths,
+          scenarios: (f.aiScenarios ?? []).map((s) => ({
+            id: s.id,
+            title: s.description,
+            priority: s.priority,
+            latestTest: s.latestTest,
+          })),
+        }))
+      setFeatures(mapped)
     }
     if (rRes.ok) {
       const data = (await rRes.json()) as {
@@ -247,50 +307,174 @@ function FeatureRunBlock({
   runningByScenario,
   onChanged,
 }: {
-  feature: EditableFeature
+  feature: ExecFeature
   projectId: string
   latestByScenario: Map<string, LatestResult>
   runningByScenario: Map<string, RunningInfo>
   onChanged: () => Promise<void> | void
 }) {
+  const t = useTranslations('projects.overview.execution')
   const [open, setOpen] = useState(true)
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [submitting, setSubmitting] = useState(false)
+
+  // Cenários que já estão rodando não podem ser selecionados — filtra da
+  // seleção sempre que a lista muda.
+  useEffect(() => {
+    setSelected((prev) => {
+      const next = new Set<string>()
+      for (const id of prev) {
+        const isRunning = runningByScenario.has(id)
+        const exists = feature.scenarios.some((s) => s.id === id)
+        if (exists && !isRunning) next.add(id)
+      }
+      return next
+    })
+  }, [feature.scenarios, runningByScenario])
+
+  const selectableIds = feature.scenarios
+    .filter((s) => !runningByScenario.has(s.id))
+    .map((s) => s.id)
+  const allSelected =
+    selectableIds.length > 0 &&
+    selectableIds.every((id) => selected.has(id))
+  const selectedCount = selected.size
+
+  const toggleSelect = (id: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  const toggleSelectAll = () => {
+    setSelected((prev) => {
+      if (allSelected) {
+        const next = new Set(prev)
+        for (const id of selectableIds) next.delete(id)
+        return next
+      }
+      const next = new Set(prev)
+      for (const id of selectableIds) next.add(id)
+      return next
+    })
+  }
+
+  const runOne = async (
+    scenarioId: string,
+  ): Promise<{ ok: boolean; status?: number }> => {
+    try {
+      const res = await fetch(
+        `/api/projects/${projectId}/ai-scenarios/${scenarioId}/run`,
+        {
+          method: 'POST',
+          headers: { 'X-Requested-With': 'fetch' },
+        },
+      )
+      return { ok: res.ok, status: res.status }
+    } catch {
+      return { ok: false }
+    }
+  }
+
+  const runSelected = async () => {
+    const ids = Array.from(selected).filter(
+      (id) =>
+        !runningByScenario.has(id) &&
+        feature.scenarios.some((s) => s.id === id),
+    )
+    if (ids.length === 0) return
+    setSubmitting(true)
+    setSelected(new Set())
+    const results = await Promise.all(ids.map((id) => runOne(id)))
+    const ok = results.filter((r) => r.ok).length
+    const hasRate = results.some((r) => r.status === 429)
+    const hasMissing = results.some((r) => r.status === 409)
+    if (hasRate) toast.error(t('errors.rate_limited'))
+    else if (hasMissing) toast.error(t('errors.no_generated_test'))
+    else toast.success(t('enqueued_batch', { count: ok }))
+    setSubmitting(false)
+    await onChanged()
+  }
+
   return (
     <div className="overflow-hidden rounded-lg border border-border bg-card shadow-sm">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-start gap-3 p-4 text-left transition-colors hover:bg-accent/20"
-      >
-        <ChevronRight
-          className={cn(
-            'mt-0.5 size-4 shrink-0 text-muted-foreground transition-transform',
-            open && 'rotate-90',
-          )}
-        />
-        <div className="min-w-0 flex-1">
-          <div className="font-display text-base font-semibold">
-            {feature.name}
+      <div className="flex items-start gap-3 p-4">
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          className="flex min-w-0 flex-1 items-start gap-3 text-left"
+          aria-expanded={open}
+        >
+          <ChevronRight
+            className={cn(
+              'mt-0.5 size-4 shrink-0 text-muted-foreground transition-transform',
+              open && 'rotate-90',
+            )}
+          />
+          <div className="min-w-0 flex-1">
+            <div className="font-display text-base font-semibold">
+              {feature.name}
+            </div>
+            <p className="text-sm text-muted-foreground">
+              {feature.description}
+            </p>
           </div>
-          <p className="text-sm text-muted-foreground">{feature.description}</p>
-        </div>
-        <span className="shrink-0 rounded-full bg-muted px-1.5 py-0 text-[10px] font-medium tabular-nums text-muted-foreground">
-          {feature.scenarios.length}
-        </span>
-      </button>
+          <span className="shrink-0 rounded-full bg-muted px-1.5 py-0 text-[10px] font-medium tabular-nums text-muted-foreground">
+            {feature.scenarios.length}
+          </span>
+        </button>
+        {open && selectedCount > 0 ? (
+          <Button
+            type="button"
+            size="sm"
+            onClick={(e) => {
+              e.stopPropagation()
+              void runSelected()
+            }}
+            disabled={submitting}
+            className="shrink-0"
+          >
+            {submitting ? (
+              <Loader2 className="size-3.5 animate-spin" />
+            ) : (
+              <Play className="size-3.5" />
+            )}
+            {t('run_selected', { count: selectedCount })}
+          </Button>
+        ) : null}
+      </div>
 
       {open ? (
-        <ul className="space-y-2 border-t border-border/40 bg-muted/20 p-3">
-          {feature.scenarios.map((s) => (
-            <ScenarioRunRow
-              key={s.id}
-              scenario={s}
-              projectId={projectId}
-              latest={latestByScenario.get(s.id) ?? null}
-              running={runningByScenario.get(s.id) ?? null}
-              onChanged={onChanged}
+        <div className="space-y-2 border-t border-border/40 bg-muted/20 p-3">
+          <div className="flex items-center gap-2">
+            <Checkbox
+              checked={allSelected}
+              onCheckedChange={toggleSelectAll}
+              disabled={submitting || selectableIds.length === 0}
+              aria-label={t('select_all')}
             />
-          ))}
-        </ul>
+            <span className="text-[11px] text-muted-foreground">
+              {t('select_all')}
+            </span>
+          </div>
+          <ul className="space-y-2">
+            {feature.scenarios.map((s) => (
+              <ScenarioRunRow
+                key={s.id}
+                scenario={s}
+                projectId={projectId}
+                latest={latestByScenario.get(s.id) ?? null}
+                running={runningByScenario.get(s.id) ?? null}
+                selected={selected.has(s.id)}
+                onToggleSelect={() => toggleSelect(s.id)}
+                onChanged={onChanged}
+              />
+            ))}
+          </ul>
+        </div>
       ) : null}
     </div>
   )
@@ -301,12 +485,16 @@ function ScenarioRunRow({
   projectId,
   latest,
   running,
+  selected,
+  onToggleSelect,
   onChanged,
 }: {
-  scenario: EditableScenario
+  scenario: ExecScenario
   projectId: string
   latest: LatestResult | null
   running: RunningInfo | null
+  selected: boolean
+  onToggleSelect: () => void
   onChanged: () => Promise<void> | void
 }) {
   const t = useTranslations('projects.overview.execution')
@@ -355,6 +543,13 @@ function ScenarioRunRow({
 
   return (
     <li className="flex items-start gap-3 rounded-md border border-border/60 bg-card p-3 shadow-sm">
+      <Checkbox
+        checked={selected}
+        onCheckedChange={onToggleSelect}
+        disabled={isRunning}
+        className="mt-1"
+        aria-label={t('select_scenario')}
+      />
       <StatusBadge latest={latest} running={running} />
       <div className="min-w-0 flex-1 space-y-1">
         <div className="flex flex-wrap items-center gap-2">
@@ -393,20 +588,16 @@ function ScenarioRunRow({
         ) : (
           <p className="text-xs text-muted-foreground">{t('never_run')}</p>
         )}
-        {isDone && latest && latest.status !== 'passed' && latest.errorMessage ? (
-          <>
-            <ErrorSummary message={latest.errorMessage} />
-            {scenario.latestTest ? (
-              <FailedFlow
-                code={scenario.latestTest.code}
-                errorMessage={latest.errorMessage}
-                projectId={projectId}
-                scenarioId={scenario.id}
-                runId={latest.runId}
-                onChanged={onChanged}
-              />
-            ) : null}
-          </>
+        {scenario.latestTest ? (
+          <RunFlow
+            code={scenario.latestTest.code}
+            errorMessage={latest?.errorMessage ?? null}
+            projectId={projectId}
+            scenarioId={scenario.id}
+            runId={latest?.runId ?? null}
+            status={latest?.status ?? null}
+            onChanged={onChanged}
+          />
         ) : null}
       </div>
       <Button
@@ -458,19 +649,21 @@ function LiveFlow({
   )
 }
 
-function FailedFlow({
+function RunFlow({
   code,
   errorMessage,
   projectId,
   scenarioId,
   runId,
+  status,
   onChanged,
 }: {
   code: string
-  errorMessage: string
+  errorMessage: string | null
   projectId: string
   scenarioId: string
-  runId: string
+  runId: string | null
+  status: 'passed' | 'failed' | 'skipped' | 'timedout' | null
   onChanged: () => Promise<void> | void
 }) {
   const t = useTranslations('projects.overview.execution')
@@ -481,7 +674,10 @@ function FailedFlow({
   const [lightbox, setLightbox] = useState(false)
 
   const parsed = parseTestCode(code)
-  const failedStepIndex = locateFailedStepIndex(parsed, errorMessage)
+  const failedStepIndex =
+    errorMessage && status !== null && status !== 'passed'
+      ? locateFailedStepIndex(parsed, errorMessage)
+      : null
 
   const saveStepEdit = async (newCode: string) => {
     try {
@@ -509,7 +705,10 @@ function FailedFlow({
 
   // Carrega os detalhes do run (step events + screenshot + trace) só quando
   // o usuário expande o flow, pra não fazer N+1 requests no listing.
+  // Sem runId (cenário nunca foi rodado) não há detail pra buscar — o
+  // expand só mostra o código parseado em estado idle.
   useEffect(() => {
+    if (!runId) return
     if (!open || detail !== null || loadingDetail) return
     let cancelled = false
     setLoadingDetail(true)
@@ -581,19 +780,25 @@ function FailedFlow({
       return { stepStatuses: statuses, stepArtifacts: artifacts }
     }
 
-    // Fallback heurístico enquanto detalhe não carregou
+    // Fallback heurístico enquanto detalhe não carregou (ou cenário nunca
+    // rodou). Regras:
+    //   - passed:             tudo verde
+    //   - failed + índice:    verde até, vermelho no step falho, resto idle
+    //   - null / ambíguo:     tudo idle (preview só do código)
     const statuses: StepStatus[] =
-      failedStepIndex !== null
-        ? Array.from({ length: flatCount }, (_, i) =>
-            i < failedStepIndex
-              ? 'passed'
-              : i === failedStepIndex
-                ? 'failed'
-                : 'idle',
-          )
-        : Array.from({ length: flatCount }, () => 'idle' as const)
+      status === 'passed'
+        ? Array.from({ length: flatCount }, () => 'passed' as const)
+        : failedStepIndex !== null
+          ? Array.from({ length: flatCount }, (_, i) =>
+              i < failedStepIndex
+                ? 'passed'
+                : i === failedStepIndex
+                  ? 'failed'
+                  : 'idle',
+            )
+          : Array.from({ length: flatCount }, () => 'idle' as const)
     return { stepStatuses: statuses, stepArtifacts: null }
-  }, [detail, failedStepIndex, flatCount])
+  }, [detail, failedStepIndex, flatCount, status])
 
   return (
     <div className="overflow-hidden rounded-md border border-border/60 bg-card">
@@ -618,6 +823,11 @@ function FailedFlow({
       </button>
       {open ? (
         <>
+          {errorMessage && status !== null && status !== 'passed' ? (
+            <div className="border-t border-border/40">
+              <ErrorSummary message={errorMessage} />
+            </div>
+          ) : null}
           <TestFlowView
             code={code}
             failedStepIndex={failedStepIndex}

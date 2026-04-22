@@ -534,6 +534,34 @@ export const analysisFeatures = pgTable(
   }),
 )
 
+export const projectTestEnvVars = pgTable(
+  'project_test_env_vars',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    projectId: uuid('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    valueEncrypted: bytea('value_encrypted').notNull(),
+    updatedBy: uuid('updated_by').references(() => users.id, {
+      onDelete: 'set null',
+    }),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    uniqueName: uniqueIndex('project_test_env_vars_unique').on(
+      t.projectId,
+      t.name,
+    ),
+    projectIdx: index('project_test_env_vars_project_idx').on(t.projectId),
+  }),
+)
+
 export const featureAiScenarioTests = pgTable(
   'feature_ai_scenario_tests',
   {

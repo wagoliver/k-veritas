@@ -1,21 +1,24 @@
 import { NextResponse, type NextRequest } from 'next/server'
-import { and, desc, eq } from 'drizzle-orm'
+import { and, eq } from 'drizzle-orm'
 
 import { db } from '@/lib/db/pg'
-import { projectTestRuns, scenarioTests } from '@/lib/db/schema'
+import { featureAiScenarioTests } from '@/lib/db/schema'
 import { getServerSession } from '@/lib/auth/session'
 import { Problems } from '@/lib/auth/errors'
 import { authorizeProject } from '@/lib/auth/project-access'
 import { audit } from '@/lib/auth/audit'
 import { clientIp, userAgent } from '@/lib/auth/request'
-import { sql } from 'drizzle-orm'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 /**
- * GET — histórico de testes gerados pra um scenario específico.
- * Mais recente primeiro. Útil pra ver versões anteriores do código.
+ * No modelo novo, `feature_ai_scenario_tests` tem UNIQUE(feature_id,
+ * scenario_id), então só existe 1 row por cenário — o último gerado.
+ * Regenerar (via POST /generate-test) faz upsert no lugar.
+ *
+ * GET retorna o teste atual (ou array vazio se não há). A UI pode
+ * continuar tratando como lista.
  */
 export async function GET(
   _req: NextRequest,
@@ -30,43 +33,42 @@ export async function GET(
 
   const rows = await db
     .select({
-      id: scenarioTests.id,
-      code: scenarioTests.code,
-      titleSnapshot: scenarioTests.titleSnapshot,
-      filePath: scenarioTests.filePath,
-      createdAt: scenarioTests.createdAt,
-      testRunId: scenarioTests.testRunId,
-      runStatus: projectTestRuns.status,
-      runProvider: projectTestRuns.provider,
-      runModel: projectTestRuns.model,
+      id: featureAiScenarioTests.id,
+      code: featureAiScenarioTests.code,
+      model: featureAiScenarioTests.model,
+      provider: featureAiScenarioTests.provider,
+      createdAt: featureAiScenarioTests.createdAt,
     })
-    .from(scenarioTests)
-    .innerJoin(
-      projectTestRuns,
-      eq(projectTestRuns.id, scenarioTests.testRunId),
-    )
+    .from(featureAiScenarioTests)
     .where(
       and(
-        eq(scenarioTests.projectId, project.id),
-        eq(scenarioTests.scenarioIdSnapshot, scenarioId),
+        eq(featureAiScenarioTests.projectId, project.id),
+        eq(featureAiScenarioTests.scenarioId, scenarioId),
       ),
     )
-    .orderBy(desc(scenarioTests.createdAt))
-    .limit(20)
+    .limit(1)
 
   return NextResponse.json(
-    { tests: rows },
+    {
+      tests: rows.map((r) => ({
+        id: r.id,
+        code: r.code,
+        titleSnapshot: null,
+        filePath: null,
+        createdAt: r.createdAt,
+        testRunId: null,
+        runStatus: 'completed',
+        runProvider: r.provider,
+        runModel: r.model,
+      })),
+    },
     { headers: { 'Cache-Control': 'no-store' } },
   )
 }
 
 /**
- * DELETE — apaga TODOS os testes gerados pra esse scenario.
- * O scenario volta a ser "candidato" (aparece apagado na aba Cenários de
- * Teste). O próximo "Gerar" produz um teste novo do zero.
- *
- * project_test_runs em si não são apagados — eles são o histórico de
- * rodadas e guardam custo/tokens/duração pra auditoria.
+ * DELETE — apaga o teste gerado deste cenário. O próximo "Gerar"
+ * produz um teste novo do zero.
  */
 export async function DELETE(
   req: NextRequest,
@@ -83,14 +85,14 @@ export async function DELETE(
   if (!project) return Problems.forbidden()
 
   const deleted = await db
-    .delete(scenarioTests)
+    .delete(featureAiScenarioTests)
     .where(
       and(
-        eq(scenarioTests.projectId, project.id),
-        eq(scenarioTests.scenarioIdSnapshot, scenarioId),
+        eq(featureAiScenarioTests.projectId, project.id),
+        eq(featureAiScenarioTests.scenarioId, scenarioId),
       ),
     )
-    .returning({ id: scenarioTests.id })
+    .returning({ id: featureAiScenarioTests.id })
 
   await audit({
     userId: session.user.id,
@@ -112,12 +114,9 @@ export async function DELETE(
 }
 
 /**
- * PATCH — edita o código da última versão do teste desse cenário.
- * Usado pelo edit-per-step inline: a UI calcula o code completo com a
- * linha substituída e manda aqui.
- *
- * Atualiza em-place (não cria nova linha no histórico). Pra restaurar
- * o código original, regere o teste (trash + "Gerar").
+ * PATCH — edita o código do teste atual. Usado pelo edit-per-step
+ * inline: a UI calcula o code completo com a linha substituída e manda
+ * aqui. Atualização in-place (só 1 row por cenário).
  */
 export async function PATCH(
   req: NextRequest,
@@ -144,21 +143,18 @@ export async function PATCH(
   }
   if (body.code.length > 100_000) return Problems.invalidBody()
 
-  // Atualiza apenas o scenario_tests mais recente daquele scenario.
-  const result = await db.execute<{ id: string }>(sql`
-    UPDATE scenario_tests
-    SET code = ${body.code}
-    WHERE id = (
-      SELECT id FROM scenario_tests
-      WHERE project_id = ${project.id}
-        AND scenario_id_snapshot = ${scenarioId}
-      ORDER BY created_at DESC
-      LIMIT 1
+  const updated = await db
+    .update(featureAiScenarioTests)
+    .set({ code: body.code })
+    .where(
+      and(
+        eq(featureAiScenarioTests.projectId, project.id),
+        eq(featureAiScenarioTests.scenarioId, scenarioId),
+      ),
     )
-    RETURNING id
-  `)
+    .returning({ id: featureAiScenarioTests.id })
 
-  if (result.length === 0) {
+  if (updated.length === 0) {
     return Problems.conflict(
       'no_test_to_edit',
       'Este cenário não tem teste gerado pra editar.',
@@ -173,7 +169,7 @@ export async function PATCH(
     meta: {
       projectId: project.id,
       scenarioId,
-      testId: result[0].id,
+      testId: updated[0].id,
       codeBytes: body.code.length,
     },
     outcome: 'success',

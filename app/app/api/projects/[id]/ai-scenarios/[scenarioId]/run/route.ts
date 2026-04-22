@@ -3,8 +3,8 @@ import { and, eq } from 'drizzle-orm'
 
 import { db } from '@/lib/db/pg'
 import {
-  analysisScenarios,
-  scenarioTests,
+  analysisFeatures,
+  featureAiScenarioTests,
   testExecRuns,
 } from '@/lib/db/schema'
 import { getServerSession } from '@/lib/auth/session'
@@ -21,6 +21,10 @@ export const dynamic = 'force-dynamic'
  * POST — enfileira execução de um único cenário. O runner container
  * polling claimNextJob pega e processa. O front faz polling no detalhe
  * do run pra acompanhar.
+ *
+ * No modelo novo, scenarioId é UUID dentro do jsonb `analysis_features.
+ * ai_scenarios`. A gente valida que existe uma feature com esse cenário
+ * aprovada e que há teste gerado em feature_ai_scenario_tests.
  */
 export async function POST(
   req: NextRequest,
@@ -36,33 +40,41 @@ export async function POST(
   const project = await authorizeProject(session.user.id, id)
   if (!project) return Problems.forbidden()
 
-  // Confirma que o scenario pertence ao projeto e tem teste gerado
-  const [scenario] = await db
-    .select({ id: analysisScenarios.id })
-    .from(analysisScenarios)
+  // Valida que existe teste gerado pra este cenário neste projeto.
+  // feature_ai_scenario_tests.scenario_id é TEXT (o UUID do cenário
+  // dentro do jsonb) e tem UNIQUE(feature_id, scenario_id), então 1 row
+  // por cenário. Se não tem row, não tem teste ainda.
+  const [testRow] = await db
+    .select({
+      id: featureAiScenarioTests.id,
+      featureId: featureAiScenarioTests.featureId,
+    })
+    .from(featureAiScenarioTests)
     .where(
       and(
-        eq(analysisScenarios.id, scenarioId),
-        eq(analysisScenarios.projectId, project.id),
+        eq(featureAiScenarioTests.projectId, project.id),
+        eq(featureAiScenarioTests.scenarioId, scenarioId),
       ),
     )
     .limit(1)
-  if (!scenario) return Problems.forbidden()
-
-  const [anyTest] = await db
-    .select({ id: scenarioTests.id })
-    .from(scenarioTests)
-    .where(
-      and(
-        eq(scenarioTests.projectId, project.id),
-        eq(scenarioTests.scenarioIdSnapshot, scenarioId),
-      ),
-    )
-    .limit(1)
-  if (!anyTest) {
+  if (!testRow) {
     return Problems.conflict(
       'no_generated_test',
       'Gere o teste Playwright deste cenário antes de executar.',
+    )
+  }
+
+  // Feature precisa estar aprovada pra rodar — gate consistente com
+  // o enqueue de geração.
+  const [feature] = await db
+    .select({ approvedAt: analysisFeatures.approvedAt })
+    .from(analysisFeatures)
+    .where(eq(analysisFeatures.id, testRow.featureId))
+    .limit(1)
+  if (!feature || !feature.approvedAt) {
+    return Problems.conflict(
+      'feature_not_approved',
+      'Aprove a feature na tela Estrutura antes de executar o teste.',
     )
   }
 
@@ -97,8 +109,11 @@ export async function POST(
     outcome: 'success',
   })
 
-  return NextResponse.json({ runId: created.id, status: 'pending' }, {
-    status: 202,
-    headers: { 'Cache-Control': 'no-store' },
-  })
+  return NextResponse.json(
+    { runId: created.id, status: 'pending' },
+    {
+      status: 202,
+      headers: { 'Cache-Control': 'no-store' },
+    },
+  )
 }
