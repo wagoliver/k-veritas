@@ -639,6 +639,7 @@
           "empty_title": "Análise de código",
           "empty_description": "A IA lê o código-fonte do seu projeto e sugere features e cenários de teste. Você revisa e aprova, depois a gente gera os testes Playwright.",
           "source_not_configured_hint": "Este projeto não tem um repositório configurado. Configure em Settings para disparar a análise.",
+          "source_zip_uploaded": "Usando ZIP enviado. A análise roda sobre o arquivo do repositório.",
           "planning_heading": "Planejamento da análise",
           "planning_business_rule_label": "Regra de Negócio",
           "planning_business_rule_placeholder": "Descreva em texto livre a regra de negócio do sistema. Ex.: 'Login antifraude: após 3 tentativas falhas mostrar CAPTCHA; mensagens genéricas para evitar enumeração de usuário'.",

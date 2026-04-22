@@ -54,6 +54,7 @@ interface LatestResponse {
     sourceType: 'url' | 'repo'
     repoUrl: string | null
     repoBranch: string | null
+    hasRepoZip: boolean
     hasBusinessContext: boolean
   }
 }
@@ -244,7 +245,7 @@ export function CodeAnalysisPanel({ projectId }: { projectId: string }) {
   const project = data.project
   const sourceConfigured =
     project.sourceType === 'repo' &&
-    (project.repoUrl !== null || /* ZIP fallback futuro */ false)
+    (project.repoUrl !== null || project.hasRepoZip)
 
   // Empty state — nenhum job rodou ainda.
   if (!job) {
@@ -482,6 +483,10 @@ function EmptyState({
           {project.repoBranch ? (
             <span className="text-muted-foreground"> · {project.repoBranch}</span>
           ) : null}
+        </div>
+      ) : sourceConfigured && project.hasRepoZip ? (
+        <div className="max-w-lg rounded-md border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+          {t('source_zip_uploaded')}
         </div>
       ) : (
         <p className="max-w-lg text-xs text-muted-foreground">

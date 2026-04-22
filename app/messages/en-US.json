@@ -639,6 +639,7 @@
           "empty_title": "Code analysis",
           "empty_description": "AI reads your project's source code and drafts features and test scenarios. You review and approve, then we generate the Playwright tests.",
           "source_not_configured_hint": "This project has no repository configured. Set one in Settings to run the analysis.",
+          "source_zip_uploaded": "Using uploaded ZIP. Analysis runs against the uploaded file.",
           "planning_heading": "Analysis planning",
           "planning_business_rule_label": "Business rule",
           "planning_business_rule_placeholder": "Free-text description of the system's business rule. E.g.: 'Login anti-fraud: show CAPTCHA after 3 failed attempts; use generic messages to avoid user enumeration'.",

@@ -51,6 +51,9 @@ export async function GET(
       sourceType: project.sourceType,
       repoUrl: project.repoUrl,
       repoBranch: project.repoBranch,
+      // Flag de ZIP uploaded (não expõe o path). A UI usa pra saber que
+      // tem fonte configurada sem depender de git URL.
+      hasRepoZip: project.repoZipPath !== null,
       hasBusinessContext:
         !!project.businessContext && project.businessContext.trim().length > 0,
     },
