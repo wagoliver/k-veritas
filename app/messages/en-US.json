@@ -873,7 +873,7 @@
         "field_ai_scenarios_empty": "AI didn't suggest scenarios for this feature.",
         "save": "Save",
         "approve": "Approve",
-        "unapprove": "Unapprove",
+        "unapprove": "Cancel approval",
         "delete": "Delete feature",
         "confirm_delete": "Delete this feature? This action cannot be undone.",
         "toast_saved": "Changes saved.",

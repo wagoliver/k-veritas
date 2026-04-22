@@ -873,7 +873,7 @@
         "field_ai_scenarios_empty": "A IA não sugeriu cenários pra esta feature.",
         "save": "Salvar",
         "approve": "Aprovar",
-        "unapprove": "Desaprovar",
+        "unapprove": "Cancelar aprovação",
         "delete": "Excluir feature",
         "confirm_delete": "Excluir esta feature? A ação é irreversível.",
         "toast_saved": "Alterações salvas.",
