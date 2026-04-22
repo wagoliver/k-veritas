@@ -92,13 +92,17 @@ export async function POST(req: NextRequest) {
     }
     normalizedTargetUrl = parsed.data.targetUrl!
   } else {
-    const repoCheck = validateRepoUrl(parsed.data.repoUrl!)
-    if (!repoCheck.ok) {
-      return Problems.invalidBody({
-        repoUrl: repoCheck.reason ?? 'invalid_repo_url',
-      })
+    // Fluxo ZIP: cliente marca pendingZipUpload e sobe o arquivo logo
+    // após este POST. repoUrl vem undefined — pula a validação.
+    if (parsed.data.repoUrl) {
+      const repoCheck = validateRepoUrl(parsed.data.repoUrl)
+      if (!repoCheck.ok) {
+        return Problems.invalidBody({
+          repoUrl: repoCheck.reason ?? 'invalid_repo_url',
+        })
+      }
+      normalizedRepoUrl = repoCheck.normalized!
     }
-    normalizedRepoUrl = repoCheck.normalized!
 
     // targetUrl é opcional em modo repo, mas se vier preenchido
     // precisa ser URL válida (os testes Playwright vão apontar pra ela).

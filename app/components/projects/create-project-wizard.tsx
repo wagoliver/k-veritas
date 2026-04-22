@@ -1,9 +1,9 @@
 'use client'
 
 import { zodResolver } from '@hookform/resolvers/zod'
-import { Code2, Globe, Loader2 } from 'lucide-react'
+import { Code2, Globe, Loader2, Upload } from 'lucide-react'
 import { useLocale, useTranslations } from 'next-intl'
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { toast } from 'sonner'
 import { z } from 'zod'
@@ -42,7 +42,9 @@ const schema = z
       .trim()
       .min(2, { message: 'errors.min_2' })
       .max(80, { message: 'errors.max_80' }),
-    sourceType: z.enum(['url', 'repo']),
+    // UI-only: 'zip' mapeia pra sourceType='repo' no backend + upload
+    // do arquivo logo após a criação (fluxo pra repos privados).
+    sourceType: z.enum(['url', 'repo', 'zip']),
     targetUrl: z.string().trim().optional().or(z.literal('')),
     repoUrl: z.string().trim().optional().or(z.literal('')),
     repoBranch: z.string().trim().optional().or(z.literal('')),
@@ -81,10 +83,11 @@ const schema = z
         path: ['repoUrl'],
       })
     }
-    // Em modo repo, targetUrl é opcional — mas se o usuário digitar
-    // algo, precisa ser URL válida (os specs vão rodar contra ela).
+    // Modo 'zip' valida o arquivo fora do zod (client state), não aqui.
+    // Em modo repo/zip, targetUrl é opcional. Se preenchida, precisa
+    // ser URL válida (os specs vão rodar contra ela).
     if (
-      v.sourceType === 'repo' &&
+      v.sourceType !== 'url' &&
       v.targetUrl &&
       !/^https?:\/\//.test(v.targetUrl)
     ) {
@@ -128,6 +131,8 @@ export function CreateProjectWizard() {
   const t = useTranslations('projects.wizard')
   const router = useRouter()
   const [submitting, setSubmitting] = useState(false)
+  const [zipFile, setZipFile] = useState<File | null>(null)
+  const zipInputRef = useRef<HTMLInputElement>(null)
   const uiLocale = useLocale()
 
   const defaultTargetLocale: TargetLocale = (
@@ -156,11 +161,19 @@ export function CreateProjectWizard() {
   const sourceType = form.watch('sourceType')
 
   const onSubmit = async (values: Values) => {
+    // Modo zip exige que o usuário tenha selecionado um arquivo antes.
+    if (values.sourceType === 'zip' && !zipFile) {
+      toast.error(t('errors.zip_required'))
+      return
+    }
+
     setSubmitting(true)
     try {
       const body: Record<string, unknown> = {
         name: values.name,
-        sourceType: values.sourceType,
+        // 'zip' vira 'repo' no backend — são o mesmo modelo code-first,
+        // com repo_zip_path em vez de repo_url.
+        sourceType: values.sourceType === 'zip' ? 'repo' : values.sourceType,
         targetLocale: values.targetLocale,
         scenarios: [] as string[],
         businessContext: values.businessContext || undefined,
@@ -168,6 +181,19 @@ export function CreateProjectWizard() {
 
       if (values.sourceType === 'url') {
         body.targetUrl = values.targetUrl
+        body.authKind = values.requiresAuth ? 'form' : 'none'
+        if (values.requiresAuth) {
+          body.authForm = {
+            loginUrl: values.loginUrl,
+            username: values.username,
+            password: values.password,
+          }
+        }
+      } else if (values.sourceType === 'zip') {
+        // Flag pro validator deixar passar sem repoUrl. O upload do ZIP
+        // acontece logo depois do POST /projects.
+        body.pendingZipUpload = true
+        if (values.targetUrl) body.targetUrl = values.targetUrl
         body.authKind = values.requiresAuth ? 'form' : 'none'
         if (values.requiresAuth) {
           body.authForm = {
@@ -235,6 +261,27 @@ export function CreateProjectWizard() {
       }
 
       const created = (await res.json()) as { id: string }
+
+      // Modo zip: sobe o arquivo logo após a criação. Se falhar aqui,
+      // o projeto existe sem fonte. A QA vê em Configurações e pode
+      // re-uploadar ou setar uma URL.
+      if (values.sourceType === 'zip' && zipFile) {
+        const fd = new FormData()
+        fd.append('file', zipFile)
+        const uploadRes = await fetch(
+          `/api/projects/${created.id}/repo/upload`,
+          {
+            method: 'POST',
+            headers: { 'X-Requested-With': 'fetch' },
+            body: fd,
+          },
+        )
+        if (!uploadRes.ok) {
+          toast.error(t('errors.zip_upload'))
+          // Continua o redirect pro projeto criado; o usuário resolve lá.
+        }
+      }
+
       toast.success(t('success'))
       router.push(`/projects/${created.id}`)
     } catch {
@@ -283,13 +330,20 @@ export function CreateProjectWizard() {
             render={({ field }) => (
               <FormItem>
                 <FormLabel>{t('step1.source_type_label')}</FormLabel>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-3 gap-3">
                   <SourceCard
                     icon={<Code2 className="size-5" />}
                     title={t('step1.source_type_options.repo_title')}
                     description={t('step1.source_type_options.repo_desc')}
                     selected={field.value === 'repo'}
                     onClick={() => field.onChange('repo')}
+                  />
+                  <SourceCard
+                    icon={<Upload className="size-5" />}
+                    title={t('step1.source_type_options.zip_title')}
+                    description={t('step1.source_type_options.zip_desc')}
+                    selected={field.value === 'zip'}
+                    onClick={() => field.onChange('zip')}
                   />
                   <SourceCard
                     icon={<Globe className="size-5" />}
@@ -363,8 +417,76 @@ export function CreateProjectWizard() {
             </>
           ) : null}
 
-          {/* targetUrl aparece pros dois modos — url-first é obrigatório;
-              repo-first é opcional (pode completar depois em Settings). */}
+          {sourceType === 'zip' ? (
+            <>
+              <FormItem>
+                <FormLabel>{t('step1.zip_file_label')}</FormLabel>
+                <input
+                  ref={zipInputRef}
+                  type="file"
+                  accept=".zip,application/zip"
+                  className="sr-only"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0] ?? null
+                    if (
+                      file &&
+                      !file.name.toLowerCase().endsWith('.zip')
+                    ) {
+                      toast.error(t('errors.zip_not_zip'))
+                      return
+                    }
+                    if (file && file.size > 100 * 1024 * 1024) {
+                      toast.error(t('errors.zip_too_large'))
+                      return
+                    }
+                    setZipFile(file)
+                  }}
+                />
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => zipInputRef.current?.click()}
+                  >
+                    <Upload className="size-4" />
+                    {zipFile ? t('step1.zip_file_replace') : t('step1.zip_file_choose')}
+                  </Button>
+                  {zipFile ? (
+                    <span className="truncate text-xs text-muted-foreground">
+                      {zipFile.name}
+                      {' · '}
+                      {(zipFile.size / 1024 / 1024).toFixed(1)} MB
+                    </span>
+                  ) : null}
+                </div>
+                <FormDescription>{t('step1.zip_file_hint')}</FormDescription>
+              </FormItem>
+
+              <FormField
+                control={form.control}
+                name="businessContext"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t('step1.business_context_label')}</FormLabel>
+                    <FormControl>
+                      <Textarea
+                        {...field}
+                        rows={6}
+                        placeholder={t('step1.business_context_placeholder')}
+                      />
+                    </FormControl>
+                    <FormDescription>
+                      {t('step1.business_context_hint')}
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </>
+          ) : null}
+
+          {/* targetUrl aparece pros dois modos: url-first é obrigatório;
+              repo-first / zip é opcional (completa depois em Settings). */}
           <FormField
             control={form.control}
             name="targetUrl"

@@ -51,6 +51,10 @@ export const createProjectSchema = z
     authForm: authFormSchema.optional(),
     targetLocale: targetLocaleSchema.optional(),
     scenarios: z.array(z.string().trim().min(4).max(500)).max(50).default([]),
+    // Flag client-side que indica que o ZIP será subido logo após o
+    // POST /projects. Libera a criação com sourceType='repo' sem
+    // repoUrl — o client faz PUT /repo/upload em seguida.
+    pendingZipUpload: z.boolean().optional(),
   })
   .superRefine((v, ctx) => {
     if (v.authKind === 'form' && !v.authForm) {
@@ -67,7 +71,11 @@ export const createProjectSchema = z
         path: ['targetUrl'],
       })
     }
-    if (v.sourceType === 'repo' && !v.repoUrl) {
+    // Projetos 'repo' sem repoUrl são válidos quando o usuário pretende
+    // fazer upload de ZIP depois (fluxo do wizard com 3ª opção "Upload").
+    // A análise só dispara se houver fonte concreta (repo_url ou
+    // repo_zip_path) — checado no endpoint /ai/analyze.
+    if (v.sourceType === 'repo' && !v.repoUrl && v.pendingZipUpload !== true) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         message: 'repo_url_required',
