@@ -33,13 +33,17 @@ export const updateFeatureSchema = z.object({
   paths: z.array(pathSchema).max(50).optional(),
   sortOrder: z.number().int().min(0).max(10_000).optional(),
   reviewed: z.boolean().optional(),
-  // Contexto por-feature (code-first). Todos opcionais; `null` limpa
-  // o valor, `undefined` deixa como está.
+  // Contexto por-feature LEGADO. Mantidos no validator porque as colunas
+  // no banco ainda existem e o dev pode enviar via Swagger/Postman — mas
+  // a UI nova não usa mais. Serão removidos quando Cenário estabilizar.
   businessRule: z.string().trim().max(5_000).nullable().optional(),
   testRestrictions: z.string().trim().max(2_000).nullable().optional(),
   codeFocus: z.array(codeFocusItemSchema).max(50).optional(),
   expectedEnvVars: z.array(envVarNameSchema).max(20).optional(),
   coveragePriorities: z.array(coveragePriorityEnum).max(4).optional(),
+  // Novo modelo: entendimento + cenários gerados pela IA + aprovação.
+  aiUnderstanding: z.string().trim().max(10_000).nullable().optional(),
+  aiScenarios: z.array(z.string().trim().min(4).max(500)).max(20).optional(),
 })
 
 export const createFeatureFreeScenarioSchema = z.object({

@@ -155,6 +155,10 @@ export async function GET(
           expectedEnvVars: f.expectedEnvVars,
           coveragePriorities: f.coveragePriorities,
           contextUpdatedAt: f.contextUpdatedAt,
+          aiUnderstanding: f.aiUnderstanding,
+          aiScenarios: f.aiScenarios,
+          approvedAt: f.approvedAt,
+          approvedBy: f.approvedBy,
           scenarios: (scenariosByFeature.get(f.id) ?? []).map((r) => {
             const s = r.scenario
             const latestTest = latestTestByScenario.get(s.id) ?? null

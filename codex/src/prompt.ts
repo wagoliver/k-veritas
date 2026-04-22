@@ -106,16 +106,22 @@ Formato esperado:
         "name": "Nome legível",
         "description": "Uma frase sobre a capacidade",
         "paths": ["/rota", "/outra"],
-        "rationale": "Por que essas rotas formam uma feature"
+        "rationale": "Por que essas rotas formam uma feature",
+        "aiUnderstanding": "2-5 frases em prosa sobre como a feature funciona, baseado no que você leu do código",
+        "aiScenarios": [
+          "Caminho feliz descrito em linguagem de QA",
+          "Variação/erro esperado",
+          "..."
+        ]
       }
     ]
   }
 
-Idioma obrigatório (summary, name, description, rationale): "${input.targetLocale}".
+Idioma obrigatório (summary, name, description, rationale, aiUnderstanding, aiScenarios): "${input.targetLocale}".
 
 Regras estritas da fase 'structure' estão no system prompt — siga-as. Quando terminar, responda com uma única linha:
 
-  done: N features, K paths
+  done: N features, K paths, S scenarios
 `
   }
 

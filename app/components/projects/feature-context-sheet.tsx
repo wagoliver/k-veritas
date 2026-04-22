@@ -2,12 +2,9 @@
 
 import {
   CheckCircle2,
-  ChevronRight,
-  Focus,
+  Circle,
   Loader2,
   Pencil,
-  Play,
-  Sparkles,
   Trash2,
   X,
 } from 'lucide-react'
@@ -16,7 +13,6 @@ import { useTranslations } from 'next-intl'
 import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
-import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import {
   Sheet,
@@ -28,13 +24,7 @@ import {
 } from '@/components/ui/sheet'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
-import {
-  ModelPicker,
-  useOrgPrimaryConfig,
-  usePersistedModel,
-} from './model-picker'
-import { ScenariosEditor } from './scenarios-editor'
-import type { CoveragePriority, FeatureCard } from './feature-context-cards'
+import type { FeatureCard } from './feature-context-cards'
 
 interface Props {
   feature: FeatureCard | null
@@ -42,20 +32,6 @@ interface Props {
   open: boolean
   onOpenChange: (open: boolean) => void
   onChanged: () => Promise<void> | void
-}
-
-const PRIORITY_OPTIONS: CoveragePriority[] = [
-  'critical',
-  'high',
-  'normal',
-  'low',
-]
-
-const PRIORITY_COLORS: Record<CoveragePriority, string> = {
-  critical: 'text-destructive',
-  high: 'text-orange-600 dark:text-orange-400',
-  normal: 'text-foreground',
-  low: 'text-muted-foreground',
 }
 
 export function FeatureContextSheet({
@@ -67,80 +43,49 @@ export function FeatureContextSheet({
 }: Props) {
   const t = useTranslations('projects.overview.discovery')
 
-  // Re-hydrata ao trocar de feature ou reabrir o sheet.
-  const [businessRule, setBusinessRule] = useState('')
-  const [testRestrictions, setTestRestrictions] = useState('')
-  const [codeFocus, setCodeFocus] = useState<FeatureCard['codeFocus']>([])
-  const [envVars, setEnvVars] = useState<string[]>([])
-  const [priorities, setPriorities] = useState<CoveragePriority[]>([])
   const [name, setName] = useState('')
   const [editingName, setEditingName] = useState(false)
-  const [envVarDraft, setEnvVarDraft] = useState('')
-  const [focusDraft, setFocusDraft] = useState('')
+  const [aiUnderstanding, setAiUnderstanding] = useState('')
+  const [aiScenarios, setAiScenarios] = useState<string[]>([])
+  const [scenarioDraft, setScenarioDraft] = useState('')
+  const [approvedAt, setApprovedAt] = useState<string | null>(null)
   const [saving, startSave] = useTransition()
   const [deleting, startDelete] = useTransition()
-  const [generating, startGenerate] = useTransition()
-  // "Avançado" só abre automático quando a feature já tem algum campo
-  // não-essencial preenchido — sinaliza que a QA usou aquilo antes.
-  const [advancedOpen, setAdvancedOpen] = useState(false)
-  const [modelOverride, setModelOverride] = usePersistedModel(
-    `model:${projectId}:generate-tests`,
-  )
-  const orgCfg = useOrgPrimaryConfig()
-  const [suggesting, startSuggesting] = useTransition()
+  const [approving, startApprove] = useTransition()
 
   useEffect(() => {
     if (!feature) return
-    setBusinessRule(feature.businessRule ?? '')
-    setTestRestrictions(feature.testRestrictions ?? '')
-    setCodeFocus(feature.codeFocus ?? [])
-    setEnvVars(feature.expectedEnvVars ?? [])
-    setPriorities(feature.coveragePriorities ?? [])
     setName(feature.name)
     setEditingName(false)
-    setEnvVarDraft('')
-    setFocusDraft('')
-    // Abre "Avançado" se já tem algum campo não-essencial preenchido.
-    const hasAdvanced =
-      (feature.testRestrictions?.trim().length ?? 0) > 0 ||
-      (feature.codeFocus?.length ?? 0) > 0 ||
-      (feature.expectedEnvVars?.length ?? 0) > 0 ||
-      (feature.coveragePriorities?.length ?? 0) > 0
-    setAdvancedOpen(hasAdvanced)
+    setAiUnderstanding(feature.aiUnderstanding ?? '')
+    setAiScenarios(feature.aiScenarios ?? [])
+    setScenarioDraft('')
+    setApprovedAt(feature.approvedAt)
   }, [feature])
 
   if (!feature) return null
 
-  const togglePriority = (p: CoveragePriority) => {
-    setPriorities((prev) =>
-      prev.includes(p) ? prev.filter((x) => x !== p) : [...prev, p],
-    )
-  }
+  const approved = approvedAt !== null
 
-  const addFocus = (mode: 'focus' | 'ignore') => {
-    const path = focusDraft.trim()
-    if (path.length === 0) return
-    setCodeFocus((prev) => [...prev, { path, mode }])
-    setFocusDraft('')
-  }
-
-  const removeFocus = (idx: number) => {
-    setCodeFocus((prev) => prev.filter((_, i) => i !== idx))
-  }
-
-  const addEnvVar = () => {
-    const v = envVarDraft.trim().toUpperCase()
-    if (!/^[A-Z_][A-Z0-9_]*$/.test(v)) return
-    if (envVars.includes(v)) {
-      setEnvVarDraft('')
+  const addScenario = () => {
+    const v = scenarioDraft.trim()
+    if (v.length < 4) return
+    if (aiScenarios.includes(v)) {
+      setScenarioDraft('')
       return
     }
-    setEnvVars((prev) => [...prev, v])
-    setEnvVarDraft('')
+    setAiScenarios((prev) => [...prev, v])
+    setScenarioDraft('')
   }
 
-  const removeEnvVar = (v: string) => {
-    setEnvVars((prev) => prev.filter((x) => x !== v))
+  const removeScenario = (idx: number) => {
+    setAiScenarios((prev) => prev.filter((_, i) => i !== idx))
+  }
+
+  const editScenario = (idx: number, value: string) => {
+    setAiScenarios((prev) =>
+      prev.map((s, i) => (i === idx ? value : s)),
+    )
   }
 
   const save = (closeAfter = false) => {
@@ -155,11 +100,10 @@ export function FeatureContextSheet({
           },
           body: JSON.stringify({
             name: editingName ? name.trim() : undefined,
-            businessRule: businessRule.trim() || null,
-            testRestrictions: testRestrictions.trim() || null,
-            codeFocus,
-            expectedEnvVars: envVars,
-            coveragePriorities: priorities,
+            aiUnderstanding: aiUnderstanding.trim() || null,
+            aiScenarios: aiScenarios
+              .map((s) => s.trim())
+              .filter((s) => s.length >= 4),
           }),
         },
       )
@@ -174,85 +118,50 @@ export function FeatureContextSheet({
     })
   }
 
-  const suggestWithAi = () => {
-    startSuggesting(async () => {
+  const toggleApprove = () => {
+    startApprove(async () => {
+      // Se ainda tem alterações não salvas, salva antes de aprovar —
+      // senão a QA aprova uma versão "em disco" diferente do que tá na tela.
       const res = await fetch(
-        `/api/projects/${projectId}/features/${feature.id}/suggest-context`,
+        `/api/projects/${projectId}/features/${feature.id}`,
         {
-          method: 'POST',
+          method: 'PATCH',
           headers: {
             'Content-Type': 'application/json',
             'X-Requested-With': 'fetch',
           },
-          body: JSON.stringify(
-            modelOverride ? { model: modelOverride } : {},
-          ),
+          body: JSON.stringify({
+            aiUnderstanding: aiUnderstanding.trim() || null,
+            aiScenarios: aiScenarios
+              .map((s) => s.trim())
+              .filter((s) => s.length >= 4),
+          }),
         },
       )
       if (!res.ok) {
-        toast.error(t('errors.suggest'))
+        toast.error(t('errors.save'))
         return
       }
-      const body = (await res.json()) as {
-        suggestion: {
-          businessRule?: string | null
-          freeScenarios?: string[]
-          testRestrictions?: string | null
-          expectedEnvVars?: string[]
-        }
-      }
-      const s = body.suggestion
 
-      // Preenche só campos vazios — nunca sobrescreve trabalho da QA.
-      let filledAny = false
-      if (s.businessRule && businessRule.trim().length === 0) {
-        setBusinessRule(s.businessRule)
-        filledAny = true
+      const approveRes = await fetch(
+        `/api/projects/${projectId}/features/${feature.id}/approve`,
+        {
+          method: approved ? 'DELETE' : 'POST',
+          headers: { 'X-Requested-With': 'fetch' },
+        },
+      )
+      if (!approveRes.ok) {
+        toast.error(t('errors.approve'))
+        return
       }
-      if (s.testRestrictions && testRestrictions.trim().length === 0) {
-        setTestRestrictions(s.testRestrictions)
-        filledAny = true
+      const body = (await approveRes.json()) as {
+        feature: { approvedAt: string | null }
       }
-      if (s.expectedEnvVars && s.expectedEnvVars.length > 0) {
-        const missing = s.expectedEnvVars.filter((v) => !envVars.includes(v))
-        if (missing.length > 0) {
-          setEnvVars((prev) => [...prev, ...missing])
-          filledAny = true
-        }
-      }
-      // Cenários livres: só adiciona os NÃO-duplicados, via POST direto
-      // (reusa a API que já persiste, consistente com o ScenariosEditor).
-      if (s.freeScenarios && s.freeScenarios.length > 0) {
-        for (const desc of s.freeScenarios) {
-          await fetch(
-            `/api/projects/${projectId}/features/${feature.id}/free-scenarios`,
-            {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'X-Requested-With': 'fetch',
-              },
-              body: JSON.stringify({ description: desc, priority: 0 }),
-            },
-          ).catch(() => {})
-        }
-        filledAny = true
-      }
-
-      if (filledAny) {
-        toast.success(t('toast_suggested'))
-        // Expande avançado se alguma coisa caiu lá.
-        if (
-          (s.testRestrictions && testRestrictions.trim().length === 0) ||
-          (s.expectedEnvVars && s.expectedEnvVars.length > 0)
-        ) {
-          setAdvancedOpen(true)
-        }
-        // Recarrega os free scenarios via onChanged (re-fetcha features + counts)
-        await onChanged()
-      } else {
-        toast.info(t('toast_suggested_empty'))
-      }
+      setApprovedAt(body.feature.approvedAt)
+      toast.success(
+        approved ? t('toast_unapproved') : t('toast_approved'),
+      )
+      await onChanged()
     })
   }
 
@@ -276,51 +185,6 @@ export function FeatureContextSheet({
     })
   }
 
-  const generateForFeature = () => {
-    startGenerate(async () => {
-      // Salva contexto atual antes pra garantir que vai pro prompt
-      await new Promise<void>((resolve) => {
-        startSave(async () => {
-          await fetch(`/api/projects/${projectId}/features/${feature.id}`, {
-            method: 'PATCH',
-            headers: {
-              'Content-Type': 'application/json',
-              'X-Requested-With': 'fetch',
-            },
-            body: JSON.stringify({
-              businessRule: businessRule.trim() || null,
-              testRestrictions: testRestrictions.trim() || null,
-              codeFocus,
-              expectedEnvVars: envVars,
-              coveragePriorities: priorities,
-            }),
-          })
-          resolve()
-        })
-      })
-
-      const res = await fetch(
-        `/api/projects/${projectId}/features/${feature.id}/generate-tests`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Requested-With': 'fetch',
-          },
-          body: JSON.stringify(
-            modelOverride ? { model: modelOverride } : {},
-          ),
-        },
-      )
-      if (!res.ok) {
-        toast.error(t('errors.generate', { name: feature.name }))
-        return
-      }
-      toast.success(t('toast_generate_done'))
-      await onChanged()
-    })
-  }
-
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
@@ -334,32 +198,17 @@ export function FeatureContextSheet({
               {feature.name}
             </SheetDescription>
           </div>
-          <div className="flex items-center gap-1">
-            {orgCfg ? (
-              <ModelPicker
-                value={modelOverride}
-                onChange={setModelOverride}
-                provider={orgCfg.provider}
-                baseUrl={orgCfg.baseUrl}
-                defaultModel={orgCfg.defaultModel}
-                compact
-              />
-            ) : null}
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={suggestWithAi}
-              disabled={suggesting || saving || deleting || generating}
-            >
-              {suggesting ? (
-                <Loader2 className="size-3.5 animate-spin" />
-              ) : (
-                <Sparkles className="size-3.5" />
-              )}
-              {t('suggest_with_ai')}
-            </Button>
-          </div>
+          {approved ? (
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-fin-gain/10 px-2.5 py-1 text-xs font-medium text-fin-gain">
+              <CheckCircle2 className="size-3.5" />
+              {t('approved_badge')}
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground">
+              <Circle className="size-3.5" />
+              {t('pending_badge')}
+            </span>
+          )}
         </SheetHeader>
 
         <div className="flex-1 space-y-5 overflow-y-auto px-6 pb-4">
@@ -412,202 +261,81 @@ export function FeatureContextSheet({
             </div>
           </section>
 
-          {/* Regra de negócio */}
+          {/* Entendimento da IA */}
           <section className="space-y-2">
             <label className="text-xs font-medium text-muted-foreground">
-              {t('field_business_rule')}
+              {t('field_ai_understanding')}
             </label>
+            <p className="text-[11px] text-muted-foreground">
+              {t('field_ai_understanding_hint')}
+            </p>
             <Textarea
-              value={businessRule}
-              onChange={(e) => setBusinessRule(e.target.value)}
-              placeholder={t('placeholder_business_rule')}
-              rows={4}
+              value={aiUnderstanding}
+              onChange={(e) => setAiUnderstanding(e.target.value)}
+              placeholder={t('placeholder_ai_understanding')}
+              rows={6}
               disabled={saving}
+              className="font-mono text-xs leading-relaxed"
             />
           </section>
 
-          {/* Cenários livres */}
+          {/* Cenários sugeridos */}
           <section className="space-y-2">
             <label className="text-xs font-medium text-muted-foreground">
-              {t('field_free_scenarios')}
+              {t('field_ai_scenarios')}
             </label>
-            <ScenariosEditor
-              projectId={projectId}
-              scope={{ kind: 'feature', featureId: feature.id }}
-            />
-          </section>
-
-          {/* Avançado: colapsado por padrão. Contém os 4 campos opcionais
-              que 90% das QAs não precisam mexer. */}
-          <section className="rounded-lg border border-border/60 bg-background/50">
-            <button
-              type="button"
-              onClick={() => setAdvancedOpen((v) => !v)}
-              className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
-              aria-expanded={advancedOpen}
-            >
-              <ChevronRight
-                className={cn(
-                  'size-3.5 transition-transform',
-                  advancedOpen && 'rotate-90',
-                )}
+            <p className="text-[11px] text-muted-foreground">
+              {t('field_ai_scenarios_hint')}
+            </p>
+            <div className="flex gap-2">
+              <Input
+                value={scenarioDraft}
+                onChange={(e) => setScenarioDraft(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault()
+                    addScenario()
+                  }
+                }}
+                placeholder={t('placeholder_ai_scenarios')}
+                disabled={saving}
               />
-              <span className="font-semibold uppercase tracking-wider">
-                {t('advanced_toggle')}
-              </span>
-              <span className="text-[10px] font-normal normal-case tracking-normal opacity-70">
-                {t('advanced_hint')}
-              </span>
-            </button>
-
-            {advancedOpen ? (
-              <div className="space-y-5 border-t border-border/60 px-3 py-4">
-                {/* Restrições */}
-                <section className="space-y-2">
-                  <label className="text-xs font-medium text-muted-foreground">
-                    {t('field_test_restrictions')}
-                  </label>
-                  <Textarea
-                    value={testRestrictions}
-                    onChange={(e) => setTestRestrictions(e.target.value)}
-                    placeholder={t('placeholder_test_restrictions')}
-                    rows={3}
-                    disabled={saving}
-                  />
-                </section>
-
-                {/* Code focus */}
-                <section className="space-y-2">
-                  <label className="text-xs font-medium text-muted-foreground">
-                    {t('field_code_focus')}
-                  </label>
-                  <div className="flex gap-2">
-                    <Input
-                      value={focusDraft}
-                      onChange={(e) => setFocusDraft(e.target.value)}
-                      placeholder={t('placeholder_code_focus')}
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={addScenario}
+                disabled={saving || scenarioDraft.trim().length < 4}
+              >
+                {t('scenario_add')}
+              </Button>
+            </div>
+            {aiScenarios.length > 0 ? (
+              <ul className="space-y-1.5">
+                {aiScenarios.map((s, i) => (
+                  <li
+                    key={i}
+                    className="flex items-start gap-2 rounded border border-border bg-background px-2 py-1.5"
+                  >
+                    <Textarea
+                      value={s}
+                      onChange={(e) => editScenario(i, e.target.value)}
+                      rows={1}
+                      className="flex-1 resize-none border-none bg-transparent p-0 text-xs shadow-none focus-visible:ring-0"
                       disabled={saving}
                     />
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => addFocus('focus')}
-                      disabled={saving || focusDraft.trim().length === 0}
-                      title={t('focus_add_focus')}
-                    >
-                      <Focus className="size-3.5" />
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => addFocus('ignore')}
-                      disabled={saving || focusDraft.trim().length === 0}
-                      title={t('focus_add_ignore')}
+                    <button
+                      type="button"
+                      onClick={() => removeScenario(i)}
+                      className="shrink-0 opacity-60 hover:opacity-100"
+                      disabled={saving}
+                      aria-label={t('scenario_remove')}
                     >
                       <X className="size-3.5" />
-                    </Button>
-                  </div>
-                  {codeFocus.length > 0 ? (
-                    <ul className="flex flex-wrap gap-1.5">
-                      {codeFocus.map((item, i) => (
-                        <li
-                          key={i}
-                          className={cn(
-                            'inline-flex items-center gap-1 rounded border px-2 py-0.5 font-mono text-[11px]',
-                            item.mode === 'focus'
-                              ? 'border-primary/40 bg-primary/10 text-primary'
-                              : 'border-destructive/40 bg-destructive/10 text-destructive',
-                          )}
-                        >
-                          {item.mode === 'focus' ? '+' : '-'} {item.path}
-                          <button
-                            type="button"
-                            onClick={() => removeFocus(i)}
-                            className="ml-1 opacity-60 hover:opacity-100"
-                          >
-                            <X className="size-3" />
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
-                  ) : null}
-                </section>
-
-                {/* Env vars */}
-                <section className="space-y-2">
-                  <label className="text-xs font-medium text-muted-foreground">
-                    {t('field_env_vars')}
-                  </label>
-                  <div className="flex gap-2">
-                    <Input
-                      value={envVarDraft}
-                      onChange={(e) =>
-                        setEnvVarDraft(e.target.value.toUpperCase())
-                      }
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          e.preventDefault()
-                          addEnvVar()
-                        }
-                      }}
-                      placeholder={t('placeholder_env_vars')}
-                      className="font-mono"
-                      disabled={saving}
-                    />
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={addEnvVar}
-                      disabled={saving || envVarDraft.trim().length === 0}
-                    >
-                      {t('add')}
-                    </Button>
-                  </div>
-                  {envVars.length > 0 ? (
-                    <ul className="flex flex-wrap gap-1.5">
-                      {envVars.map((v) => (
-                        <li
-                          key={v}
-                          className="inline-flex items-center gap-1 rounded border border-border bg-background px-2 py-0.5 font-mono text-[11px]"
-                        >
-                          {v}
-                          <button
-                            type="button"
-                            onClick={() => removeEnvVar(v)}
-                            className="ml-1 opacity-60 hover:opacity-100"
-                          >
-                            <X className="size-3" />
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
-                  ) : null}
-                </section>
-
-                {/* Prioridades */}
-                <section className="space-y-2">
-                  <label className="text-xs font-medium text-muted-foreground">
-                    {t('field_priorities')}
-                  </label>
-                  <div className="flex flex-wrap gap-3">
-                    {PRIORITY_OPTIONS.map((p) => (
-                      <label
-                        key={p}
-                        className="flex cursor-pointer items-center gap-1.5 text-sm"
-                      >
-                        <Checkbox
-                          checked={priorities.includes(p)}
-                          onCheckedChange={() => togglePriority(p)}
-                          disabled={saving}
-                        />
-                        <span className={cn('capitalize', PRIORITY_COLORS[p])}>
-                          {p}
-                        </span>
-                      </label>
-                    ))}
-                  </div>
-                </section>
-              </div>
+                    </button>
+                  </li>
+                ))}
+              </ul>
             ) : null}
           </section>
         </div>
@@ -617,7 +345,7 @@ export function FeatureContextSheet({
             variant="ghost"
             size="sm"
             onClick={removeFeature}
-            disabled={deleting || saving || generating}
+            disabled={deleting || saving || approving}
             className="text-destructive hover:text-destructive"
           >
             {deleting ? (
@@ -632,27 +360,27 @@ export function FeatureContextSheet({
             <Button
               variant="outline"
               size="sm"
-              onClick={generateForFeature}
-              disabled={generating || saving || deleting}
+              onClick={() => save(false)}
+              disabled={saving || deleting || approving}
             >
-              {generating ? (
+              {saving ? (
                 <Loader2 className="size-3.5 animate-spin" />
-              ) : (
-                <Play className="size-3.5" />
-              )}
-              {t('generate_tests_feature')}
+              ) : null}
+              {t('save')}
             </Button>
             <Button
               size="sm"
-              onClick={() => save(true)}
-              disabled={saving || deleting || generating}
+              onClick={toggleApprove}
+              disabled={saving || deleting || approving}
+              variant={approved ? 'outline' : 'default'}
+              className={cn(approved && 'border-fin-gain text-fin-gain')}
             >
-              {saving ? (
+              {approving ? (
                 <Loader2 className="size-3.5 animate-spin" />
               ) : (
                 <CheckCircle2 className="size-3.5" />
               )}
-              {t('save')}
+              {approved ? t('unapprove') : t('approve')}
             </Button>
           </div>
         </SheetFooter>

@@ -71,6 +71,14 @@ export async function PATCH(
     updates.coveragePriorities = parsed.data.coveragePriorities
     contextTouched = true
   }
+  if (parsed.data.aiUnderstanding !== undefined) {
+    updates.aiUnderstanding = parsed.data.aiUnderstanding
+    contextTouched = true
+  }
+  if (parsed.data.aiScenarios !== undefined) {
+    updates.aiScenarios = parsed.data.aiScenarios
+    contextTouched = true
+  }
   if (contextTouched) {
     updates.contextUpdatedAt = new Date()
     updates.contextUpdatedBy = session.user.id

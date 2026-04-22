@@ -307,6 +307,8 @@ export async function importStructure(params: {
     name: string
     description: string
     paths: string[]
+    aiUnderstanding: string | null
+    aiScenarios: string[]
   }>
 }): Promise<string> {
   return await sql.begin(async (tx) => {
@@ -332,11 +334,13 @@ export async function importStructure(params: {
       await tx`
         INSERT INTO analysis_features
           (project_id, source_analysis_id, external_id, name, description,
-           paths, sort_order, source)
+           paths, sort_order, source,
+           ai_understanding, ai_scenarios)
         VALUES
           (${params.projectId}, ${analysis.id}, ${f.externalId},
            ${f.name}, ${f.description},
-           ${JSON.stringify(f.paths)}, ${featureOrder++}, 'ai')
+           ${JSON.stringify(f.paths)}, ${featureOrder++}, 'ai',
+           ${f.aiUnderstanding}, ${JSON.stringify(f.aiScenarios)})
       `
     }
     return analysis.id

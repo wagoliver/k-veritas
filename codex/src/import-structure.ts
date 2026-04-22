@@ -15,6 +15,8 @@ interface StructureFeature {
   description: string
   paths: string[]
   rationale?: string
+  aiUnderstanding?: string
+  aiScenarios?: string[]
 }
 
 interface StructureManifest {
@@ -95,6 +97,19 @@ export async function importStructureManifest(params: {
       name: f.name,
       description: f.description,
       paths: f.paths,
+      aiUnderstanding:
+        typeof f.aiUnderstanding === 'string' && f.aiUnderstanding.trim().length > 0
+          ? f.aiUnderstanding.trim()
+          : null,
+      aiScenarios: Array.isArray(f.aiScenarios)
+        ? f.aiScenarios
+            .filter(
+              (s): s is string =>
+                typeof s === 'string' && s.trim().length > 0,
+            )
+            .map((s) => s.trim())
+            .slice(0, 20)
+        : [],
     })),
   })
 

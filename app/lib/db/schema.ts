@@ -487,9 +487,10 @@ export const analysisFeatures = pgTable(
       onDelete: 'set null',
     }),
     source: text('source').notNull().default('ai'),
-    // Contexto por-feature preenchido pela QA entre etapas 1 e 2 do
-    // discovery code-first. Opcionais — quando vazios, a IA trabalha só
-    // com código.
+    // Contexto por-feature LEGADO (business_rule, test_restrictions,
+    // code_focus, expected_env_vars, coverage_priorities). Mantidos no
+    // schema pra evitar migração destrutiva, mas não aparecem mais na UI
+    // — serão removidos quando a tela Cenário estabilizar.
     businessRule: text('business_rule'),
     testRestrictions: text('test_restrictions'),
     codeFocus: jsonb('code_focus').notNull().default(sql`'[]'::jsonb`),
@@ -501,6 +502,14 @@ export const analysisFeatures = pgTable(
       .default(sql`'[]'::jsonb`),
     contextUpdatedAt: timestamp('context_updated_at', { withTimezone: true }),
     contextUpdatedBy: uuid('context_updated_by').references(() => users.id, {
+      onDelete: 'set null',
+    }),
+    // Novo modelo: codex escreve o entendimento + cenários durante a fase
+    // 'structure'. QA apenas revisa/edita e aprova.
+    aiUnderstanding: text('ai_understanding'),
+    aiScenarios: jsonb('ai_scenarios').notNull().default(sql`'[]'::jsonb`),
+    approvedAt: timestamp('approved_at', { withTimezone: true }),
+    approvedBy: uuid('approved_by').references(() => users.id, {
       onDelete: 'set null',
     }),
     createdAt: timestamp('created_at', { withTimezone: true })
