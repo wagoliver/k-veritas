@@ -1,16 +1,17 @@
 import { NextResponse, type NextRequest } from 'next/server'
-import { asc, eq, max } from 'drizzle-orm'
+import { and, asc, eq, max } from 'drizzle-orm'
 import { alias } from 'drizzle-orm/pg-core'
 
 import { db } from '@/lib/db/pg'
 import {
   analysisFeatures,
   analysisScenarios,
+  codeAnalysisJobs,
   featureAiScenarioTests,
   scenarioTests,
   users,
 } from '@/lib/db/schema'
-import { sql as sqlTag } from 'drizzle-orm'
+import { inArray, sql as sqlTag } from 'drizzle-orm'
 import { getServerSession } from '@/lib/auth/session'
 import { Problems } from '@/lib/auth/errors'
 import { authorizeProject } from '@/lib/auth/project-access'
@@ -165,6 +166,29 @@ export async function GET(
     })
   }
 
+  // Jobs em voo (pending/running) de scenario_test pra este projeto. A UI
+  // usa isso pra trancar os controles e retomar o polling mesmo após
+  // reload da página — senão o estado "gerando" fica só no client.
+  const inFlightJobs = await db
+    .select({
+      featureId: codeAnalysisJobs.targetFeatureId,
+      scenarioId: codeAnalysisJobs.targetScenarioId,
+    })
+    .from(codeAnalysisJobs)
+    .where(
+      and(
+        eq(codeAnalysisJobs.projectId, project.id),
+        eq(codeAnalysisJobs.phase, 'scenario_test'),
+        inArray(codeAnalysisJobs.status, ['pending', 'running']),
+      ),
+    )
+  const pendingKeys = new Set<string>()
+  for (const j of inFlightJobs) {
+    if (j.featureId && j.scenarioId) {
+      pendingKeys.add(`${j.featureId}:${j.scenarioId}`)
+    }
+  }
+
   return NextResponse.json(
     {
       features: features.map((row) => {
@@ -201,6 +225,7 @@ export async function GET(
               }>).map((s) => ({
                 ...s,
                 latestTest: aiTestsByKey.get(`${f.id}:${s.id}`) ?? null,
+                isPending: pendingKeys.has(`${f.id}:${s.id}`),
               }))
             : [],
           approvedAt: f.approvedAt,

@@ -757,6 +757,8 @@
         "pending_label": "Generating…",
         "pending_tooltip": "Job sent to kveritas-codex. Screen refreshes when the test is ready.",
         "pending_hint": "kveritas-codex is exploring the code and writing the .spec.ts — editing is locked until it finishes.",
+        "feature_pending_label": "{count} generating",
+        "priority_tooltip": "Click to change priority",
         "show_code": "Show code",
         "hide_code": "Hide code",
         "copy": "Copy",

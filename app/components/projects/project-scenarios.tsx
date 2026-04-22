@@ -53,6 +53,7 @@ interface ScenarioWithTest {
   description: string
   priority: Priority
   latestTest: LatestTest | null
+  isPending: boolean
 }
 
 interface ApprovedFeature {
@@ -100,19 +101,31 @@ export function ProjectScenarios({ projectId }: { projectId: string }) {
         name: f.name,
         paths: f.paths,
         aiUnderstanding: f.aiUnderstanding,
-        aiScenarios: Array.isArray(f.aiScenarios) ? f.aiScenarios : [],
+        aiScenarios: Array.isArray(f.aiScenarios)
+          ? f.aiScenarios.map((s) => ({
+              ...s,
+              // Defensivo: payloads antigos podem não trazer isPending.
+              isPending: Boolean((s as ScenarioWithTest).isPending),
+            }))
+          : [],
         approvedAt: f.approvedAt,
       }))
     setFeatures(approved)
     setLoading(false)
 
-    // Remove do pendingIds qualquer cenário que agora tem latestTest.
+    // Sincroniza pendingIds com o backend:
+    //   - adiciona os que o server reporta como in-flight (sobrevive a
+    //     reload da página)
+    //   - remove os que já têm latestTest (geração concluída)
     setPendingIds((prev) => {
-      if (prev.size === 0) return prev
       const next = new Set(prev)
       for (const f of approved) {
         for (const s of f.aiScenarios) {
-          if (s.latestTest && next.has(s.id)) next.delete(s.id)
+          if (s.isPending) next.add(s.id)
+          else if (s.latestTest) next.delete(s.id)
+          // cenário sem isPending e sem latestTest: está no pendingIds só
+          // se a QA acabou de disparar e o job ainda não virou pending no
+          // banco — mantém até próxima poll.
         }
       }
       return next
@@ -191,7 +204,7 @@ export function ProjectScenarios({ projectId }: { projectId: string }) {
   }
 
   return (
-    <section className="space-y-4">
+    <section className="space-y-3">
       <header className="flex flex-wrap items-center gap-3">
         <div className="flex-1 min-w-0">
           <h2 className="font-display text-lg font-semibold">
@@ -215,7 +228,7 @@ export function ProjectScenarios({ projectId }: { projectId: string }) {
         ) : null}
       </header>
 
-      <div className="space-y-3">
+      <div className="space-y-2">
         {features.map((feature) => (
           <FeatureBlock
             key={feature.id}
@@ -245,8 +258,11 @@ function FeatureBlock({
   onChanged: () => Promise<ApprovedFeature[] | null>
 }) {
   const t = useTranslations('projects.overview.scenarios')
-  // Cards retraídos por default — QA expande o que quer ver.
-  const [expanded, setExpanded] = useState(false)
+  // Cards retraídos por default, EXCETO se a feature tiver cenários com
+  // job em voo — aí auto-expande pra QA ver o progresso sem um clique.
+  const [expanded, setExpanded] = useState(() =>
+    feature.aiScenarios.some((s) => s.isPending),
+  )
   const [localScenarios, setLocalScenarios] = useState(feature.aiScenarios)
   const [saving, setSaving] = useState(false)
   const [draft, setDraft] = useState('')
@@ -317,6 +333,7 @@ function FeatureBlock({
       description: v,
       priority: 'normal',
       latestTest: null,
+      isPending: false,
     }
     const next = [...localScenarios, newScenario]
     setLocalScenarios(next)
@@ -437,18 +454,43 @@ function FeatureBlock({
   }
 
   const generatedCount = localScenarios.filter((s) => s.latestTest).length
+  const total = localScenarios.length
   const selectedCount = selected.size
+  // Pending local considera tanto a flag do backend (sobrevive F5) quanto
+  // o pendingIds setado no momento do clique (antes do job virar row no
+  // banco).
+  const pendingInFeature = localScenarios.filter(
+    (s) => s.isPending || pendingIds.has(s.id),
+  ).length
+  const progressPct =
+    total > 0 ? Math.round((generatedCount / total) * 100) : 0
+  const allDone = total > 0 && generatedCount === total
+  const progressBarColor = allDone
+    ? 'bg-fin-gain'
+    : generatedCount > 0
+      ? 'bg-primary'
+      : 'bg-muted-foreground/30'
 
   return (
-    <div className="surface-card overflow-hidden rounded-xl">
-      <div className="flex items-start gap-3 border-b border-border/60 bg-card/60 px-4 py-3">
+    <div
+      className={cn(
+        'surface-card overflow-hidden rounded-xl transition-all',
+        pendingInFeature > 0 && 'ring-1 ring-primary/40',
+      )}
+    >
+      <div
+        className={cn(
+          'flex items-center gap-3 border-b border-border/60 px-4 py-2.5 transition-colors',
+          pendingInFeature > 0 ? 'bg-primary/5' : 'bg-card/60',
+        )}
+      >
         <button
           type="button"
           onClick={() => setExpanded((v) => !v)}
-          className="flex min-w-0 flex-1 items-start gap-3 text-left"
+          className="flex min-w-0 flex-1 items-center gap-3 text-left"
           aria-expanded={expanded}
         >
-          <div className="mt-0.5 shrink-0">
+          <div className="shrink-0">
             {expanded ? (
               <ChevronDown className="size-4 text-muted-foreground" />
             ) : (
@@ -457,30 +499,55 @@ function FeatureBlock({
           </div>
           <div className="min-w-0 flex-1 space-y-1">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="font-display text-base font-semibold">
+              <span className="font-display text-sm font-semibold">
                 {feature.name}
               </span>
-              <span className="inline-flex items-center gap-1 rounded-full bg-fin-gain/10 px-2 py-0.5 text-[10px] font-medium text-fin-gain">
-                <CheckCircle2 className="size-3" />
-                {t('approved_badge')}
+              {allDone ? (
+                <CheckCircle2 className="size-3.5 shrink-0 text-fin-gain" />
+              ) : null}
+              <span className="text-[11px] text-muted-foreground">
+                {generatedCount}/{total}
               </span>
-              <span className="text-xs text-muted-foreground">
-                {t('scenarios_count', {
-                  count: localScenarios.length,
-                  generated: generatedCount,
-                })}
-              </span>
-            </div>
-            <div className="flex flex-wrap gap-1">
-              {feature.paths.slice(0, 5).map((p) => (
+              {pendingInFeature > 0 ? (
+                <span
+                  className="inline-flex items-center gap-1 rounded-full border border-primary/40 bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary"
+                  title={t('pending_tooltip')}
+                >
+                  <Loader2 className="size-3 animate-spin" />
+                  {t('feature_pending_label', { count: pendingInFeature })}
+                </span>
+              ) : null}
+              {feature.paths.slice(0, 3).map((p) => (
                 <span
                   key={p}
-                  className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px]"
+                  className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground"
                 >
                   {p}
                 </span>
               ))}
+              {feature.paths.length > 3 ? (
+                <span className="text-[10px] text-muted-foreground/70">
+                  +{feature.paths.length - 3}
+                </span>
+              ) : null}
             </div>
+            {total > 0 ? (
+              <div
+                className="h-1 w-full overflow-hidden rounded-full bg-muted/60"
+                role="progressbar"
+                aria-valuenow={progressPct}
+                aria-valuemin={0}
+                aria-valuemax={100}
+              >
+                <div
+                  className={cn(
+                    'h-full rounded-full transition-all',
+                    progressBarColor,
+                  )}
+                  style={{ width: `${progressPct}%` }}
+                />
+              </div>
+            ) : null}
           </div>
         </button>
         {expanded && selectedCount > 0 ? (
@@ -505,14 +572,14 @@ function FeatureBlock({
       </div>
 
       {expanded ? (
-        <div className="space-y-3 px-4 py-4">
+        <div className="space-y-2 px-4 py-3">
           {localScenarios.length === 0 ? (
             <p className="text-xs text-muted-foreground">
               {t('empty_scenarios')}
             </p>
           ) : (
             <>
-              <div className="flex items-center gap-2 pb-1">
+              <div className="flex items-center gap-2">
                 <Checkbox
                   checked={allSelected}
                   onCheckedChange={toggleSelectAll}
@@ -523,7 +590,7 @@ function FeatureBlock({
                   {t('select_all')}
                 </span>
               </div>
-              <ul className="space-y-3">
+              <ul className="space-y-1.5">
                 {localScenarios.map((s) => (
                   <ScenarioRow
                     key={s.id}
@@ -614,22 +681,29 @@ function ScenarioRow({
     }
   }
 
+  // Stripe lateral — principal sinalizador visual de estado:
+  // azul = gerando, verde = pronto, neutro = pendente de geração.
+  const stripeClass = inFlight
+    ? 'border-l-primary bg-primary/5'
+    : hasTest
+      ? 'border-l-fin-gain'
+      : 'border-l-border'
+
   return (
     <li
       className={cn(
-        'rounded-lg border p-3 transition-colors',
-        inFlight
-          ? 'border-primary/40 bg-primary/5 ring-1 ring-primary/30'
-          : 'border-border bg-background/40',
+        'group rounded-lg border border-l-[3px] px-3 py-2 transition-colors',
+        stripeClass,
+        inFlight && 'ring-1 ring-primary/25',
+        !inFlight && 'border-border bg-background/40',
       )}
       aria-busy={inFlight}
     >
-      <div className="flex items-start gap-2">
+      <div className="flex items-center gap-2">
         <Checkbox
           checked={selected}
           onCheckedChange={onToggleSelect}
           disabled={disabled || inFlight}
-          className="mt-1"
           aria-label={t('select_scenario')}
         />
 
@@ -639,11 +713,13 @@ function ScenarioRow({
               type="button"
               disabled={disabled || inFlight}
               className={cn(
-                'mt-1 inline-flex shrink-0 cursor-pointer items-center rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider transition-opacity hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-60',
+                'inline-flex shrink-0 cursor-pointer items-center gap-0.5 rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider transition-opacity hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-60',
                 PRIORITY_CLASSES[scenario.priority],
               )}
+              title={t('priority_tooltip')}
             >
               {t(`priority.${scenario.priority}`)}
+              <ChevronDown className="size-2.5 opacity-70" />
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" className="w-40">
@@ -676,7 +752,10 @@ function ScenarioRow({
           rows={1}
           readOnly={inFlight}
           className={cn(
-            'flex-1 resize-none border-none bg-transparent p-0 text-xs shadow-none focus-visible:ring-0',
+            'flex-1 resize-none border-none bg-transparent p-0 text-xs leading-snug shadow-none focus-visible:ring-0',
+            // Sobrescreve o min-h-24 do Textarea base: altura colapsa pra 1
+            // linha e cresce via field-sizing-content quando o texto quebra.
+            '!min-h-0 field-sizing-content',
             inFlight && 'text-muted-foreground',
           )}
           disabled={disabled}
@@ -684,31 +763,29 @@ function ScenarioRow({
 
         {inFlight ? (
           <span
-            className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-primary/30 bg-primary/10 px-2 py-1 text-[11px] font-medium text-primary"
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-primary/30 bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary"
             title={t('pending_tooltip')}
           >
-            <Loader2 className="size-3.5 animate-spin" />
+            <Loader2 className="size-3 animate-spin" />
             {t('pending_label')}
           </span>
         ) : hasTest ? (
-          <Button
+          <button
             type="button"
-            size="sm"
-            variant="ghost"
             onClick={onRegenerate}
             disabled={disabled}
-            className="shrink-0"
+            className="shrink-0 rounded p-1 text-muted-foreground opacity-0 transition-opacity hover:text-foreground group-hover:opacity-100 focus-visible:opacity-100 disabled:cursor-not-allowed disabled:opacity-30"
             title={t('regenerate_tooltip')}
+            aria-label={t('regenerate')}
           >
             <RefreshCw className="size-3.5" />
-            {t('regenerate')}
-          </Button>
+          </button>
         ) : null}
 
         <button
           type="button"
           onClick={onRemove}
-          className="shrink-0 p-1 opacity-60 hover:opacity-100 disabled:cursor-not-allowed disabled:opacity-30"
+          className="shrink-0 p-1 text-muted-foreground opacity-0 hover:text-destructive group-hover:opacity-100 focus-visible:opacity-100 disabled:cursor-not-allowed disabled:opacity-30"
           disabled={disabled || inFlight}
           aria-label={t('remove_scenario')}
         >
@@ -717,14 +794,14 @@ function ScenarioRow({
       </div>
 
       {inFlight ? (
-        <p className="mt-2 flex items-center gap-1.5 text-[11px] text-primary">
+        <p className="mt-1.5 flex items-center gap-1.5 text-[11px] text-primary">
           <span className="inline-block size-1.5 animate-pulse rounded-full bg-primary" />
           {t('pending_hint')}
         </p>
       ) : null}
 
       {hasTest && scenario.latestTest ? (
-        <div className="mt-2 space-y-2">
+        <div className="mt-1.5">
           <button
             type="button"
             onClick={() => setShowCode((v) => !v)}
@@ -750,14 +827,14 @@ function ScenarioRow({
           </button>
 
           {showCode ? (
-            <div className="space-y-1.5">
+            <div className="mt-1.5 space-y-1">
               <div className="flex justify-end">
                 <Button
                   type="button"
                   size="sm"
                   variant="ghost"
                   onClick={copyCode}
-                  className="h-7 gap-1.5 px-2 text-[11px]"
+                  className="h-6 gap-1.5 px-2 text-[11px]"
                 >
                   <Copy className="size-3" />
                   {t('copy')}
