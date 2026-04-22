@@ -14,6 +14,7 @@ export type CoveragePriority = 'critical' | 'high' | 'normal' | 'low'
 export type ScenarioPriority = 'critical' | 'high' | 'normal' | 'low'
 
 export interface AiScenario {
+  id: string
   description: string
   priority: ScenarioPriority
 }
