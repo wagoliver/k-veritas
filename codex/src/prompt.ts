@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-import type { CodeAnalysisPhase } from './db.ts'
+import type { CodeAnalysisPhase, ScenarioTarget } from './db.ts'
 
 // Caminho dos prompts montados no container. São resolvidos relativos a
 // este arquivo (src/prompt.ts), então `/app/prompts/...` dentro do
@@ -20,6 +20,12 @@ const STRUCTURE_SYSTEM_PATH = join(
   'prompts',
   'structure-system.md',
 )
+const SCENARIO_TEST_SYSTEM_PATH = join(
+  __dirname,
+  '..',
+  'prompts',
+  'scenario-test-system.md',
+)
 
 // Limite de leitura pra um CLAUDE.md de repo: evita estourar o context
 // window quando o projeto tem docs gigantes. 256KB bate muito bem.
@@ -32,6 +38,7 @@ export interface PromptInput {
   outputDir: string // /work/<jobId>/output
   repoRoot: string // /work/<jobId>/repo
   phase: CodeAnalysisPhase
+  scenarioTarget?: ScenarioTarget
 }
 
 /**
@@ -45,7 +52,11 @@ export async function buildSystemPrompt(
   phase: CodeAnalysisPhase,
 ): Promise<string> {
   const masterPath =
-    phase === 'structure' ? STRUCTURE_SYSTEM_PATH : KVERITAS_SYSTEM_PATH
+    phase === 'structure'
+      ? STRUCTURE_SYSTEM_PATH
+      : phase === 'scenario_test'
+        ? SCENARIO_TEST_SYSTEM_PATH
+        : KVERITAS_SYSTEM_PATH
   const master = await readFile(masterPath, 'utf8')
 
   let repoClaudeMd = ''
@@ -76,10 +87,63 @@ export async function buildSystemPrompt(
 
 /**
  * User prompt da rodada. Divergente por fase:
- *   - structure: só pede features.json (inventário, sem cenários/testes).
- *   - tests:     pede manifest.json (cenários) + .spec.ts por feature.
+ *   - structure:     features.json (inventário).
+ *   - tests:         manifest.json + .spec.ts por feature (legado).
+ *   - scenario_test: UM .spec.ts pra um cenário específico.
  */
 export function buildUserPrompt(input: PromptInput): string {
+  if (input.phase === 'scenario_test') {
+    if (!input.scenarioTarget) {
+      throw new Error(
+        'buildUserPrompt: scenario_test exige scenarioTarget no input',
+      )
+    }
+    const target = input.scenarioTarget
+    const outputFile = join(input.outputDir, 'test.spec.ts')
+    const understanding =
+      (target.featureAiUnderstanding ?? '').trim().length > 0
+        ? `\nEntendimento da feature (escrito pela IA e revisado pela QA):\n\n${target.featureAiUnderstanding!.trim()}\n`
+        : ''
+
+    return `Gere UM arquivo .spec.ts Playwright pra o cenário abaixo, do projeto "${input.projectName}" (cwd: ${input.repoRoot}).
+
+== Feature ==
+Nome: ${target.featureName}
+Rotas: ${target.featurePaths.join(', ') || '(nenhuma rota listada)'}${understanding}
+== Cenário ==
+Descrição: ${target.scenarioDescription}
+Prioridade: ${target.scenarioPriority}
+
+== Contexto do projeto ==
+Leia ${input.jobRoot}/context.md — contém regra de negócio, cenários desejados e tipos de teste (e2e/smoke/regression/integration) definidos pela QA no projeto.
+
+== Checklist obrigatório (na ordem) ==
+
+1. **package.json** — identificar framework.
+2. **Grep \`data-testid=\`** nos paths da feature (${target.featurePaths.join(', ') || 'paths não listados'}). Liste os testIds encontrados explicitamente antes de decidir seletores.
+3. **Read** dos arquivos de rota (ex.: \`page.tsx\`) pra identificar inputs e botões.
+4. **Detectar i18n:** se aparecer \`t('...')\`, \`$t('...')\`, \`<FormattedMessage>\`, etc., você precisa **Read do arquivo de locale** (messages/<locale>.json, locales/<locale>/*.json, etc.) pra resolver os textos reais. Target locale aqui: **${input.targetLocale}**.
+5. **Alarme de idioma:** se target_locale = ${input.targetLocale} (não-inglês) mas você só achou strings em inglês, volte e procure o arquivo de locale que você pulou.
+6. **Escreva o spec** em:
+
+   ${outputFile}
+
+== Lembre-se ==
+
+- **Citação obrigatória** de origem em cada seletor (ex.: \`// testid extraído de src/app/login/page.tsx:34\`). Se não consegue citar, não viu — use TODO honesto.
+- **Proibido:** chutar tradução, \`process.env.X || 'default'\`, seletor sem fonte.
+- **Um \`test()\`** com tag \`@smoke\` se prioridade=critical, \`@regression\` se high, nenhuma tag se normal/low.
+- **3+ asserções** no caminho feliz (URL + elemento visível + ausência de erro).
+- Nome do \`test()\` no idioma do target_locale: **${input.targetLocale}**.
+
+As regras completas estão no system prompt — siga-as estritamente.
+
+Quando terminar de escrever o arquivo, responda APENAS:
+
+  done: spec written
+`
+  }
+
   if (input.phase === 'structure') {
     return `Analise a ESTRUTURA do projeto "${input.projectName}" no diretório atual (cwd já é o repositório clonado: ${input.repoRoot}).
 

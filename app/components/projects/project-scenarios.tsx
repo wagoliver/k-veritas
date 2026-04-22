@@ -9,15 +9,14 @@ import {
   Loader2,
   Play,
   RefreshCw,
-  Sparkles,
   Trash2,
-  X,
 } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslations } from 'next-intl'
 import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import { CodeBlock } from '@/components/ui/code-block'
 import { DateTime } from '@/components/ui/date-time'
 import {
@@ -68,7 +67,6 @@ interface ApprovedFeature {
 interface FeaturesResponse {
   features: Array<
     ApprovedFeature & {
-      // Campos que não usamos aqui mas vêm do endpoint
       [k: string]: unknown
     }
   >
@@ -79,15 +77,20 @@ export function ProjectScenarios({ projectId }: { projectId: string }) {
   const [features, setFeatures] = useState<ApprovedFeature[] | null>(null)
   const [loading, setLoading] = useState(true)
 
-  const load = async () => {
+  // Cenários com job em voo (enfileirado ou rodando no codex). Quando o
+  // latestTest aparece no payload, removemos o id daqui — o row para de
+  // mostrar spinner. Polling roda enquanto o set tiver algo.
+  const [pendingIds, setPendingIds] = useState<Set<string>>(new Set())
+  const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const load = useCallback(async (): Promise<ApprovedFeature[] | null> => {
     const res = await fetch(`/api/projects/${projectId}/features`, {
       headers: { 'X-Requested-With': 'fetch' },
       cache: 'no-store',
     })
     if (!res.ok) {
       toast.error(t('errors.load'))
-      setLoading(false)
-      return
+      return null
     }
     const data = (await res.json()) as FeaturesResponse
     const approved = data.features
@@ -102,12 +105,39 @@ export function ProjectScenarios({ projectId }: { projectId: string }) {
       }))
     setFeatures(approved)
     setLoading(false)
-  }
+
+    // Remove do pendingIds qualquer cenário que agora tem latestTest.
+    setPendingIds((prev) => {
+      if (prev.size === 0) return prev
+      const next = new Set(prev)
+      for (const f of approved) {
+        for (const s of f.aiScenarios) {
+          if (s.latestTest && next.has(s.id)) next.delete(s.id)
+        }
+      }
+      return next
+    })
+
+    return approved
+  }, [projectId, t])
 
   useEffect(() => {
     load()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [projectId])
+  }, [load])
+
+  // Poll enquanto há jobs em voo. Cancela quando set esvazia.
+  useEffect(() => {
+    if (pendingIds.size === 0) {
+      if (pollTimerRef.current) clearTimeout(pollTimerRef.current)
+      return
+    }
+    pollTimerRef.current = setTimeout(() => {
+      void load()
+    }, 3000)
+    return () => {
+      if (pollTimerRef.current) clearTimeout(pollTimerRef.current)
+    }
+  }, [pendingIds, load, features])
 
   const stats = useMemo(() => {
     if (!features) return null
@@ -123,9 +153,16 @@ export function ProjectScenarios({ projectId }: { projectId: string }) {
       features: features.length,
       scenarios: totalScenarios,
       generated,
-      pending: totalScenarios - generated,
     }
   }, [features])
+
+  const markPending = (ids: string[]) => {
+    setPendingIds((prev) => {
+      const next = new Set(prev)
+      for (const id of ids) next.add(id)
+      return next
+    })
+  }
 
   if (loading) {
     return (
@@ -153,38 +190,6 @@ export function ProjectScenarios({ projectId }: { projectId: string }) {
     )
   }
 
-  const generateAllPending = async () => {
-    const pending: Array<{ featureId: string; scenarioId: string }> = []
-    for (const f of features) {
-      for (const s of f.aiScenarios) {
-        if (!s.latestTest) pending.push({ featureId: f.id, scenarioId: s.id })
-      }
-    }
-    if (pending.length === 0) {
-      toast.info(t('toast_all_done'))
-      return
-    }
-    toast.info(t('toast_batch_starting', { count: pending.length }))
-    let ok = 0
-    for (let i = 0; i < pending.length; i++) {
-      const { featureId, scenarioId } = pending[i]
-      try {
-        const res = await fetch(
-          `/api/projects/${projectId}/features/${featureId}/scenarios/${scenarioId}/generate-test`,
-          {
-            method: 'POST',
-            headers: { 'X-Requested-With': 'fetch' },
-          },
-        )
-        if (res.ok) ok += 1
-      } catch {
-        // segue próximo
-      }
-    }
-    toast.success(t('toast_batch_done', { ok, total: pending.length }))
-    await load()
-  }
-
   return (
     <section className="space-y-4">
       <header className="flex flex-wrap items-center gap-3">
@@ -202,11 +207,11 @@ export function ProjectScenarios({ projectId }: { projectId: string }) {
             </p>
           ) : null}
         </div>
-        {stats && stats.pending > 0 ? (
-          <Button size="sm" onClick={generateAllPending}>
-            <Play className="size-3.5" />
-            {t('batch_all_pending', { count: stats.pending })}
-          </Button>
+        {pendingIds.size > 0 ? (
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary">
+            <Loader2 className="size-3 animate-spin" />
+            {t('pending_count', { count: pendingIds.size })}
+          </span>
         ) : null}
       </header>
 
@@ -216,6 +221,8 @@ export function ProjectScenarios({ projectId }: { projectId: string }) {
             key={feature.id}
             projectId={projectId}
             feature={feature}
+            pendingIds={pendingIds}
+            markPending={markPending}
             onChanged={load}
           />
         ))}
@@ -227,25 +234,38 @@ export function ProjectScenarios({ projectId }: { projectId: string }) {
 function FeatureBlock({
   projectId,
   feature,
+  pendingIds,
+  markPending,
   onChanged,
 }: {
   projectId: string
   feature: ApprovedFeature
-  onChanged: () => Promise<void>
+  pendingIds: Set<string>
+  markPending: (ids: string[]) => void
+  onChanged: () => Promise<ApprovedFeature[] | null>
 }) {
   const t = useTranslations('projects.overview.scenarios')
-  const [expanded, setExpanded] = useState(true)
+  // Cards retraídos por default — QA expande o que quer ver.
+  const [expanded, setExpanded] = useState(false)
   const [localScenarios, setLocalScenarios] = useState(feature.aiScenarios)
   const [saving, setSaving] = useState(false)
   const [draft, setDraft] = useState('')
-  const [generatingIds, setGeneratingIds] = useState<Set<string>>(new Set())
-  const [batching, setBatching] = useState(false)
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [submitting, setSubmitting] = useState(false)
+  const [regeneratingIds, setRegeneratingIds] = useState<Set<string>>(
+    new Set(),
+  )
 
   useEffect(() => {
     setLocalScenarios(feature.aiScenarios)
+    // Limpa seleção se algum cenário sumiu ou recebeu teste novo.
+    setSelected((prev) => {
+      const nextIds = new Set(feature.aiScenarios.map((s) => s.id))
+      const next = new Set<string>()
+      for (const id of prev) if (nextIds.has(id)) next.add(id)
+      return next
+    })
   }, [feature.aiScenarios])
-
-  const pendingCount = localScenarios.filter((s) => !s.latestTest).length
 
   const persistScenarios = async (scenarios: ScenarioWithTest[]) => {
     setSaving(true)
@@ -308,6 +328,11 @@ function FeatureBlock({
     if (!confirm(t('confirm_remove_scenario'))) return
     const next = localScenarios.filter((s) => s.id !== id)
     setLocalScenarios(next)
+    setSelected((prev) => {
+      const n = new Set(prev)
+      n.delete(id)
+      return n
+    })
     void persistScenarios(next)
   }
 
@@ -319,8 +344,38 @@ function FeatureBlock({
     await persistScenarios(localScenarios)
   }
 
-  const generateOne = async (scenarioId: string) => {
-    setGeneratingIds((prev) => new Set(prev).add(scenarioId))
+  const toggleSelect = (id: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  const allSelectable = localScenarios
+    .filter((s) => !pendingIds.has(s.id))
+    .map((s) => s.id)
+  const allSelected =
+    allSelectable.length > 0 &&
+    allSelectable.every((id) => selected.has(id))
+
+  const toggleSelectAll = () => {
+    setSelected((prev) => {
+      if (allSelected) {
+        const next = new Set(prev)
+        for (const id of allSelectable) next.delete(id)
+        return next
+      }
+      const next = new Set(prev)
+      for (const id of allSelectable) next.add(id)
+      return next
+    })
+  }
+
+  const enqueueOne = async (
+    scenarioId: string,
+  ): Promise<{ ok: boolean; status?: number }> => {
     try {
       const res = await fetch(
         `/api/projects/${projectId}/features/${feature.id}/scenarios/${scenarioId}/generate-test`,
@@ -329,118 +384,125 @@ function FeatureBlock({
           headers: { 'X-Requested-With': 'fetch' },
         },
       )
-      if (!res.ok) {
-        if (res.status === 409) {
-          toast.error(t('errors.not_approved'))
-        } else if (res.status === 429) {
-          toast.error(t('errors.rate_limited'))
-        } else {
-          toast.error(t('errors.generate'))
-        }
-        return
-      }
-      toast.success(t('toast_generated'))
-      await onChanged()
-    } finally {
-      setGeneratingIds((prev) => {
-        const next = new Set(prev)
-        next.delete(scenarioId)
-        return next
-      })
+      return { ok: res.ok, status: res.status }
+    } catch {
+      return { ok: false }
     }
   }
 
-  const generateAllInFeature = async () => {
-    const pending = localScenarios.filter((s) => !s.latestTest)
-    if (pending.length === 0) {
-      toast.info(t('toast_all_done'))
-      return
+  const generateSelected = async () => {
+    const ids = Array.from(selected).filter(
+      (id) =>
+        !pendingIds.has(id) &&
+        localScenarios.some((s) => s.id === id),
+    )
+    if (ids.length === 0) return
+    setSubmitting(true)
+    markPending(ids)
+    setSelected(new Set())
+    const results = await Promise.all(ids.map((id) => enqueueOne(id)))
+    const ok = results.filter((r) => r.ok).length
+    const hasAnthropicMissing = results.some(
+      (r) => r.status === 400,
+    )
+    const hasRate = results.some((r) => r.status === 429)
+    if (hasAnthropicMissing) {
+      toast.error(t('errors.anthropic_missing'))
+    } else if (hasRate) {
+      toast.error(t('errors.rate_limited'))
+    } else {
+      toast.success(t('toast_enqueued', { count: ok }))
     }
-    setBatching(true)
-    toast.info(t('toast_batch_starting', { count: pending.length }))
-    let ok = 0
-    for (const s of pending) {
-      try {
-        const res = await fetch(
-          `/api/projects/${projectId}/features/${feature.id}/scenarios/${s.id}/generate-test`,
-          {
-            method: 'POST',
-            headers: { 'X-Requested-With': 'fetch' },
-          },
-        )
-        if (res.ok) ok += 1
-      } catch {
-        // continue
-      }
-    }
-    toast.success(t('toast_batch_done', { ok, total: pending.length }))
-    setBatching(false)
+    setSubmitting(false)
     await onChanged()
   }
 
+  const regenerate = async (scenarioId: string) => {
+    setRegeneratingIds((prev) => new Set(prev).add(scenarioId))
+    const { ok, status } = await enqueueOne(scenarioId)
+    setRegeneratingIds((prev) => {
+      const next = new Set(prev)
+      next.delete(scenarioId)
+      return next
+    })
+    if (!ok) {
+      if (status === 429) toast.error(t('errors.rate_limited'))
+      else if (status === 400) toast.error(t('errors.anthropic_missing'))
+      else toast.error(t('errors.generate'))
+      return
+    }
+    markPending([scenarioId])
+    toast.success(t('toast_enqueued', { count: 1 }))
+    await onChanged()
+  }
+
+  const generatedCount = localScenarios.filter((s) => s.latestTest).length
+  const selectedCount = selected.size
+
   return (
     <div className="surface-card overflow-hidden rounded-xl">
-      <button
-        type="button"
-        onClick={() => setExpanded((v) => !v)}
-        className="flex w-full items-start gap-3 border-b border-border/60 bg-card/60 px-4 py-3 text-left transition-colors hover:bg-accent/20"
-        aria-expanded={expanded}
-      >
-        <div className="mt-0.5 shrink-0">
-          {expanded ? (
-            <ChevronDown className="size-4 text-muted-foreground" />
-          ) : (
-            <ChevronRight className="size-4 text-muted-foreground" />
-          )}
-        </div>
-        <div className="min-w-0 flex-1 space-y-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="font-display text-base font-semibold">
-              {feature.name}
-            </span>
-            <span className="inline-flex items-center gap-1 rounded-full bg-fin-gain/10 px-2 py-0.5 text-[10px] font-medium text-fin-gain">
-              <CheckCircle2 className="size-3" />
-              {t('approved_badge')}
-            </span>
-            <span className="text-xs text-muted-foreground">
-              {t('scenarios_count', {
-                count: localScenarios.length,
-                generated: localScenarios.filter((s) => s.latestTest).length,
-              })}
-            </span>
+      <div className="flex items-start gap-3 border-b border-border/60 bg-card/60 px-4 py-3">
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          className="flex min-w-0 flex-1 items-start gap-3 text-left"
+          aria-expanded={expanded}
+        >
+          <div className="mt-0.5 shrink-0">
+            {expanded ? (
+              <ChevronDown className="size-4 text-muted-foreground" />
+            ) : (
+              <ChevronRight className="size-4 text-muted-foreground" />
+            )}
           </div>
-          <div className="flex flex-wrap gap-1">
-            {feature.paths.slice(0, 5).map((p) => (
-              <span
-                key={p}
-                className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px]"
-              >
-                {p}
+          <div className="min-w-0 flex-1 space-y-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="font-display text-base font-semibold">
+                {feature.name}
               </span>
-            ))}
+              <span className="inline-flex items-center gap-1 rounded-full bg-fin-gain/10 px-2 py-0.5 text-[10px] font-medium text-fin-gain">
+                <CheckCircle2 className="size-3" />
+                {t('approved_badge')}
+              </span>
+              <span className="text-xs text-muted-foreground">
+                {t('scenarios_count', {
+                  count: localScenarios.length,
+                  generated: generatedCount,
+                })}
+              </span>
+            </div>
+            <div className="flex flex-wrap gap-1">
+              {feature.paths.slice(0, 5).map((p) => (
+                <span
+                  key={p}
+                  className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px]"
+                >
+                  {p}
+                </span>
+              ))}
+            </div>
           </div>
-        </div>
-        {pendingCount > 0 && expanded ? (
+        </button>
+        {expanded && selectedCount > 0 ? (
           <Button
             type="button"
             size="sm"
-            variant="outline"
             onClick={(e) => {
               e.stopPropagation()
-              void generateAllInFeature()
+              void generateSelected()
             }}
-            disabled={batching || saving}
+            disabled={submitting || saving}
             className="shrink-0"
           >
-            {batching ? (
+            {submitting ? (
               <Loader2 className="size-3.5 animate-spin" />
             ) : (
-              <Sparkles className="size-3.5" />
+              <Play className="size-3.5" />
             )}
-            {t('batch_feature', { count: pendingCount })}
+            {t('generate_selected', { count: selectedCount })}
           </Button>
         ) : null}
-      </button>
+      </div>
 
       {expanded ? (
         <div className="space-y-3 px-4 py-4">
@@ -449,21 +511,37 @@ function FeatureBlock({
               {t('empty_scenarios')}
             </p>
           ) : (
-            <ul className="space-y-3">
-              {localScenarios.map((s) => (
-                <ScenarioRow
-                  key={s.id}
-                  scenario={s}
-                  generating={generatingIds.has(s.id)}
-                  disabled={saving || batching}
-                  onChangePriority={(p) => editPriority(s.id, p)}
-                  onChangeDescription={(d) => editDescription(s.id, d)}
-                  onBlurDescription={() => saveBlurOnDescription(s.id)}
-                  onRemove={() => removeScenario(s.id)}
-                  onGenerate={() => generateOne(s.id)}
+            <>
+              <div className="flex items-center gap-2 pb-1">
+                <Checkbox
+                  checked={allSelected}
+                  onCheckedChange={toggleSelectAll}
+                  disabled={saving || submitting || allSelectable.length === 0}
+                  aria-label={t('select_all')}
                 />
-              ))}
-            </ul>
+                <span className="text-[11px] text-muted-foreground">
+                  {t('select_all')}
+                </span>
+              </div>
+              <ul className="space-y-3">
+                {localScenarios.map((s) => (
+                  <ScenarioRow
+                    key={s.id}
+                    scenario={s}
+                    selected={selected.has(s.id)}
+                    pending={pendingIds.has(s.id)}
+                    regenerating={regeneratingIds.has(s.id)}
+                    disabled={saving || submitting}
+                    onToggleSelect={() => toggleSelect(s.id)}
+                    onChangePriority={(p) => editPriority(s.id, p)}
+                    onChangeDescription={(d) => editDescription(s.id, d)}
+                    onBlurDescription={() => saveBlurOnDescription(s.id)}
+                    onRemove={() => removeScenario(s.id)}
+                    onRegenerate={() => regenerate(s.id)}
+                  />
+                ))}
+              </ul>
+            </>
           )}
 
           <div className="flex gap-2">
@@ -477,14 +555,14 @@ function FeatureBlock({
                 }
               }}
               placeholder={t('add_scenario_placeholder')}
-              disabled={saving || batching}
+              disabled={saving || submitting}
             />
             <Button
               type="button"
               size="sm"
               variant="outline"
               onClick={addScenario}
-              disabled={saving || batching || draft.trim().length < 4}
+              disabled={saving || submitting || draft.trim().length < 4}
             >
               {t('add_scenario')}
             </Button>
@@ -497,27 +575,34 @@ function FeatureBlock({
 
 function ScenarioRow({
   scenario,
-  generating,
+  selected,
+  pending,
+  regenerating,
   disabled,
+  onToggleSelect,
   onChangePriority,
   onChangeDescription,
   onBlurDescription,
   onRemove,
-  onGenerate,
+  onRegenerate,
 }: {
   scenario: ScenarioWithTest
-  generating: boolean
+  selected: boolean
+  pending: boolean
+  regenerating: boolean
   disabled: boolean
+  onToggleSelect: () => void
   onChangePriority: (p: Priority) => void
   onChangeDescription: (d: string) => void
   onBlurDescription: () => void
   onRemove: () => void
-  onGenerate: () => void
+  onRegenerate: () => void
 }) {
   const t = useTranslations('projects.overview.scenarios')
   const [showCode, setShowCode] = useState(false)
 
   const hasTest = scenario.latestTest !== null
+  const inFlight = pending || regenerating
 
   const copyCode = async () => {
     if (!scenario.latestTest) return
@@ -530,15 +615,31 @@ function ScenarioRow({
   }
 
   return (
-    <li className="rounded-lg border border-border bg-background/40 p-3">
+    <li
+      className={cn(
+        'rounded-lg border p-3 transition-colors',
+        inFlight
+          ? 'border-primary/40 bg-primary/5 ring-1 ring-primary/30'
+          : 'border-border bg-background/40',
+      )}
+      aria-busy={inFlight}
+    >
       <div className="flex items-start gap-2">
+        <Checkbox
+          checked={selected}
+          onCheckedChange={onToggleSelect}
+          disabled={disabled || inFlight}
+          className="mt-1"
+          aria-label={t('select_scenario')}
+        />
+
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button
               type="button"
-              disabled={disabled}
+              disabled={disabled || inFlight}
               className={cn(
-                'mt-1 inline-flex shrink-0 cursor-pointer items-center rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider transition-opacity hover:opacity-80 disabled:cursor-not-allowed',
+                'mt-1 inline-flex shrink-0 cursor-pointer items-center rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider transition-opacity hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-60',
                 PRIORITY_CLASSES[scenario.priority],
               )}
             >
@@ -573,39 +674,54 @@ function ScenarioRow({
           onChange={(e) => onChangeDescription(e.target.value)}
           onBlur={onBlurDescription}
           rows={1}
-          className="flex-1 resize-none border-none bg-transparent p-0 text-xs shadow-none focus-visible:ring-0"
+          readOnly={inFlight}
+          className={cn(
+            'flex-1 resize-none border-none bg-transparent p-0 text-xs shadow-none focus-visible:ring-0',
+            inFlight && 'text-muted-foreground',
+          )}
           disabled={disabled}
         />
 
-        <Button
-          type="button"
-          size="sm"
-          variant={hasTest ? 'ghost' : 'default'}
-          onClick={onGenerate}
-          disabled={disabled || generating}
-          className="shrink-0"
-          title={hasTest ? t('regenerate_tooltip') : t('generate_tooltip')}
-        >
-          {generating ? (
+        {inFlight ? (
+          <span
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-primary/30 bg-primary/10 px-2 py-1 text-[11px] font-medium text-primary"
+            title={t('pending_tooltip')}
+          >
             <Loader2 className="size-3.5 animate-spin" />
-          ) : hasTest ? (
+            {t('pending_label')}
+          </span>
+        ) : hasTest ? (
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            onClick={onRegenerate}
+            disabled={disabled}
+            className="shrink-0"
+            title={t('regenerate_tooltip')}
+          >
             <RefreshCw className="size-3.5" />
-          ) : (
-            <Sparkles className="size-3.5" />
-          )}
-          {hasTest ? t('regenerate') : t('generate')}
-        </Button>
+            {t('regenerate')}
+          </Button>
+        ) : null}
 
         <button
           type="button"
           onClick={onRemove}
-          className="shrink-0 p-1 opacity-60 hover:opacity-100"
-          disabled={disabled || generating}
+          className="shrink-0 p-1 opacity-60 hover:opacity-100 disabled:cursor-not-allowed disabled:opacity-30"
+          disabled={disabled || inFlight}
           aria-label={t('remove_scenario')}
         >
           <Trash2 className="size-3.5" />
         </button>
       </div>
+
+      {inFlight ? (
+        <p className="mt-2 flex items-center gap-1.5 text-[11px] text-primary">
+          <span className="inline-block size-1.5 animate-pulse rounded-full bg-primary" />
+          {t('pending_hint')}
+        </p>
+      ) : null}
 
       {hasTest && scenario.latestTest ? (
         <div className="mt-2 space-y-2">

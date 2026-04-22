@@ -8,7 +8,7 @@ export const sql = postgres(requireEnv('DATABASE_URL'), {
   prepare: false,
 })
 
-export type CodeAnalysisPhase = 'structure' | 'tests'
+export type CodeAnalysisPhase = 'structure' | 'tests' | 'scenario_test'
 
 export interface PendingCodeJob {
   id: string
@@ -20,7 +20,18 @@ export interface PendingCodeJob {
   repo_zip_path: string | null
   phase: CodeAnalysisPhase
   target_feature_id: string | null
+  target_scenario_id: string | null
   model_override: string | null
+}
+
+export interface ScenarioTarget {
+  featureId: string
+  featureName: string
+  featurePaths: string[]
+  featureAiUnderstanding: string | null
+  scenarioId: string
+  scenarioDescription: string
+  scenarioPriority: 'critical' | 'high' | 'normal' | 'low'
 }
 
 export interface Project {
@@ -65,7 +76,7 @@ export async function claimNextJob(
     )
     RETURNING id, project_id, requested_by,
               source_type, repo_url, repo_branch, repo_zip_path,
-              phase, target_feature_id, model_override
+              phase, target_feature_id, target_scenario_id, model_override
   `
   const job = rows[0]
   if (!job) return null
@@ -86,6 +97,96 @@ export async function claimNextJob(
     return null
   }
   return { job, project }
+}
+
+export async function loadScenarioTarget(
+  projectId: string,
+  featureId: string,
+  scenarioId: string,
+): Promise<ScenarioTarget | null> {
+  const rows = await sql<
+    Array<{
+      id: string
+      name: string
+      paths: unknown
+      ai_understanding: string | null
+      ai_scenarios: unknown
+      approved_at: Date | null
+    }>
+  >`
+    SELECT id, name, paths, ai_understanding, ai_scenarios, approved_at
+    FROM analysis_features
+    WHERE id = ${featureId} AND project_id = ${projectId}
+    LIMIT 1
+  `
+  const feature = rows[0]
+  if (!feature) return null
+  if (!feature.approved_at) return null
+
+  const scenarios = Array.isArray(feature.ai_scenarios)
+    ? (feature.ai_scenarios as Array<{
+        id?: string
+        description?: string
+        priority?: string
+      }>)
+    : []
+  const scenario = scenarios.find((s) => s.id === scenarioId)
+  if (!scenario || typeof scenario.description !== 'string') return null
+
+  const priority =
+    scenario.priority === 'critical' ||
+    scenario.priority === 'high' ||
+    scenario.priority === 'normal' ||
+    scenario.priority === 'low'
+      ? scenario.priority
+      : 'normal'
+
+  const paths = Array.isArray(feature.paths)
+    ? (feature.paths as unknown[]).filter(
+        (p): p is string => typeof p === 'string',
+      )
+    : []
+
+  return {
+    featureId: feature.id,
+    featureName: feature.name,
+    featurePaths: paths,
+    featureAiUnderstanding: feature.ai_understanding,
+    scenarioId,
+    scenarioDescription: scenario.description,
+    scenarioPriority: priority,
+  }
+}
+
+export async function upsertScenarioTest(params: {
+  projectId: string
+  featureId: string
+  scenarioId: string
+  code: string
+  model: string
+  provider: string
+  tokensIn: number
+  tokensOut: number
+  requestedBy: string
+}): Promise<void> {
+  await sql`
+    INSERT INTO feature_ai_scenario_tests
+      (project_id, feature_id, scenario_id, code, model, provider,
+       tokens_in, tokens_out, created_by, created_at)
+    VALUES
+      (${params.projectId}, ${params.featureId}, ${params.scenarioId},
+       ${params.code}, ${params.model}, ${params.provider},
+       ${params.tokensIn}, ${params.tokensOut}, ${params.requestedBy},
+       now())
+    ON CONFLICT (feature_id, scenario_id) DO UPDATE SET
+      code = EXCLUDED.code,
+      model = EXCLUDED.model,
+      provider = EXCLUDED.provider,
+      tokens_in = EXCLUDED.tokens_in,
+      tokens_out = EXCLUDED.tokens_out,
+      created_by = EXCLUDED.created_by,
+      created_at = now()
+  `
 }
 
 export type EventKind = 'status' | 'tool' | 'text' | 'error'

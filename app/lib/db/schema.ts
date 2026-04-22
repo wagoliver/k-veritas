@@ -348,10 +348,14 @@ export const codeAnalysisJobs = pgTable(
       .notNull()
       .references(() => projects.id, { onDelete: 'cascade' }),
     status: text('status').notNull().default('pending'),
-    // 'structure': etapa 1, só inventário de rotas/features (barato).
-    // 'tests':     etapa 2, gera testes de uma feature específica.
+    // 'structure':     etapa 1, só inventário de rotas/features (barato).
+    // 'tests':         etapa 2 legada, gera testes de uma feature inteira.
+    // 'scenario_test': gera UM .spec.ts pra um cenário específico da feature.
     phase: text('phase').notNull().default('structure'),
     targetFeatureId: uuid('target_feature_id'),
+    // Preenchido só quando phase='scenario_test'. Texto porque o cenário
+    // vive como UUID-string dentro de analysis_features.ai_scenarios (jsonb).
+    targetScenarioId: text('target_scenario_id'),
     // Modelo escolhido pela QA no clique. NULL = default da org.
     modelOverride: text('model_override'),
     sourceType: text('source_type').notNull(),

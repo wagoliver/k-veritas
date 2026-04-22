@@ -6,6 +6,7 @@ import {
   emitEvent,
   getOrgCredentialRaw,
   heartbeat,
+  loadScenarioTarget,
   markCompleted,
   markCompletedWithWarning,
   markFailed,
@@ -15,11 +16,13 @@ import {
   updateProgress,
   type PendingCodeJob,
   type Project,
+  type ScenarioTarget,
 } from './db.ts'
 import { persistRepoSnapshot, prepareJobWorkspace } from './clone.ts'
 import { decryptSecret } from './crypto.ts'
 import { importManifest } from './import.ts'
 import { importStructureManifest } from './import-structure.ts'
+import { importScenarioTestManifest } from './import-scenario-test.ts'
 import { runClaude } from './run-claude.ts'
 import { env } from './env.ts'
 
@@ -33,6 +36,10 @@ const MAX_BUDGET_USD = Number(env('CODEX_MAX_BUDGET_USD', '5'))
 // Budget específico da fase 'structure' (inventário). Bem menor que o
 // budget da fase 'tests' — só lista rotas, não explora código.
 const STRUCTURE_BUDGET_USD = Number(env('CODEX_STRUCTURE_BUDGET_USD', '1'))
+// Budget de UM cenário → UM .spec.ts. Explora só os arquivos da feature.
+const SCENARIO_TEST_BUDGET_USD = Number(
+  env('CODEX_SCENARIO_TEST_BUDGET_USD', '2'),
+)
 const DEFAULT_MODEL = env('CODEX_MODEL', 'claude-sonnet-4-5-20250929')
 const KEEP_WORKDIR = env('CODEX_KEEP_WORKDIR', 'false') === 'true'
 
@@ -91,11 +98,31 @@ async function processJob(
   let turnsUsed = 0
   let jobRoot: string | null = null
 
+  let scenarioTarget: ScenarioTarget | null = null
+
   try {
     if (phase === 'tests') {
       throw new Error(
         'phase "tests" ainda não é executada pelo codex — use POST /features/[featureId]/generate-tests (fase 4 do roadmap)',
       )
+    }
+
+    if (phase === 'scenario_test') {
+      if (!job.target_feature_id || !job.target_scenario_id) {
+        throw new Error(
+          'phase scenario_test exige target_feature_id e target_scenario_id',
+        )
+      }
+      scenarioTarget = await loadScenarioTarget(
+        project.id,
+        job.target_feature_id,
+        job.target_scenario_id,
+      )
+      if (!scenarioTarget) {
+        throw new Error(
+          'scenario_target não encontrado (feature ausente, não aprovada, ou cenário inexistente)',
+        )
+      }
     }
 
     await emitEvent(
@@ -141,7 +168,11 @@ async function processJob(
     )
 
     const budget =
-      phase === 'structure' ? STRUCTURE_BUDGET_USD : MAX_BUDGET_USD
+      phase === 'structure'
+        ? STRUCTURE_BUDGET_USD
+        : phase === 'scenario_test'
+          ? SCENARIO_TEST_BUDGET_USD
+          : MAX_BUDGET_USD
 
     await updateProgress(jobId, { label: 'invocando Claude Code' })
     const result = await runClaude({
@@ -152,6 +183,7 @@ async function processJob(
         outputDir: workspace.outputDir,
         repoRoot: workspace.repoRoot,
         phase,
+        scenarioTarget: scenarioTarget ?? undefined,
       },
       repoRoot: workspace.repoRoot,
       outputDir: workspace.outputDir,
@@ -183,9 +215,17 @@ async function processJob(
 
     const outputInventory = await listOutputTree(workspace.outputDir)
     const expectedOutput =
-      phase === 'structure' ? 'features.json' : 'manifest.json'
+      phase === 'structure'
+        ? 'features.json'
+        : phase === 'scenario_test'
+          ? 'test.spec.ts'
+          : 'manifest.json'
     const hasManifest = outputInventory.some((p) =>
-      p.startsWith(expectedOutput),
+      // scenario_test: spec pode estar em subdir (tests/). buscar qualquer
+      // .spec.ts na árvore serve como "tem output".
+      phase === 'scenario_test'
+        ? /\.spec\.(ts|tsx|js|jsx)/.test(p)
+        : p.startsWith(expectedOutput),
     )
 
     // Resumo textual do erro do Claude (se houver) — reusado pra
@@ -219,40 +259,67 @@ async function processJob(
     }
 
     await updateProgress(jobId, { label: `importando ${expectedOutput}` })
-    const { analysisId, manifestPath } =
-      phase === 'structure'
-        ? await importStructureManifest({
-            jobId,
-            projectId: project.id,
-            requestedBy: job.requested_by,
-            model,
-            provider: 'anthropic',
-            outputDir: workspace.outputDir,
-            durationMs: Date.now() - t0,
-            tokensIn,
-            tokensOut,
-          })
-        : await importManifest({
-            jobId,
-            projectId: project.id,
-            requestedBy: job.requested_by,
-            model,
-            provider: 'anthropic',
-            outputDir: workspace.outputDir,
-            durationMs: Date.now() - t0,
-            tokensIn,
-            tokensOut,
-          })
 
-    console.log(
-      `[codex] job=${jobId} analysis=${analysisId} manifest=${manifestPath} phase=${phase}`,
-    )
-    await emitEvent(
-      jobId,
-      'status',
-      'import_done',
-      `analysis=${analysisId} tokens=${tokensIn}/${tokensOut} turns=${turnsUsed}`,
-    )
+    if (phase === 'scenario_test') {
+      if (!scenarioTarget) {
+        throw new Error('scenarioTarget perdido — estado inconsistente')
+      }
+      const imported = await importScenarioTestManifest({
+        projectId: project.id,
+        featureId: scenarioTarget.featureId,
+        scenarioId: scenarioTarget.scenarioId,
+        requestedBy: job.requested_by,
+        model,
+        provider: 'anthropic',
+        outputDir: workspace.outputDir,
+        tokensIn,
+        tokensOut,
+      })
+      console.log(
+        `[codex] job=${jobId} scenario=${scenarioTarget.scenarioId} spec=${imported.bytes}b phase=scenario_test`,
+      )
+      await emitEvent(
+        jobId,
+        'status',
+        'import_done',
+        `spec=${imported.bytes}b tokens=${tokensIn}/${tokensOut} turns=${turnsUsed}`,
+      )
+    } else {
+      const { analysisId, manifestPath } =
+        phase === 'structure'
+          ? await importStructureManifest({
+              jobId,
+              projectId: project.id,
+              requestedBy: job.requested_by,
+              model,
+              provider: 'anthropic',
+              outputDir: workspace.outputDir,
+              durationMs: Date.now() - t0,
+              tokensIn,
+              tokensOut,
+            })
+          : await importManifest({
+              jobId,
+              projectId: project.id,
+              requestedBy: job.requested_by,
+              model,
+              provider: 'anthropic',
+              outputDir: workspace.outputDir,
+              durationMs: Date.now() - t0,
+              tokensIn,
+              tokensOut,
+            })
+
+      console.log(
+        `[codex] job=${jobId} analysis=${analysisId} manifest=${manifestPath} phase=${phase}`,
+      )
+      await emitEvent(
+        jobId,
+        'status',
+        'import_done',
+        `analysis=${analysisId} tokens=${tokensIn}/${tokensOut} turns=${turnsUsed}`,
+      )
+    }
 
     // Persiste snapshot enxuto do repo pra que o app (volume /data
     // compartilhado) consiga ler os componentes na hora de gerar testes.
